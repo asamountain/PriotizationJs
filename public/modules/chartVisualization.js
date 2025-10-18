@@ -198,6 +198,8 @@ export class ChartVisualization {
     q1.setAttribute('opacity', '0.05');
     q1.setAttribute('rx', '2');
     q1.setAttribute('ry', '2');
+    q1.style.cursor = 'pointer';
+    q1.addEventListener('click', (e) => this.handleQuadrantClick(e));
     parentGroup.appendChild(q1);
     
     // Quadrant 2: Important & Not Urgent (bottom-right) - Success color
@@ -210,6 +212,8 @@ export class ChartVisualization {
     q2.setAttribute('opacity', '0.05');
     q2.setAttribute('rx', '2');
     q2.setAttribute('ry', '2');
+    q2.style.cursor = 'pointer';
+    q2.addEventListener('click', (e) => this.handleQuadrantClick(e));
     parentGroup.appendChild(q2);
     
     // Quadrant 3: Not Important & Urgent (top-left) - Warning color
@@ -222,6 +226,8 @@ export class ChartVisualization {
     q3.setAttribute('opacity', '0.05');
     q3.setAttribute('rx', '2');
     q3.setAttribute('ry', '2');
+    q3.style.cursor = 'pointer';
+    q3.addEventListener('click', (e) => this.handleQuadrantClick(e));
     parentGroup.appendChild(q3);
     
     // Quadrant 4: Not Important & Not Urgent (bottom-left) - Info color
@@ -234,6 +240,8 @@ export class ChartVisualization {
     q4.setAttribute('opacity', '0.05');
     q4.setAttribute('rx', '2');
     q4.setAttribute('ry', '2');
+    q4.style.cursor = 'pointer';
+    q4.addEventListener('click', (e) => this.handleQuadrantClick(e));
     parentGroup.appendChild(q4);
     
     // Add quadrant labels in Vuetify style
@@ -1009,5 +1017,42 @@ export class ChartVisualization {
     closeX.setAttribute('fill', 'white');
     closeX.textContent = '×';
     expansionGroup.appendChild(closeX);
+  }
+  
+  // Handle clicks on quadrants to add tasks
+  handleQuadrantClick(event) {
+    // Get the SVG element and calculate the clicked position
+    const svg = this.chartGroup;
+    const rect = svg.getBoundingClientRect();
+    
+    // Get mouse position relative to SVG
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // Convert from screen coordinates to SVG viewBox coordinates
+    const viewBoxWidth = 800;
+    const viewBoxHeight = 600;
+    const svgX = (x / rect.width) * viewBoxWidth;
+    const svgY = (y / rect.height) * viewBoxHeight;
+    
+    // Convert SVG coordinates to importance/urgency values (1-10)
+    // Chart area is from (40, 40) to (760, 560)
+    // X-axis is importance (40-760 maps to 0-10)
+    // Y-axis is urgency (560-40 maps to 0-10, inverted)
+    const importance = Math.round(((svgX - 40) / 720) * 10);
+    const urgency = Math.round(((560 - svgY) / 520) * 10);
+    
+    // Clamp values to 1-10 range
+    const clampedImportance = Math.max(1, Math.min(10, importance));
+    const clampedUrgency = Math.max(1, Math.min(10, urgency));
+    
+    console.log(`Quadrant clicked at: Importance=${clampedImportance}, Urgency=${clampedUrgency}`);
+    
+    // Trigger the modal in the Vue app
+    if (window.app && typeof window.app.openQuickAddModal === 'function') {
+      window.app.openQuickAddModal(clampedImportance, clampedUrgency);
+    } else {
+      console.warn('Vue app or openQuickAddModal method not available');
+    }
   }
 } 

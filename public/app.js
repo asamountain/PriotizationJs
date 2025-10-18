@@ -133,6 +133,16 @@ window.addEventListener('DOMContentLoaded', () => {
         ],
         leftPanelWidth: parseFloat(localStorage.getItem('leftPanelWidth')) || 55,
         isResizing: false,
+        showAddTaskPanel: localStorage.getItem('showAddTaskPanel') !== 'false',
+        showCsvImportPanel: localStorage.getItem('showCsvImportPanel') !== 'false',
+        showQuickAddModal: false,
+        quickAddTask: {
+          name: '',
+          importance: 5,
+          urgency: 5,
+          link: '',
+          notes: ''
+        },
       };
     },
     computed: {
@@ -610,6 +620,57 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showNotification('Downloading CSV template...', 'info');
       },
 
+      toggleAddTaskPanel() {
+        this.showAddTaskPanel = !this.showAddTaskPanel;
+        localStorage.setItem('showAddTaskPanel', this.showAddTaskPanel);
+      },
+
+      toggleCsvImportPanel() {
+        this.showCsvImportPanel = !this.showCsvImportPanel;
+        localStorage.setItem('showCsvImportPanel', this.showCsvImportPanel);
+      },
+
+      openQuickAddModal(importance, urgency) {
+        this.quickAddTask.importance = importance;
+        this.quickAddTask.urgency = urgency;
+        this.quickAddTask.name = '';
+        this.quickAddTask.link = '';
+        this.quickAddTask.notes = '';
+        this.showQuickAddModal = true;
+      },
+
+      submitQuickTask() {
+        if (!this.quickAddTask.name) {
+          this.showNotification('Please enter a task name', 'error');
+          return;
+        }
+
+        const taskData = {
+          name: this.quickAddTask.name,
+          importance: this.quickAddTask.importance,
+          urgency: this.quickAddTask.urgency,
+          link: this.quickAddTask.link || null,
+          notes: this.quickAddTask.notes || null
+        };
+
+        this.socket.emit('addTask', taskData);
+        this.showNotification(`Added: ${taskData.name}`, 'success');
+        
+        // Close modal and reset
+        this.showQuickAddModal = false;
+        this.quickAddTask = {
+          name: '',
+          importance: 5,
+          urgency: 5,
+          link: '',
+          notes: ''
+        };
+      },
+
+      closeQuickAddModal() {
+        this.showQuickAddModal = false;
+      },
+
       // Resize panel methods
       startResize(e) {
         this.isResizing = true;
@@ -659,6 +720,11 @@ window.addEventListener('DOMContentLoaded', () => {
         // Save sort preference to localStorage
         localStorage.setItem('taskSortBy', newValue);
       }
+    },
+    provide() {
+      return {
+        openQuickAddModal: this.openQuickAddModal
+      };
     },
     beforeUnmount() {
       // Clean up resize listeners

@@ -60,6 +60,16 @@ export class TaskOperations {
     console.log('Sent toggleDone request for task:', taskId);
   }
 
+  deleteTask(taskId) {
+    const socket = window.app?.socket || window.taskManager?.socket || io(window.location.origin);
+    if (!socket) {
+      console.error('No socket connection available');
+      return;
+    }
+    socket.emit('deleteTask', taskId);
+    console.log('Sent deleteTask request for task:', taskId);
+  }
+
   addSubtask(subtask, parentId) {
     console.log('TaskOperations.addSubtask called with:', subtask, 'parentId:', parentId);
     

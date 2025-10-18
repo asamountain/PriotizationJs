@@ -107,6 +107,28 @@
         }
       }
       
+      /* Task list improvements */
+      .v-list-item {
+        min-height: 80px !important;
+        padding: 12px 16px !important;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      }
+      
+      .v-list-item:hover {
+        background-color: rgba(25, 118, 210, 0.04) !important;
+      }
+      
+      .gap-2 {
+        gap: 8px;
+      }
+      
+      .text-wrap {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        word-break: break-word !important;
+      }
+      
       .highlighted-task {
         animation: highlight-pulse 1.5s ease-in-out;
       }
@@ -258,13 +280,16 @@
                     <!-- RIGHT SIDE: Task List (scrollable) -->
                     <div class="split-view-right" ref="rightPanel">
 
-                        <!-- CSV Import Card -->
+                        <!-- CSV Import Card (Collapsible) -->
                         <v-card class="mb-4" elevation="3">
-                        <v-card-title class="text-h5 d-flex align-center">
+                        <v-card-title class="text-h6 d-flex align-center" style="cursor: pointer;" @click="toggleCsvImportPanel">
                             <v-icon class="me-2" color="success">mdi-file-import</v-icon>
                             Import Tasks from CSV
+                            <v-spacer></v-spacer>
+                            <v-icon>{{ showCsvImportPanel ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
                         </v-card-title>
-                        <v-card-text>
+                        <v-expand-transition>
+                        <v-card-text v-show="showCsvImportPanel">
                             <v-row align="center">
                                 <v-col cols="12" md="6">
                                     <v-file-input
@@ -317,12 +342,19 @@
                                 </div>
                             </v-alert>
                         </v-card-text>
+                        </v-expand-transition>
                     </v-card>
 
-                        <!-- Task form in a card -->
+                        <!-- Task form in a card (Collapsible) -->
                         <v-card class="mb-4" elevation="3">
-                        <v-card-title class="text-h5">Add New Task</v-card-title>
-                        <v-card-text>
+                        <v-card-title class="text-h6 d-flex align-center" style="cursor: pointer;" @click="toggleAddTaskPanel">
+                            <v-icon class="me-2" color="primary">mdi-plus-circle</v-icon>
+                            Add New Task
+                            <v-spacer></v-spacer>
+                            <v-icon>{{ showAddTaskPanel ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                        </v-card-title>
+                        <v-expand-transition>
+                        <v-card-text v-show="showAddTaskPanel">
                             <v-form @submit.prevent="submitTask">
                                 <v-row>
                                     <v-col cols="12" md="6">
@@ -378,6 +410,7 @@
                                 </v-btn>
                             </v-form>
                         </v-card-text>
+                        </v-expand-transition>
                     </v-card>
 
                         <!-- Active Tasks Section -->
@@ -431,38 +464,30 @@
                                         </template>
 
                                         <div class="d-flex flex-column flex-grow-1">
-                                            <div class="d-flex align-items-center">
-                                                <v-list-item-title :class="{'text-decoration-line-through': task.done}" class="me-3">
-                                                    {{ task.name }}
-                                                </v-list-item-title>
+                                            <!-- Task Title - Full width, no truncation -->
+                                            <v-list-item-title :class="{'text-decoration-line-through': task.done}" class="mb-2 text-wrap" style="font-size: 1.1rem; font-weight: 500; line-height: 1.4;">
+                                                {{ task.name }}
+                                            </v-list-item-title>
+                                            
+                                            <!-- Importance and Urgency Badges - More prominent -->
+                                            <div class="d-flex align-items-center mb-2 gap-2">
+                                                <v-chip
+                                                    size="default"
+                                                    color="primary"
+                                                    variant="flat"
+                                                >
+                                                    <v-icon start size="small">mdi-star</v-icon>
+                                                    Importance: {{ task.importance }}/10
+                                                </v-chip>
                                                 
-                                                <!-- Importance and Urgency moved next to title -->
-                                                <div class="d-flex align-items-center" style="width: 33%;">
-                                                    <v-progress-linear
-                                                        class="me-2"
-                                                        :model-value="task.importance * 10"
-                                                        height="8"
-                                                        color="primary"
-                                                        rounded
-                                                        style="min-width: 60px; max-width: 100px;"
-                                                    >
-                                                        <template v-slot:default>
-                                                            <span class="text-caption text-white">I: {{ task.importance }}</span>
-                                                        </template>
-                                                    </v-progress-linear>
-                                                    
-                                                    <v-progress-linear
-                                                        :model-value="task.urgency * 10"
-                                                        height="8"
-                                                        color="secondary"
-                                                        rounded
-                                                        style="min-width: 60px; max-width: 100px;"
-                                                    >
-                                                        <template v-slot:default>
-                                                            <span class="text-caption text-white">U: {{ task.urgency }}</span>
-                                                        </template>
-                                                    </v-progress-linear>
-                                                </div>
+                                                <v-chip
+                                                    size="default"
+                                                    color="secondary"
+                                                    variant="flat"
+                                                >
+                                                    <v-icon start size="small">mdi-clock-fast</v-icon>
+                                                    Urgency: {{ task.urgency }}/10
+                                                </v-chip>
                                             </div>
 
                                             <v-list-item-subtitle>
@@ -977,6 +1002,90 @@
                         <v-btn color="grey" variant="text" @click="closeNotesDialog">Cancel</v-btn>
                         <v-btn color="primary" variant="elevated" @click="saveTaskNotes">
                             Save Notes
+                        </v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
+            <!-- Quick Add Task Modal -->
+            <v-dialog v-model="showQuickAddModal" max-width="600px">
+                <v-card>
+                    <v-card-title class="text-h5 d-flex align-center">
+                        <v-icon class="me-2" color="primary">mdi-plus-circle-outline</v-icon>
+                        Quick Add Task
+                    </v-card-title>
+                    <v-card-text>
+                        <v-form @submit.prevent="submitQuickTask">
+                            <v-text-field
+                                v-model="quickAddTask.name"
+                                label="Task Name *"
+                                placeholder="Enter task name..."
+                                variant="outlined"
+                                required
+                                autofocus
+                                class="mb-3"
+                            ></v-text-field>
+
+                            <v-row class="mb-3">
+                                <v-col cols="6">
+                                    <v-text-field
+                                        v-model.number="quickAddTask.importance"
+                                        label="Importance"
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        variant="outlined"
+                                        hint="1-10 scale"
+                                        persistent-hint
+                                    ></v-text-field>
+                                </v-col>
+                                <v-col cols="6">
+                                    <v-text-field
+                                        v-model.number="quickAddTask.urgency"
+                                        label="Urgency"
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        variant="outlined"
+                                        hint="1-10 scale"
+                                        persistent-hint
+                                    ></v-text-field>
+                                </v-col>
+                            </v-row>
+
+                            <v-text-field
+                                v-model="quickAddTask.link"
+                                label="Link (optional)"
+                                placeholder="https://..."
+                                variant="outlined"
+                                class="mb-3"
+                            ></v-text-field>
+
+                            <v-textarea
+                                v-model="quickAddTask.notes"
+                                label="Notes (optional)"
+                                placeholder="Additional details..."
+                                variant="outlined"
+                                rows="3"
+                            ></v-textarea>
+                        </v-form>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn
+                            color="grey"
+                            variant="text"
+                            @click="closeQuickAddModal"
+                        >
+                            Cancel
+                        </v-btn>
+                        <v-btn
+                            color="primary"
+                            variant="elevated"
+                            @click="submitQuickTask"
+                        >
+                            Add Task
+                            <v-icon end>mdi-check</v-icon>
                         </v-btn>
                     </v-card-actions>
                 </v-card>

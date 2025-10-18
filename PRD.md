@@ -139,7 +139,8 @@ CREATE TABLE tasks (
 
 ✅ **Interactive Features**
 - Hover: Show tooltip with task name
-- Click: Highlight task in list (right side)
+- Click dot: Highlight task in list (right side)
+- **Click quadrant**: Open quick-add modal with pre-filled importance/urgency
 - Scroll to highlighted task automatically
 - Clustered dots when tasks overlap
 - **Always visible** in split-screen left panel
@@ -227,6 +228,26 @@ The parser supports multiple column name variations (case-insensitive):
 - Displays Status (OnGoing, Not Sure, etc.)
 - Displays Due Date from CSV
 - Color-coded chips for each metadata type
+
+✅ **Collapsible Panels (NEW)**
+- CSV Import panel can be hidden/shown
+- Add New Task panel can be hidden/shown
+- Collapse states persisted to localStorage
+- Chevron icons indicate expand/collapse state
+
+✅ **Quick Add Modal (NEW)**
+- Triggered by clicking anywhere on the Eisenhower Matrix
+- Pre-fills importance/urgency based on click position
+- Allows immediate task creation without scrolling
+- All optional fields available (link, notes)
+
+✅ **Improved Task List UI (NEW)**
+- Larger task titles (1.1rem) with full text wrap
+- No ellipsis truncation on task names
+- Importance/Urgency as prominent chips (not gauge bars)
+- Icons for importance (star) and urgency (clock)
+- Larger list items (80px minimum height)
+- Better hover states and spacing
 
 ---
 
