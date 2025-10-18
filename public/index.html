@@ -16,7 +16,7 @@
     <script src="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.css" rel="stylesheet">
     <style>
-      /* Split View Layout */
+      /* Split View Layout - Account for app bar */
       .split-view-main {
         padding: 0 !important;
         overflow: hidden;
@@ -27,6 +27,13 @@
         height: 100%;
         width: 100%;
         padding: 0;
+        margin: 0;
+      }
+      
+      /* Ensure v-main takes full viewport minus app bar */
+      .v-main {
+        min-height: calc(100vh - 56px) !important;
+        height: calc(100vh - 56px) !important;
       }
       
       .split-view-left {
@@ -84,6 +91,7 @@
         overflow: visible;
         padding: 0 !important;
         position: relative;
+        min-height: 0; /* Allow flexbox to shrink */
       }
       
       #taskChart {
@@ -92,6 +100,8 @@
         position: absolute;
         top: 0;
         left: 0;
+        right: 0;
+        bottom: 0;
       }
       
       /* Responsive: Stack on smaller screens */
