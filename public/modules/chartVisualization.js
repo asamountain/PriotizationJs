@@ -244,8 +244,8 @@ export class ChartVisualization {
     q4.addEventListener('click', (e) => this.handleQuadrantClick(e));
     parentGroup.appendChild(q4);
     
-    // Add quadrant labels in Vuetify style
-    this.addVuetifyQuadrantLabels(parentGroup);
+    // Quadrant labels removed per user request - chart is cleaner without them
+    // this.addVuetifyQuadrantLabels(parentGroup);
     
     // Add axes lines
     const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
