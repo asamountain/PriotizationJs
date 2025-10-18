@@ -857,9 +857,9 @@
                         {{ currentTask.notes ? 'Edit Notes: ' : 'Add Notes: ' }} {{ currentTask.name }}
                     </v-card-title>
                     <v-card-text class="pa-4">
-                        <!-- Key binding forces component to re-render -->
+                        <!-- Stable key for proper Vue reactivity -->
                         <v-textarea
-                            :key="`notes-${noteTaskId}-${Date.now()}`"
+                            :key="`notes-${noteTaskId}`"
                             v-model="editingNotes"
                             label="Task Notes"
                             variant="outlined"
