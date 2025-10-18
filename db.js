@@ -45,7 +45,24 @@ class Database {
         `ALTER TABLE tasks ADD COLUMN notes TEXT NULL`,
         `ALTER TABLE tasks ADD COLUMN progress INTEGER NULL`,
         `ALTER TABLE tasks ADD COLUMN category TEXT NULL`,
-        `ALTER TABLE tasks ADD COLUMN status TEXT NULL`
+        `ALTER TABLE tasks ADD COLUMN status TEXT NULL`,
+        // Pomodoro/Time tracking columns
+        `ALTER TABLE tasks ADD COLUMN total_time_spent INTEGER DEFAULT 0`,
+        `ALTER TABLE tasks ADD COLUMN active_timer_start TEXT NULL`,
+        `ALTER TABLE tasks ADD COLUMN pomodoro_count INTEGER DEFAULT 0`,
+        `ALTER TABLE tasks ADD COLUMN last_worked_at TEXT NULL`,
+        // Create time_logs table for detailed session tracking
+        `CREATE TABLE IF NOT EXISTS time_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_id INTEGER NOT NULL,
+          start_time TEXT NOT NULL,
+          end_time TEXT NULL,
+          duration INTEGER DEFAULT 0,
+          session_type TEXT DEFAULT 'focus',
+          notes TEXT NULL,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        )`
       ];
       
       this.db.serialize(() => {
@@ -376,6 +393,107 @@ class Database {
       });
     });
   }
+
+  // Timer/Pomodoro methods
+  async startTimer(taskId) {
+    return new Promise((resolve, reject) => {
+      const now = new Date().toISOString();
+      this.db.run(
+        `UPDATE tasks SET active_timer_start = ?, last_worked_at = ? WHERE id = ?`,
+        [now, now, taskId],
+        function (err) {
+          if (err) {
+            console.error("Error starting timer:", err);
+            reject(err);
+            return;
+          }
+          resolve({ taskId, startTime: now });
+        }
+      );
+    });
+  }
+
+  async stopTimer(taskId) {
+    return new Promise((resolve, reject) => {
+      // First, get the current timer start time
+      this.db.get(
+        `SELECT active_timer_start, total_time_spent FROM tasks WHERE id = ?`,
+        [taskId],
+        (err, task) => {
+          if (err || !task || !task.active_timer_start) {
+            reject(err || new Error('No active timer'));
+            return;
+          }
+
+          const startTime = new Date(task.active_timer_start);
+          const endTime = new Date();
+          const duration = Math.floor((endTime - startTime) / 1000); // seconds
+          const newTotalTime = (task.total_time_spent || 0) + duration;
+
+          // Update task and create time log
+          this.db.serialize(() => {
+            // Update task
+            this.db.run(
+              `UPDATE tasks SET 
+                active_timer_start = NULL, 
+                total_time_spent = ?,
+                pomodoro_count = pomodoro_count + ?
+              WHERE id = ?`,
+              [newTotalTime, duration >= 1500 ? 1 : 0, taskId] // 25 min = 1 pomodoro
+            );
+
+            // Log the session
+            this.db.run(
+              `INSERT INTO time_logs (task_id, start_time, end_time, duration, session_type)
+              VALUES (?, ?, ?, ?, ?)`,
+              [taskId, task.active_timer_start, endTime.toISOString(), duration, 'focus'],
+              function (err) {
+                if (err) {
+                  reject(err);
+                  return;
+                }
+                resolve({ taskId, duration, totalTime: newTotalTime, logId: this.lastID });
+              }
+            );
+          });
+        }
+      );
+    });
+  }
+
+  async getTimeLogs(taskId) {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT * FROM time_logs WHERE task_id = ? ORDER BY created_at DESC`,
+        [taskId],
+        (err, rows) => {
+          if (err) {
+            console.error("Error fetching time logs:", err);
+            reject(err);
+            return;
+          }
+          resolve(rows);
+        }
+      );
+    });
+  }
+
+  async getActiveTimers() {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT id, name, active_timer_start FROM tasks WHERE active_timer_start IS NOT NULL`,
+        [],
+        (err, rows) => {
+          if (err) {
+            console.error("Error fetching active timers:", err);
+            reject(err);
+            return;
+          }
+          resolve(rows);
+        }
+      );
+    });
+  }
 }
 
 const database = new Database();
@@ -391,6 +509,10 @@ export const updateSubtask = (...args) => database.updateSubtask(...args);
 export const updateTaskNotes = (...args) => database.updateTaskNotes(...args);
 export const editTask = (...args) => database.editTask(...args);
 export const bulkImportTasks = (...args) => database.bulkImportTasks(...args);
+export const startTimer = (...args) => database.startTimer(...args);
+export const stopTimer = (...args) => database.stopTimer(...args);
+export const getTimeLogs = (...args) => database.getTimeLogs(...args);
+export const getActiveTimers = (...args) => database.getActiveTimers(...args);
 export const initDatabase = async () => {
   try {
     await database.init();

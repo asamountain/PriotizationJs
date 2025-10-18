@@ -1,4 +1,4 @@
-import { getTaskData, addTask, modifyTask, deleteTask, toggleTaskDone, editTask, updateTaskNotes } from "./db.js";
+import { getTaskData, addTask, modifyTask, deleteTask, toggleTaskDone, editTask, updateTaskNotes, startTimer, stopTimer, getTimeLogs } from "./db.js";
 import database from "./db.js";
 
 const setupSocket = (io) => {
@@ -21,7 +21,12 @@ const setupSocket = (io) => {
         notes: task.notes || null,
         progress: task.progress ? Number(task.progress) : null,
         category: task.category || null,
-        status: task.status || null
+        status: task.status || null,
+        // Timer fields
+        total_time_spent: task.total_time_spent || 0,
+        active_timer_start: task.active_timer_start || null,
+        pomodoro_count: task.pomodoro_count || 0,
+        last_worked_at: task.last_worked_at || null
       };
       
       // Debug logging for link
@@ -210,6 +215,44 @@ const setupSocket = (io) => {
       } catch (error) {
         console.error("Error fetching task details:", error);
         socket.emit("taskDetails", null);
+      }
+    });
+
+    // Timer handlers
+    socket.on("startTimer", async (taskId) => {
+      try {
+        console.log("Starting timer for task:", taskId);
+        const result = await startTimer(taskId);
+        const data = await getTaskData();
+        io.emit("updateTasks", { data: processTaskData(data) });
+        socket.emit("timerStarted", result);
+      } catch (error) {
+        console.error("Failed to start timer:", error);
+        socket.emit("timerError", { error: error.message });
+      }
+    });
+
+    socket.on("stopTimer", async (taskId) => {
+      try {
+        console.log("Stopping timer for task:", taskId);
+        const result = await stopTimer(taskId);
+        const data = await getTaskData();
+        io.emit("updateTasks", { data: processTaskData(data) });
+        socket.emit("timerStopped", result);
+      } catch (error) {
+        console.error("Failed to stop timer:", error);
+        socket.emit("timerError", { error: error.message });
+      }
+    });
+
+    socket.on("getTimeLogs", async (taskId) => {
+      try {
+        console.log("Getting time logs for task:", taskId);
+        const logs = await getTimeLogs(taskId);
+        socket.emit("timeLogs", { taskId, logs });
+      } catch (error) {
+        console.error("Failed to get time logs:", error);
+        socket.emit("timeLogsError", { error: error.message });
       }
     });
 
