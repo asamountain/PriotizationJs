@@ -793,6 +793,14 @@ window.addEventListener('DOMContentLoaded', () => {
         this.breakTimeRemaining = duration;
         this.showBreakDialog = false;
         
+        // Store break start time in localStorage for persistence
+        const breakData = {
+          startTime: Date.now(),
+          duration: duration,
+          taskName: this.breakTask ? this.breakTask.name : 'Task'
+        };
+        localStorage.setItem('activeBreak', JSON.stringify(breakData));
+        
         // Start break timer
         this.breakInterval = setInterval(() => {
           this.breakTimeRemaining--;
@@ -817,11 +825,49 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         this.breakTimeRemaining = 0;
         
+        // Clear break from localStorage
+        localStorage.removeItem('activeBreak');
+        
         // Play completion chime
         this.playCompletionChime();
         
         // Notify user
         this.showNotification('✅ Break complete! Ready for another Pomodoro?', 'success');
+      },
+      
+      // Restore break timer if it was active
+      restoreBreakTimer() {
+        const breakData = localStorage.getItem('activeBreak');
+        if (!breakData) return;
+        
+        try {
+          const { startTime, duration, taskName } = JSON.parse(breakData);
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          const remaining = duration - elapsed;
+          
+          if (remaining > 0) {
+            // Break is still active
+            this.breakTimeRemaining = remaining;
+            
+            // Restart interval
+            this.breakInterval = setInterval(() => {
+              this.breakTimeRemaining--;
+              if (this.breakTimeRemaining <= 0) {
+                this.endBreak();
+              }
+            }, 1000);
+            
+            console.log(`Restored break timer: ${remaining}s remaining for ${taskName}`);
+          } else {
+            // Break should have ended while away
+            localStorage.removeItem('activeBreak');
+            this.showNotification('✅ Break completed while you were away!', 'success');
+            this.playCompletionChime();
+          }
+        } catch (error) {
+          console.error('Error restoring break timer:', error);
+          localStorage.removeItem('activeBreak');
+        }
       },
 
       stopTimerUpdates() {
@@ -955,6 +1001,9 @@ window.addEventListener('DOMContentLoaded', () => {
       
       // Start timer updates for active timers
       this.startTimerUpdates();
+      
+      // Restore break timer if it was active (handles page navigation/refresh)
+      this.restoreBreakTimer();
       
       // Dispatch event to signal that app is mounted
       window.dispatchEvent(new Event('app-mounted'));
