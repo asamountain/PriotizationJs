@@ -247,7 +247,18 @@
             <v-app-bar density="comfortable" elevation="2">
                 <v-app-bar-title>Priority Task Manager</v-app-bar-title>
                 <v-spacer></v-spacer>
-                <v-btn icon @click="toggleTheme">
+                
+                <!-- CSV Import Icon Button -->
+                <v-btn icon @click="showCsvImportDialog = true" title="Import Tasks from CSV">
+                    <v-icon>mdi-file-import</v-icon>
+                </v-btn>
+                
+                <!-- Download CSV Template Button -->
+                <v-btn icon @click="downloadCSVTemplate" title="Download CSV Template">
+                    <v-icon>mdi-download</v-icon>
+                </v-btn>
+                
+                <v-btn icon @click="toggleTheme" title="Toggle Theme">
                     <v-icon>{{ isDarkTheme ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
                 </v-btn>
             </v-app-bar>
@@ -279,139 +290,6 @@
 
                     <!-- RIGHT SIDE: Task List (scrollable) -->
                     <div class="split-view-right" ref="rightPanel">
-
-                        <!-- CSV Import Card (Collapsible) -->
-                        <v-card class="mb-4" elevation="3">
-                        <v-card-title class="text-h6 d-flex align-center" style="cursor: pointer;" @click="toggleCsvImportPanel">
-                            <v-icon class="me-2" color="success">mdi-file-import</v-icon>
-                            Import Tasks from CSV
-                            <v-spacer></v-spacer>
-                            <v-icon>{{ showCsvImportPanel ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-                        </v-card-title>
-                        <v-expand-transition>
-                        <v-card-text v-show="showCsvImportPanel">
-                            <v-row align="center">
-                                <v-col cols="12" md="6">
-                                    <v-file-input
-                                        v-model="csvFile"
-                                        label="Select CSV file"
-                                        accept=".csv"
-                                        prepend-icon="mdi-file-delimited"
-                                        variant="outlined"
-                                        density="comfortable"
-                                        :loading="csvImporting"
-                                        :disabled="csvImporting"
-                                    ></v-file-input>
-                                </v-col>
-                                <v-col cols="12" md="6" class="d-flex gap-2">
-                                    <v-btn 
-                                        color="success" 
-                                        variant="elevated"
-                                        :loading="csvImporting"
-                                        :disabled="!csvFile || csvImporting"
-                                        @click="importCSV"
-                                    >
-                                        <v-icon start>mdi-upload</v-icon>
-                                        Import CSV
-                                    </v-btn>
-                                    <v-btn 
-                                        color="info" 
-                                        variant="outlined"
-                                        @click="downloadCSVTemplate"
-                                    >
-                                        <v-icon start>mdi-download</v-icon>
-                                        Download Template
-                                    </v-btn>
-                                </v-col>
-                            </v-row>
-                            <v-alert 
-                                v-if="csvImportResult"
-                                :type="csvImportResult.success ? 'success' : 'error'"
-                                class="mt-4"
-                                closable
-                                @click:close="csvImportResult = null"
-                            >
-                                {{ csvImportResult.message }}
-                                <div v-if="csvImportResult.details && csvImportResult.details.errors.length > 0" class="mt-2">
-                                    <strong>Errors:</strong>
-                                    <ul>
-                                        <li v-for="error in csvImportResult.details.errors" :key="error.row">
-                                            Row {{ error.row }}: {{ error.error }}
-                                        </li>
-                                    </ul>
-                                </div>
-                            </v-alert>
-                        </v-card-text>
-                        </v-expand-transition>
-                    </v-card>
-
-                        <!-- Task form in a card (Collapsible) -->
-                        <v-card class="mb-4" elevation="3">
-                        <v-card-title class="text-h6 d-flex align-center" style="cursor: pointer;" @click="toggleAddTaskPanel">
-                            <v-icon class="me-2" color="primary">mdi-plus-circle</v-icon>
-                            Add New Task
-                            <v-spacer></v-spacer>
-                            <v-icon>{{ showAddTaskPanel ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-                        </v-card-title>
-                        <v-expand-transition>
-                        <v-card-text v-show="showAddTaskPanel">
-                            <v-form @submit.prevent="submitTask">
-                                <v-row>
-                                    <v-col cols="12" md="6">
-                                        <v-text-field
-                    v-model="taskName"
-                                            label="Task Name"
-                    required
-                                            variant="outlined"
-                                            density="comfortable"
-                                        ></v-text-field>
-                                    </v-col>
-                                    <v-col cols="12" md="6">
-                                        <v-text-field
-                    v-model="taskLink"
-                                            label="Link (optional)"
-                                            variant="outlined"
-                                            density="comfortable"
-                    placeholder="Add a URL (http://example.com)"
-                                        ></v-text-field>
-                                    </v-col>
-                                </v-row>
-
-                                <v-row>
-                                    <v-col cols="12" md="6">
-                                        <v-slider
-                                            v-model="taskImportance"
-                        min="0"
-                        max="10"
-                        step="1"
-                                            show-ticks="always"
-                                            thumb-label
-                                            label="Importance"
-                                            color="primary"
-                                        ></v-slider>
-                                    </v-col>
-                                    <v-col cols="12" md="6">
-                                        <v-slider
-                                            v-model="taskUrgency"
-                        min="0"
-                        max="10"
-                        step="1"
-                                            show-ticks="always"
-                                            thumb-label
-                                            label="Urgency"
-                                            color="secondary"
-                                        ></v-slider>
-                                    </v-col>
-                                </v-row>
-                                
-                                <v-btn type="submit" color="primary" variant="elevated" class="mt-2">
-                                    Add Task
-                                    <v-icon end>mdi-plus</v-icon>
-                                </v-btn>
-                            </v-form>
-                        </v-card-text>
-                        </v-expand-transition>
-                    </v-card>
 
                         <!-- Active Tasks Section -->
                         <v-card class="mb-4" elevation="3">
@@ -1002,6 +880,74 @@
                         <v-btn color="grey" variant="text" @click="closeNotesDialog">Cancel</v-btn>
                         <v-btn color="primary" variant="elevated" @click="saveTaskNotes">
                             Save Notes
+                        </v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
+            <!-- CSV Import Dialog -->
+            <v-dialog v-model="showCsvImportDialog" max-width="600px">
+                <v-card>
+                    <v-card-title class="text-h5 d-flex align-center">
+                        <v-icon class="me-2" color="success">mdi-file-import</v-icon>
+                        Import Tasks from CSV
+                    </v-card-title>
+                    <v-card-text>
+                        <v-file-input
+                            v-model="csvFile"
+                            label="Select CSV file"
+                            accept=".csv"
+                            prepend-icon="mdi-file-delimited"
+                            variant="outlined"
+                            clearable
+                            class="mb-3"
+                        ></v-file-input>
+                        
+                        <!-- Import Results -->
+                        <v-alert
+                            v-if="csvImportResult"
+                            :type="csvImportResult.success ? 'success' : 'error'"
+                            closable
+                            @click:close="csvImportResult = null"
+                        >
+                            <div v-if="csvImportResult.success">
+                                Successfully imported {{ csvImportResult.details.imported }} tasks
+                                <span v-if="csvImportResult.details.errors && csvImportResult.details.errors.length > 0">
+                                    ({{ csvImportResult.details.errors.length }} errors)
+                                </span>
+                            </div>
+                            <div v-else>
+                                Failed to import CSV: {{ csvImportResult.error }}
+                            </div>
+                            
+                            <div v-if="csvImportResult.details && csvImportResult.details.errors && csvImportResult.details.errors.length > 0" class="mt-2">
+                                <strong>Errors:</strong>
+                                <ul class="ml-4">
+                                    <li v-for="error in csvImportResult.details.errors" :key="error.row">
+                                        Row {{ error.row }}: {{ error.error }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </v-alert>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn
+                            color="grey"
+                            variant="text"
+                            @click="showCsvImportDialog = false"
+                        >
+                            Cancel
+                        </v-btn>
+                        <v-btn
+                            color="success"
+                            variant="elevated"
+                            @click="importCSV"
+                            :loading="csvImporting"
+                            :disabled="!csvFile || csvImporting"
+                        >
+                            <v-icon start>mdi-upload</v-icon>
+                            Import CSV
                         </v-btn>
                     </v-card-actions>
                 </v-card>

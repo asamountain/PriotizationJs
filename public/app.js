@@ -133,8 +133,7 @@ window.addEventListener('DOMContentLoaded', () => {
         ],
         leftPanelWidth: parseFloat(localStorage.getItem('leftPanelWidth')) || 55,
         isResizing: false,
-        showAddTaskPanel: localStorage.getItem('showAddTaskPanel') !== 'false',
-        showCsvImportPanel: localStorage.getItem('showCsvImportPanel') !== 'false',
+        showCsvImportDialog: false,
         showQuickAddModal: false,
         quickAddTask: {
           name: '',
@@ -598,8 +597,14 @@ window.addEventListener('DOMContentLoaded', () => {
             };
             this.showNotification(result.message, 'success');
             
-            // Clear the file input
+            // Clear the file input and close dialog
             this.csvFile = null;
+            
+            // Close dialog after successful import
+            setTimeout(() => {
+              this.showCsvImportDialog = false;
+              this.csvImportResult = null;
+            }, 2000);
             
             // Refresh tasks - socket will handle this automatically
           } else {
@@ -626,15 +631,6 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showNotification('Downloading CSV template...', 'info');
       },
 
-      toggleAddTaskPanel() {
-        this.showAddTaskPanel = !this.showAddTaskPanel;
-        localStorage.setItem('showAddTaskPanel', this.showAddTaskPanel);
-      },
-
-      toggleCsvImportPanel() {
-        this.showCsvImportPanel = !this.showCsvImportPanel;
-        localStorage.setItem('showCsvImportPanel', this.showCsvImportPanel);
-      },
 
       openQuickAddModal(importance, urgency) {
         this.quickAddTask.importance = importance;
