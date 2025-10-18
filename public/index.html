@@ -475,6 +475,26 @@
                                         </div>
 
                                         <template v-slot:append>
+                                            <!-- Pomodoro Timer -->
+                                            <div class="d-flex align-center mr-3" style="min-width: 100px;">
+                                                <v-chip
+                                                    :color="task.active_timer_start ? 'error' : 'grey'"
+                                                    size="small"
+                                                    variant="flat"
+                                                    class="mr-1"
+                                                >
+                                                    <v-icon start size="small">{{ task.active_timer_start ? 'mdi-timer' : 'mdi-timer-outline' }}</v-icon>
+                                                    {{ formatTime(task.active_timer_start ? getElapsedTime(task.active_timer_start) : task.total_time_spent) }}
+                                                </v-chip>
+                                                <v-btn
+                                                    :icon="task.active_timer_start ? 'mdi-stop' : 'mdi-play'"
+                                                    variant="text"
+                                                    size="small"
+                                                    @click.stop="toggleTimer(task)"
+                                                    :color="task.active_timer_start ? 'error' : 'success'"
+                                                    :title="task.active_timer_start ? 'Stop timer' : 'Start timer'"
+                                                ></v-btn>
+                                            </div>
                                             <v-btn
                                                 icon="mdi-note-edit"
                                                 variant="text"

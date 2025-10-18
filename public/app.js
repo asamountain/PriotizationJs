@@ -142,6 +142,9 @@ window.addEventListener('DOMContentLoaded', () => {
           link: '',
           notes: ''
         },
+        // Timer state
+        timerInterval: null,
+        currentTime: Date.now()
       };
     },
     computed: {
@@ -676,6 +679,52 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showQuickAddModal = false;
       },
 
+      // Pomodoro Timer Methods
+      toggleTimer(task) {
+        if (task.active_timer_start) {
+          // Stop timer
+          this.socket.emit('stopTimer', task.id);
+          this.showNotification(`Timer stopped for: ${task.name}`, 'info');
+        } else {
+          // Start timer
+          this.socket.emit('startTimer', task.id);
+          this.showNotification(`Timer started for: ${task.name}`, 'success');
+        }
+      },
+
+      formatTime(seconds) {
+        if (!seconds) return '0:00';
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        
+        if (hours > 0) {
+          return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+        return `${minutes}:${String(secs).padStart(2, '0')}`;
+      },
+
+      getElapsedTime(startTime) {
+        if (!startTime) return 0;
+        const start = new Date(startTime).getTime();
+        const now = this.currentTime;
+        return Math.floor((now - start) / 1000);
+      },
+
+      startTimerUpdates() {
+        // Update current time every second for active timers
+        this.timerInterval = setInterval(() => {
+          this.currentTime = Date.now();
+        }, 1000);
+      },
+
+      stopTimerUpdates() {
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+        }
+      },
+
       // Resize panel methods
       startResize(e) {
         this.isResizing = true;
@@ -737,6 +786,8 @@ window.addEventListener('DOMContentLoaded', () => {
         document.removeEventListener('mousemove', this.handleResize);
         document.removeEventListener('mouseup', this.stopResize);
       }
+      // Clean up timer interval
+      this.stopTimerUpdates();
     },
     mounted() {
       // Make app globally available FIRST
@@ -796,8 +847,15 @@ window.addEventListener('DOMContentLoaded', () => {
           document.body.classList.add('dark-theme');
       }
       
+      // Start timer updates for active timers
+      this.startTimerUpdates();
+      
       // Dispatch event to signal that app is mounted
       window.dispatchEvent(new Event('app-mounted'));
+    },
+    beforeUnmount() {
+      // Clean up timer interval
+      this.stopTimerUpdates();
     }
   });
   
