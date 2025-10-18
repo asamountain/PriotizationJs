@@ -1073,6 +1073,66 @@
                 </v-card>
             </v-dialog>
 
+            <!-- Pomodoro Break Dialog -->
+            <v-dialog v-model="showBreakDialog" max-width="500px" persistent>
+                <v-card>
+                    <v-card-title class="text-h5 bg-success text-white">
+                        🍅 Pomodoro Complete!
+                    </v-card-title>
+                    <v-card-text class="pt-6">
+                        <div class="text-center mb-4">
+                            <v-icon size="64" color="success">mdi-check-circle</v-icon>
+                        </div>
+                        <p class="text-h6 text-center mb-4">
+                            Great job! You completed a 25-minute focus session.
+                        </p>
+                        <p class="text-center mb-2" v-if="breakTask">
+                            <strong>Task:</strong> {{ breakTask.name }}
+                        </p>
+                        <p class="text-center mb-4" v-if="breakTask">
+                            <v-chip color="primary" variant="flat">
+                                🍅 {{ breakTask.pomodoro_count }} Pomodoros completed
+                            </v-chip>
+                        </p>
+                        <v-divider class="my-4"></v-divider>
+                        <p class="text-center text-h6 mb-2">
+                            Time for a {{ breakType === 'long' ? '15' : '5' }}-minute break!
+                        </p>
+                        <p class="text-center text-body-2 text-grey">
+                            {{ breakType === 'long' ? '🌟 Long break - You earned it!' : '☕ Short break - Rest and recharge' }}
+                        </p>
+                    </v-card-text>
+                    <v-card-actions class="px-6 pb-4">
+                        <v-btn text @click="skipBreak" color="grey">
+                            Skip Break
+                        </v-btn>
+                        <v-spacer></v-spacer>
+                        <v-btn color="success" variant="flat" size="large" @click="startBreak">
+                            <v-icon start>mdi-coffee</v-icon>
+                            Start {{ breakType === 'long' ? '15' : '5' }}-Min Break
+                        </v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
+            <!-- Break Timer Indicator (when break is active) -->
+            <v-snackbar
+                :model-value="breakTimeRemaining > 0"
+                :timeout="-1"
+                location="top"
+                color="info"
+            >
+                <div class="d-flex align-center">
+                    <v-icon start>mdi-coffee</v-icon>
+                    <span class="text-h6 mr-2">Break Time:</span>
+                    <span class="text-h5 font-weight-bold">{{ formatTime(breakTimeRemaining) }}</span>
+                    <v-spacer></v-spacer>
+                    <v-btn icon size="small" @click="endBreak">
+                        <v-icon>mdi-close</v-icon>
+                    </v-btn>
+                </div>
+            </v-snackbar>
+
             <!-- Snackbar for notifications -->
             <v-snackbar
                 v-model="snackbar.show"

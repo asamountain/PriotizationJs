@@ -144,7 +144,13 @@ window.addEventListener('DOMContentLoaded', () => {
         },
         // Timer state
         timerInterval: null,
-        currentTime: Date.now()
+        currentTime: Date.now(),
+        completedPomodoros: new Set(),
+        showBreakDialog: false,
+        breakTask: null,
+        breakType: 'short', // 'short' (5min) or 'long' (15min)
+        breakTimeRemaining: 0,
+        breakInterval: null
       };
     },
     computed: {
@@ -715,7 +721,107 @@ window.addEventListener('DOMContentLoaded', () => {
         // Update current time every second for active timers
         this.timerInterval = setInterval(() => {
           this.currentTime = Date.now();
+          this.checkPomodoroCompletion();
         }, 1000);
+      },
+
+      checkPomodoroCompletion() {
+        // Check if any task has reached 25 minutes
+        const POMODORO_DURATION = 25 * 60; // 25 minutes in seconds
+        
+        this.tasks.forEach(task => {
+          if (task.active_timer_start) {
+            const elapsed = this.getElapsedTime(task.active_timer_start);
+            const pomodoroKey = `${task.id}-${task.active_timer_start}`;
+            
+            // Check if this specific pomodoro session just completed
+            if (elapsed >= POMODORO_DURATION && !this.completedPomodoros.has(pomodoroKey)) {
+              this.completedPomodoros.add(pomodoroKey);
+              this.onPomodoroComplete(task);
+            }
+          }
+        });
+      },
+
+      onPomodoroComplete(task) {
+        // Auto-stop the timer
+        this.socket.emit('stopTimer', task.id);
+        
+        // Play chime sound
+        this.playCompletionChime();
+        
+        // Show break dialog
+        this.breakTask = task;
+        // Every 4th pomodoro gets a long break
+        this.breakType = (task.pomodoro_count % 4 === 0) ? 'long' : 'short';
+        this.showBreakDialog = true;
+        
+        // Show notification
+        this.showNotification(`🍅 Pomodoro completed for: ${task.name}! Time for a break!`, 'success');
+      },
+
+      playCompletionChime() {
+        // Create a pleasant chime sound using Web Audio API
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Create a pleasant three-tone chime
+        const playTone = (frequency, startTime, duration) => {
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          oscillator.frequency.value = frequency;
+          oscillator.type = 'sine';
+          
+          gainNode.gain.setValueAtTime(0.3, startTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+          
+          oscillator.start(startTime);
+          oscillator.stop(startTime + duration);
+        };
+        
+        const now = audioContext.currentTime;
+        playTone(523.25, now, 0.3);        // C5
+        playTone(659.25, now + 0.15, 0.3); // E5
+        playTone(783.99, now + 0.3, 0.5);  // G5
+      },
+
+      startBreak() {
+        const duration = this.breakType === 'long' ? 15 * 60 : 5 * 60; // seconds
+        this.breakTimeRemaining = duration;
+        this.showBreakDialog = false;
+        
+        // Start break timer
+        this.breakInterval = setInterval(() => {
+          this.breakTimeRemaining--;
+          if (this.breakTimeRemaining <= 0) {
+            this.endBreak();
+          }
+        }, 1000);
+        
+        const breakLength = this.breakType === 'long' ? '15 min' : '5 min';
+        this.showNotification(`☕ Break started (${breakLength}). Relax!`, 'info');
+      },
+
+      skipBreak() {
+        this.showBreakDialog = false;
+        this.breakTask = null;
+      },
+
+      endBreak() {
+        if (this.breakInterval) {
+          clearInterval(this.breakInterval);
+          this.breakInterval = null;
+        }
+        this.breakTimeRemaining = 0;
+        
+        // Play completion chime
+        this.playCompletionChime();
+        
+        // Notify user
+        this.showNotification('✅ Break complete! Ready for another Pomodoro?', 'success');
       },
 
       stopTimerUpdates() {
