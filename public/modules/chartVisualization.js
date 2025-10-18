@@ -39,11 +39,10 @@ export class ChartVisualization {
       svg.setAttribute('width', '100%');
       svg.setAttribute('height', '100%');
       svg.setAttribute('viewBox', '0 0 800 600');
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
       svg.style.display = 'block';
-      svg.style.position = 'absolute';
-      svg.style.top = '0';
-      svg.style.left = '0';
-      svg.style.zIndex = '10';
+      svg.style.width = '100%';
+      svg.style.height = '100%';
       
       // Create definitions for filters and patterns
       const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
