@@ -532,6 +532,7 @@ export const startTimer = (...args) => database.startTimer(...args);
 export const stopTimer = (...args) => database.stopTimer(...args);
 export const getTimeLogs = (...args) => database.getTimeLogs(...args);
 export const getActiveTimers = (...args) => database.getActiveTimers(...args);
+export const setTaskParent = (...args) => database.setTaskParent(...args);
 export const initDatabase = async () => {
   try {
     await database.init();
