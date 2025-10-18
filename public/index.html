@@ -344,7 +344,6 @@
                                         :data-task-id="task.id" 
                                         class="task"
                                         style="cursor: pointer;"
-                                        title="Double-click to edit notes"
                                     >
                                         <template v-slot:prepend>
                                             <v-checkbox 
@@ -626,8 +625,7 @@
                                             @click="selectTask(task)"
                                             @dblclick="editTaskNotes(task)"
                                     :data-task-id="task.id"
-                                            style="cursor: pointer;"
-                                            title="Double-click to edit notes" 
+                                            style="cursor: pointer;" 
                                             class="task completed-task"
                                         >
                                             <template v-slot:prepend>
