@@ -1,4 +1,4 @@
-import { getTaskData, addTask, modifyTask, deleteTask, toggleTaskDone, editTask, updateTaskNotes, startTimer, stopTimer, getTimeLogs } from "./db.js";
+import { getTaskData, addTask, modifyTask, deleteTask, toggleTaskDone, editTask, updateTaskNotes, startTimer, stopTimer, getTimeLogs, setTaskParent } from "./db.js";
 import database from "./db.js";
 
 const setupSocket = (io) => {
@@ -256,10 +256,28 @@ const setupSocket = (io) => {
       }
     });
 
+    // Set task parent (create subtask relationship)
+    socket.on("setTaskParent", async ({ taskId, parentId }) => {
+      try {
+        console.log(`Setting parent for task ${taskId} to ${parentId}`);
+        await setTaskParent(taskId, parentId);
+        
+        // Broadcast updated tasks to all clients
+        const tasks = await getTaskData();
+        io.emit("tasksUpdated", processTaskData(tasks));
+        
+        socket.emit("taskParentSet", { taskId, parentId });
+      } catch (error) {
+        console.error("Failed to set task parent:", error);
+        socket.emit("setTaskParentError", { error: error.message });
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log("Client disconnected");
     });
   });
 };
+
 
 export default setupSocket;

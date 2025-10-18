@@ -494,6 +494,25 @@ class Database {
       );
     });
   }
+
+  // Set parent for a task (creates subtask relationship)
+  // Preserves ALL timer data - only updates parent_id
+  async setTaskParent(taskId, parentId) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `UPDATE tasks SET parent_id = ? WHERE id = ?`,
+        [parentId, taskId],
+        function (err) {
+          if (err) {
+            console.error("Error setting task parent:", err);
+            reject(err);
+            return;
+          }
+          resolve({ taskId, parentId, changes: this.changes });
+        }
+      );
+    });
+  }
 }
 
 const database = new Database();
