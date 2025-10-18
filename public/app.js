@@ -415,10 +415,12 @@ window.addEventListener('DOMContentLoaded', () => {
           console.log('Subtasks with links:', subtasksWithLinks);
         }
         
-        // Re-render the chart with updated tasks
+        // Re-render the chart with updated tasks (only if chart is initialized)
         console.log('Updating chart with', tasks.length, 'tasks');
-        if (chartVisualization && typeof chartVisualization.renderChart === 'function') {
+        if (chartVisualization && typeof chartVisualization.renderChart === 'function' && chartVisualization.dotsGroup) {
           chartVisualization.renderChart(tasks);
+        } else {
+          console.log('Chart not yet initialized, skipping render');
         }
       },
       
@@ -737,7 +739,18 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     },
     mounted() {
-      // Initialize socket connection first
+      // Make app globally available FIRST
+      window.app = this;
+      
+      // Initialize chart BEFORE socket connection to avoid race condition
+      this.$nextTick(() => {
+        if (chartVisualization) {
+          console.log('Initializing chart before socket connection');
+          chartVisualization.initializeChart();
+        }
+      });
+      
+      // Initialize socket connection AFTER chart setup
       this.socket = io(window.location.origin);
       
       // Listen for socket connection and request data
@@ -778,20 +791,10 @@ window.addEventListener('DOMContentLoaded', () => {
       window.taskManager = window.taskManager || {};
       window.taskManager.setVueApp?.(this);
       
-      // Initialize chart after Vue is mounted
-      setTimeout(() => {
-        if (chartVisualization) {
-          chartVisualization.initializeChart();
-        }
-      }, 100);
-      
       // Apply dark theme if active
         if (this.isDarkTheme) {
           document.body.classList.add('dark-theme');
       }
-      
-      // Make app globally available
-      window.app = this;
       
       // Dispatch event to signal that app is mounted
       window.dispatchEvent(new Event('app-mounted'));
