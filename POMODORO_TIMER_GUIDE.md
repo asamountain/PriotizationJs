@@ -47,16 +47,33 @@ Each task now includes an integrated Pomodoro timer that tracks:
 3. Chip turns **red** and shows live elapsed time
 4. Continue working on your task!
 
-### Stopping a Timer
-1. Click the **⏹️ stop button** (replaces play when active)
+### Automatic Pomodoro Completion (NEW! 🎉)
+1. Timer **automatically stops** at 25 minutes
+2. **Pleasant chime sound** plays (3-tone C-E-G chord)
+3. **Break dialog appears** with options:
+   - **Start Break** → Begins 5-min (or 15-min) break timer
+   - **Skip Break** → Continue working immediately
+4. Every **4th Pomodoro** → Long break (15 minutes)
+5. Break timer shows in **top snackbar** with countdown
+
+### Manual Stop
+1. Click the **⏹️ stop button** anytime before 25 minutes
 2. Session is logged automatically
 3. Time is added to task's total time
 4. If session ≥ 25 minutes → +1 pomodoro count
+
+### Break Management
+- **Short Break** (5 min) → After 1st, 2nd, 3rd Pomodoros
+- **Long Break** (15 min) → After 4th Pomodoro
+- Break timer counts down in real-time
+- **Chime plays** when break ends
+- Can **end break early** by clicking X
 
 ### Multiple Timers
 - ✅ You can run multiple timers simultaneously
 - ✅ Each task tracks independently
 - ✅ All timers sync in real-time across devices
+- ✅ Each timer triggers its own 25-min completion
 
 ---
 
@@ -188,27 +205,100 @@ On task detail view:
 - Backend: Calculates duration on stop
 - No server polling - efficient client-side display
 
+### Automatic 25-Minute Detection
+```javascript
+checkPomodoroCompletion() {
+  const POMODORO_DURATION = 25 * 60; // 25 minutes in seconds
+  
+  this.tasks.forEach(task => {
+    if (task.active_timer_start) {
+      const elapsed = this.getElapsedTime(task.active_timer_start);
+      const pomodoroKey = `${task.id}-${task.active_timer_start}`;
+      
+      // Check if this specific pomodoro session just completed
+      if (elapsed >= POMODORO_DURATION && !this.completedPomodoros.has(pomodoroKey)) {
+        this.completedPomodoros.add(pomodoroKey);
+        this.onPomodoroComplete(task);
+      }
+    }
+  });
+}
+```
+
+**Key Features:**
+- Runs every second via `setInterval`
+- Tracks completed sessions with `Set` to prevent duplicates
+- Unique key per session: `${taskId}-${startTime}`
+- Triggers at exactly 25:00 (1500 seconds)
+
+### Audio Notification (Web Audio API)
+```javascript
+playCompletionChime() {
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  
+  // Pleasant 3-tone chime: C5 → E5 → G5
+  playTone(523.25, now, 0.3);        // C5
+  playTone(659.25, now + 0.15, 0.3); // E5
+  playTone(783.99, now + 0.3, 0.5);  // G5
+}
+```
+
+**Why Web Audio API?**
+- ✅ No external audio files needed
+- ✅ Consistent across all platforms
+- ✅ Lightweight and instant
+- ✅ Pleasant, non-intrusive sound
+
+### Break Timer System
+```javascript
+// Data properties
+showBreakDialog: false,
+breakTask: null,
+breakType: 'short', // 'short' (5min) or 'long' (15min)
+breakTimeRemaining: 0,
+breakInterval: null
+
+// Automatically determines break type
+this.breakType = (task.pomodoro_count % 4 === 0) ? 'long' : 'short';
+```
+
+**Break Logic:**
+- Pomodoros 1-3 → 5-minute break
+- Pomodoro 4 → 15-minute break
+- Pomodoro 5 → Cycle restarts (5-min break)
+
 ### State Management
 ```javascript
 // Vue reactive data
-currentTime: Date.now()  // Updated every second
-timerInterval: null      // Interval handle
+currentTime: Date.now()              // Updated every second
+timerInterval: null                  // Interval handle
+completedPomodoros: new Set()        // Track completed sessions
+showBreakDialog: false               // Break modal state
+breakTimeRemaining: 0                // Break countdown (seconds)
 
 // Methods
-getElapsedTime(startTime)  // Calculate seconds elapsed
-formatTime(seconds)        // Format as M:SS or H:MM:SS
-toggleTimer(task)          // Start/stop handler
+getElapsedTime(startTime)            // Calculate seconds elapsed
+formatTime(seconds)                  // Format as M:SS or H:MM:SS
+toggleTimer(task)                    // Start/stop handler
+checkPomodoroCompletion()            // Check for 25-min completion
+onPomodoroComplete(task)             // Handle completion event
+playCompletionChime()                // Play audio notification
+startBreak()                         // Start break timer
+endBreak()                           // End break (manual or auto)
+skipBreak()                          // Dismiss break dialog
 ```
 
 ### Real-Time Sync
 - Timer start/stop broadcasts to all connected clients
 - Automatic UI update on socket events
 - No page refresh needed
+- Break dialog appears for the user who started the timer
 
 ### Data Integrity
 - Transactions for consistent time logging
 - Cascade delete: Logs removed with tasks
 - Pomodoro auto-increment (≥25min sessions)
+- Duplicate prevention with `Set` tracking
 
 ---
 
@@ -255,19 +345,28 @@ GROUP BY task_id;
 
 ## 🎨 Future UI Enhancements
 
-### V2 Features
+### V2 Features (Completed! ✅)
+- ✅ **Auto-Stop at 25 Minutes**: Timer stops automatically
+- ✅ **Audio Notifications**: Pleasant chime on completion
+- ✅ **Break Management**: Automatic break prompts (5/15 min)
+- ✅ **Break Timer**: Countdown timer for breaks
+
+### V3 Features (Planned)
 - ⏸️ **Pause/Resume**: Pause timer without ending session
-- 🔔 **Break Reminders**: Notify after 25/50 minutes
-- 🎵 **Focus Music**: Play background sounds
+- 🔔 **Custom Intervals**: Configurable Pomodoro lengths (20/25/30 min)
+- 🎵 **Focus Music**: Play background sounds during work
 - 📊 **Mini Dashboard**: Time stats in sidebar
 - 🏆 **Achievements**: Badges for streaks/milestones
 - 🌈 **Visual Timeline**: Daily focus heatmap
+- 🌅 **Do Not Disturb**: Browser notifications disabled during focus
 
-### V3 Features
+### V4 Features (Future)
 - 🤖 **AI Insights**: Personalized productivity recommendations
 - 📱 **Mobile App**: Cross-platform time tracking
 - 👥 **Team Analytics**: Collaborative focus metrics
 - 🔗 **Integration**: Todoist, Notion, Calendar sync
+- 💬 **Focus Mode**: Hide distracting UI elements
+- 📈 **Focus Prediction**: ML-based optimal work times
 
 ---
 
@@ -275,8 +374,9 @@ GROUP BY task_id;
 
 1. **Browser Only**: Timer doesn't run when browser closed
 2. **Client Time**: Uses client clock (may drift)
-3. **No Pause**: Stop = end session (planned for V2)
-4. **Manual Recovery**: No auto-stop for idle sessions
+3. **No Pause**: Stop = end session (planned for V3)
+4. **Single Notification**: Only the user who started timer sees break dialog
+5. **No Persistence**: Break timer resets on page refresh
 
 ---
 
@@ -298,12 +398,13 @@ GROUP BY task_id;
 
 ## 🚀 Roadmap
 
-- [x] **Phase 1**: Basic timer functionality
-- [x] **Phase 2**: Time logging backend
-- [x] **Phase 3**: Real-time sync
-- [ ] **Phase 4**: Analytics dashboard
-- [ ] **Phase 5**: Advanced features (pause, breaks)
-- [ ] **Phase 6**: Mobile app & integrations
+- [x] **Phase 1**: Basic timer functionality ✅
+- [x] **Phase 2**: Time logging backend ✅
+- [x] **Phase 3**: Real-time sync ✅
+- [x] **Phase 4**: Auto-completion & breaks ✅ **← NEW!**
+- [ ] **Phase 5**: Analytics dashboard (in progress)
+- [ ] **Phase 6**: Advanced features (pause, custom intervals)
+- [ ] **Phase 7**: Mobile app & integrations
 
 ---
 
