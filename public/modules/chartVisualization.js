@@ -96,11 +96,6 @@ export class ChartVisualization {
       background.setAttribute('ry', '4');
       svg.appendChild(background);
       
-      // Create dots group for task nodes
-      const dotsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      dotsGroup.classList.add('task-nodes');
-      svg.appendChild(dotsGroup);
-      
       // Add subtle border
       const border = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       border.setAttribute('x', '2');
@@ -114,7 +109,7 @@ export class ChartVisualization {
       border.setAttribute('ry', '4');
       svg.appendChild(border);
       
-      // Add quadrants
+      // Add quadrants FIRST (so they're in the background)
       const gridGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       gridGroup.classList.add('grid-lines');
       
@@ -122,6 +117,11 @@ export class ChartVisualization {
       this.addVuetifyQuadrants(gridGroup);
       
       svg.appendChild(gridGroup);
+      
+      // Create dots group for task nodes AFTER quadrants (so dots are on top)
+      const dotsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      dotsGroup.classList.add('task-nodes');
+      svg.appendChild(dotsGroup);
       
       // Store SVG and group for later use
       this.chartGroup = svg;
@@ -480,7 +480,10 @@ export class ChartVisualization {
     dot.setAttribute('filter', 'url(#elevation-2)');
     
     // Add improved event listeners
-    dot.addEventListener('click', () => this.focusOnTask(task.id));
+    dot.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent quadrant click from firing
+      this.focusOnTask(task.id);
+    });
     
     // Use a flag to track hover state
     let isHovering = false;

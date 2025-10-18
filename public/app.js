@@ -415,6 +415,12 @@ window.addEventListener('DOMContentLoaded', () => {
         if (subtasksWithLinks.length > 0) {
           console.log('Subtasks with links:', subtasksWithLinks);
         }
+        
+        // Re-render the chart with updated tasks
+        console.log('Updating chart with', tasks.length, 'tasks');
+        if (chartVisualization && typeof chartVisualization.renderChart === 'function') {
+          chartVisualization.renderChart(tasks);
+        }
       },
       
       formatDate(dateString) {
