@@ -653,7 +653,8 @@ window.addEventListener('DOMContentLoaded', () => {
           notes: this.quickAddTask.notes || null
         };
 
-        this.socket.emit('addTask', taskData);
+        // Use taskOperations to ensure proper real-time updates
+        taskOperations.addTask(taskData);
         this.showNotification(`Added: ${taskData.name}`, 'success');
         
         // Close modal and reset
