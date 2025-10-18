@@ -18,8 +18,12 @@
     <style>
       /* Split View Layout - Account for app bar */
       .split-view-main {
-        padding: 0 !important;
+        padding-top: 56px !important; /* CRITICAL: Space for fixed app bar */
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        padding-bottom: 0 !important;
         overflow: hidden;
+        height: 100vh;
       }
       
       .split-view-container {
@@ -28,12 +32,6 @@
         width: 100%;
         padding: 0;
         margin: 0;
-      }
-      
-      /* Ensure v-main takes full viewport minus app bar */
-      .v-main {
-        min-height: calc(100vh - 56px) !important;
-        height: calc(100vh - 56px) !important;
       }
       
       .split-view-left {
