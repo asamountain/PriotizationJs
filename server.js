@@ -32,6 +32,11 @@ app.get("/", (req, res) => {
     res.sendFile(join(__dirname, "public", "index.html"));
 });
 
+// Serve the analytics page
+app.get("/analytics", (req, res) => {
+    res.sendFile(join(__dirname, "public", "analytics.html"));
+});
+
 // CSV Import endpoint
 app.post("/api/import-csv", upload.single("csvFile"), async (req, res) => {
     try {
@@ -148,6 +153,31 @@ Another Task,5,5,false,,,,`;
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", "attachment; filename=task-template.csv");
     res.send(template);
+});
+
+// Analytics API endpoint
+app.get("/api/analytics", async (req, res) => {
+    try {
+        const { getTaskData, getTimeLogs } = await import("./db.js");
+        
+        // Get all tasks with time data
+        const tasks = await getTaskData();
+        
+        // Get all time logs for all tasks
+        const allLogs = [];
+        for (const task of tasks) {
+            const logs = await getTimeLogs(task.id);
+            allLogs.push(...logs.map(log => ({ ...log, task_name: task.name })));
+        }
+        
+        res.json({
+            tasks,
+            timeLogs: allLogs
+        });
+    } catch (error) {
+        console.error("Error fetching analytics:", error);
+        res.status(500).json({ error: "Failed to fetch analytics data" });
+    }
 });
 
 // Server initialization

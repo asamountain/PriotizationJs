@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics & Insights - Priority Task Manager</title>
+    
+    <!-- Vuetify -->
+    <link href="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.x/css/materialdesignicons.min.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@3.0.0/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+        }
+        
+        .stat-card {
+            min-height: 120px;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            padding: 16px;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .dark-theme .loading-overlay {
+            background: rgba(0, 0, 0, 0.9);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <v-app :theme="theme">
+            <!-- Loading Overlay -->
+            <div v-if="loading" class="loading-overlay">
+                <v-progress-circular
+                    indeterminate
+                    size="64"
+                    color="primary"
+                ></v-progress-circular>
+            </div>
+            
+            <!-- App Bar -->
+            <v-app-bar density="comfortable" elevation="2">
+                <v-btn icon href="/" title="Back to Tasks">
+                    <v-icon>mdi-arrow-left</v-icon>
+                </v-btn>
+                <v-app-bar-title>📊 Analytics & Insights</v-app-bar-title>
+                <v-spacer></v-spacer>
+                <v-chip color="primary" variant="flat" class="mr-4">
+                    <v-icon start>mdi-calendar</v-icon>
+                    {{ currentDateRange }}
+                </v-chip>
+                <v-btn icon @click="toggleTheme" title="Toggle Theme">
+                    <v-icon>{{ isDarkTheme ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
+                </v-btn>
+            </v-app-bar>
+            
+            <v-main>
+                <v-container fluid>
+                    <!-- Overview Stats -->
+                    <v-row class="mb-4">
+                        <v-col cols="12">
+                            <h2 class="text-h4 mb-4">
+                                <v-icon class="mr-2" color="primary">mdi-view-dashboard</v-icon>
+                                Overview
+                            </h2>
+                        </v-col>
+                        
+                        <v-col cols="12" sm="6" md="3">
+                            <v-card class="stat-card" elevation="3">
+                                <v-card-text>
+                                    <div class="text-h3 text-primary">{{ stats.totalHours }}</div>
+                                    <div class="text-subtitle-1 text-grey">Total Focus Hours</div>
+                                    <v-icon size="48" color="primary" class="float-right mt-n8">mdi-clock-outline</v-icon>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                        
+                        <v-col cols="12" sm="6" md="3">
+                            <v-card class="stat-card" elevation="3">
+                                <v-card-text>
+                                    <div class="text-h3 text-success">{{ stats.totalPomodoros }}</div>
+                                    <div class="text-subtitle-1 text-grey">Pomodoros Completed</div>
+                                    <v-icon size="48" color="success" class="float-right mt-n8">mdi-check-circle</v-icon>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                        
+                        <v-col cols="12" sm="6" md="3">
+                            <v-card class="stat-card" elevation="3">
+                                <v-card-text>
+                                    <div class="text-h3 text-info">{{ stats.totalSessions }}</div>
+                                    <div class="text-subtitle-1 text-grey">Focus Sessions</div>
+                                    <v-icon size="48" color="info" class="float-right mt-n8">mdi-playlist-check</v-icon>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                        
+                        <v-col cols="12" sm="6" md="3">
+                            <v-card class="stat-card" elevation="3">
+                                <v-card-text>
+                                    <div class="text-h3 text-warning">{{ stats.avgSessionMinutes }}</div>
+                                    <div class="text-subtitle-1 text-grey">Avg Session (min)</div>
+                                    <v-icon size="48" color="warning" class="float-right mt-n8">mdi-timer-outline</v-icon>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                    </v-row>
+                    
+                    <!-- Charts Row 1 -->
+                    <v-row class="mb-4">
+                        <v-col cols="12" md="8">
+                            <v-card elevation="3">
+                                <v-card-title class="d-flex align-center">
+                                    <v-icon class="mr-2" color="primary">mdi-chart-bar</v-icon>
+                                    Time Spent by Task (Top 10)
+                                </v-card-title>
+                                <v-card-text>
+                                    <div class="chart-container">
+                                        <canvas id="taskTimeChart"></canvas>
+                                    </div>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                        
+                        <v-col cols="12" md="4">
+                            <v-card elevation="3">
+                                <v-card-title class="d-flex align-center">
+                                    <v-icon class="mr-2" color="success">mdi-chart-pie</v-icon>
+                                    Task Status
+                                </v-card-title>
+                                <v-card-text>
+                                    <div class="chart-container">
+                                        <canvas id="statusChart"></canvas>
+                                    </div>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                    </v-row>
+                    
+                    <!-- Charts Row 2 -->
+                    <v-row class="mb-4">
+                        <v-col cols="12" md="6">
+                            <v-card elevation="3">
+                                <v-card-title class="d-flex align-center">
+                                    <v-icon class="mr-2" color="info">mdi-chart-line</v-icon>
+                                    Daily Focus Time (Last 30 Days)
+                                </v-card-title>
+                                <v-card-text>
+                                    <div class="chart-container">
+                                        <canvas id="dailyTimeChart"></canvas>
+                                    </div>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                        
+                        <v-col cols="12" md="6">
+                            <v-card elevation="3">
+                                <v-card-title class="d-flex align-center">
+                                    <v-icon class="mr-2" color="warning">mdi-finance</v-icon>
+                                    Pomodoros Over Time (Last 30 Days)
+                                </v-card-title>
+                                <v-card-text>
+                                    <div class="chart-container">
+                                        <canvas id="pomodoroTrendChart"></canvas>
+                                    </div>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                    </v-row>
+                    
+                    <!-- Focus Quality Section -->
+                    <v-row class="mb-4">
+                        <v-col cols="12">
+                            <h2 class="text-h4 mb-4">
+                                <v-icon class="mr-2" color="success">mdi-star</v-icon>
+                                Focus Quality
+                            </h2>
+                        </v-col>
+                        
+                        <v-col cols="12" md="6">
+                            <v-card elevation="3">
+                                <v-card-title class="d-flex align-center">
+                                    <v-icon class="mr-2" color="success">mdi-chart-donut</v-icon>
+                                    Session Length Distribution
+                                </v-card-title>
+                                <v-card-text>
+                                    <div class="chart-container">
+                                        <canvas id="sessionLengthChart"></canvas>
+                                    </div>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                        
+                        <v-col cols="12" md="6">
+                            <v-card elevation="3">
+                                <v-card-title class="d-flex align-center">
+                                    <v-icon class="mr-2" color="info">mdi-chart-bell-curve</v-icon>
+                                    Focus Time by Hour of Day
+                                </v-card-title>
+                                <v-card-text>
+                                    <div class="chart-container">
+                                        <canvas id="hourlyChart"></canvas>
+                                    </div>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                    </v-row>
+                    
+                    <!-- Task Details Table -->
+                    <v-row>
+                        <v-col cols="12">
+                            <v-card elevation="3">
+                                <v-card-title class="d-flex align-center">
+                                    <v-icon class="mr-2" color="primary">mdi-table</v-icon>
+                                    Detailed Task Statistics
+                                </v-card-title>
+                                <v-card-text>
+                                    <v-data-table
+                                        :headers="tableHeaders"
+                                        :items="taskStats"
+                                        :items-per-page="10"
+                                        class="elevation-1"
+                                    >
+                                        <template v-slot:item.name="{ item }">
+                                            <strong>{{ item.name }}</strong>
+                                        </template>
+                                        <template v-slot:item.total_time="{ item }">
+                                            {{ formatHours(item.total_time) }}
+                                        </template>
+                                        <template v-slot:item.pomodoro_count="{ item }">
+                                            <v-chip color="success" size="small">
+                                                🍅 {{ item.pomodoro_count }}
+                                            </v-chip>
+                                        </template>
+                                        <template v-slot:item.importance="{ item }">
+                                            <v-rating
+                                                :model-value="item.importance / 2"
+                                                density="compact"
+                                                half-increments
+                                                readonly
+                                                size="small"
+                                            ></v-rating>
+                                        </template>
+                                        <template v-slot:item.done="{ item }">
+                                            <v-icon :color="item.done ? 'success' : 'grey'">
+                                                {{ item.done ? 'mdi-check-circle' : 'mdi-circle-outline' }}
+                                            </v-icon>
+                                        </template>
+                                    </v-data-table>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                    </v-row>
+                </v-container>
+            </v-main>
+        </v-app>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.min.js"></script>
+    <script src="analytics.js" type="module"></script>
+</body>
+</html>
+
