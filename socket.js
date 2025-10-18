@@ -17,7 +17,11 @@ const setupSocket = (io) => {
         completed_at: task.completed_at,
         parent_id: task.parent_id,
         link: task.link || null,
-        due_date: task.due_date || null
+        due_date: task.due_date || null,
+        notes: task.notes || null,
+        progress: task.progress ? Number(task.progress) : null,
+        category: task.category || null,
+        status: task.status || null
       };
       
       // Debug logging for link

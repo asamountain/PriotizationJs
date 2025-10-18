@@ -139,9 +139,11 @@ CREATE TABLE tasks (
 
 ✅ **Interactive Features**
 - Hover: Show tooltip with task name
-- Click: Highlight task in list below
+- Click: Highlight task in list (right side)
 - Scroll to highlighted task automatically
 - Clustered dots when tasks overlap
+- **Always visible** in split-screen left panel
+- Full height display for maximum visibility
 
 ### 3.5 CSV Import/Export (NEW - ESTABLISHED)
 ✅ **Import CSV**
@@ -204,6 +206,28 @@ The parser supports multiple column name variations (case-insensitive):
 - Vuetify grid system
 - Touch-friendly controls
 
+✅ **Task Sorting (NEW)**
+- Sort active tasks by 10 different criteria:
+  - 🔥 Priority (High → Low): importance × urgency
+  - ❄️ Priority (Low → High)
+  - ⭐ Importance (High → Low)
+  - ⭐ Importance (Low → High)
+  - ⚡ Urgency (High → Low)
+  - ⚡ Urgency (Low → High)
+  - 🆕 Newest First
+  - 📅 Oldest First
+  - ⏰ Due Date (Closest first)
+  - 🔤 Name (A → Z)
+- Sort preference persists to localStorage
+- Real-time sorting as data updates
+
+✅ **Google Sheets Integration**
+- Displays Progress (0-100%)
+- Displays Category (Personal, Work, etc.)
+- Displays Status (OnGoing, Not Sure, etc.)
+- Displays Due Date from CSV
+- Color-coded chips for each metadata type
+
 ---
 
 ## 4. API ENDPOINTS
@@ -231,13 +255,21 @@ All task operations handled via Socket.IO (see section 3.6)
 ## 5. USER WORKFLOWS
 
 ### 5.1 Standard Task Creation
-1. User enters task name, adjusts importance/urgency sliders
-2. Optionally adds link, notes
-3. Clicks "Add Task"
-4. Task appears in list and chart
-5. Socket.IO broadcasts to all connected clients
+1. User enters task name in right panel
+2. Adjusts importance/urgency sliders
+3. Optionally adds link, notes
+4. Clicks "Add Task"
+5. Task appears in **both** list (right) and chart (left) simultaneously
+6. Socket.IO broadcasts to all connected clients
 
-### 5.2 CSV Import Workflow
+### 5.2 Split-Screen Interaction
+1. User views chart on left, list on right
+2. Clicks dot in chart → task highlights in list on right
+3. List auto-scrolls to show selected task
+4. Edit task in list → chart updates immediately
+5. Both views stay synchronized in real-time
+
+### 5.3 CSV Import Workflow
 1. User exports tasks from Google Sheets as CSV
 2. User clicks "Select CSV file" in import section
 3. User chooses CSV file from file system
@@ -248,13 +280,14 @@ All task operations handled via Socket.IO (see section 3.6)
 8. Tasks automatically appear in list and chart
 9. All connected clients receive update
 
-### 5.3 Task Prioritization Workflow
-1. User views scatter plot to identify task quadrants
-2. User clicks dots in chart to locate tasks in list
-3. User adjusts importance/urgency via edit dialog
-4. Chart updates in real-time
-5. User completes tasks by checking checkbox
-6. Completed tasks move to "Completed Tasks" section
+### 5.4 Task Prioritization Workflow
+1. User views scatter plot (left) to identify task quadrants
+2. User clicks dots in chart to locate tasks in list (right)
+3. User adjusts importance/urgency via edit dialog in right panel
+4. Chart updates in real-time on left
+5. User completes tasks by checking checkbox in right panel
+6. Completed tasks move to "Completed Tasks" section (right panel)
+7. Both views synchronized - see priorities visually and textually
 
 ---
 
@@ -305,19 +338,55 @@ node server.js
 
 ---
 
-## 8. FUTURE ENHANCEMENTS (NOT IMPLEMENTED)
+## 8. DEVELOPMENT TOOLS
 
-### 8.1 Potential Features
+### 8.1 Git Automation (NEW)
+✅ **Quick Git Push Scripts**
+- `npm run push` - Interactive push with custom commit message
+- `npm run quick-push` - Instant push with auto-generated timestamp
+- Color-coded terminal output
+- Shows changes before committing
+- Safe - checks for changes first
+- See `GIT_AUTOMATION.md` for details
+
+### 8.2 Split-Screen Layout (NEW)
+✅ **Permanent Split View**
+- **Left Side (default 55%):** Eisenhower Matrix chart - always full height
+- **Right Side (default 45%):** Task list with scrolling
+- Chart fills entire left viewport automatically
+- Both sides visible simultaneously for interactive workflow
+- Click dots in chart → see highlighted task in list
+- Edit tasks in list → see updates in chart immediately
+- **Responsive:** Stacks vertically on tablets/mobile (< 1024px)
+
+✅ **Resizable Divider (NEW)**
+- Draggable handle between chart and task list
+- Hover to highlight, drag to resize
+- Constrained between 30% and 70% for usability
+- Width preference saved to localStorage
+- Chart automatically redraws after resize
+- Visual feedback during drag operation
+
+✅ **One-Click Delete (NEW)**
+- No confirmation dialog - instant delete
+- Shows notification with deleted task name
+- Trash bin icon on every task
+- Undo not needed - tasks in database, can be re-imported
+
+---
+
+## 9. FUTURE ENHANCEMENTS (NOT IMPLEMENTED)
+
+### 9.1 Potential Features
 - Export tasks to CSV
 - Task filtering and search
 - Due date reminders
-- Task categories/tags
 - Drag-and-drop in chart
 - Task history/audit log
 - Bulk edit operations
 - Task templates
 
-### 8.2 Out of Scope
+### 9.2 Out of Scope
 - Multi-user support / Authentication
 - Cloud sync / Remote database
 - Mobile native apps
@@ -327,22 +396,22 @@ node server.js
 
 ---
 
-## 9. MAINTENANCE GUIDELINES
+## 10. MAINTENANCE GUIDELINES
 
-### 9.1 Code Modification Rules
+### 10.1 Code Modification Rules
 1. **Always** test CSV import after database changes
 2. **Always** update socket events when adding features
 3. **Always** maintain backward compatibility with existing `tasks.db`
 4. **Never** break the single-file database model
 5. **Document** all API changes in this PRD
 
-### 9.2 Debugging
+### 10.2 Debugging
 - Server logs: Console output (stdout)
 - Database: Query `tasks.db` with SQLite CLI
 - Client errors: Browser console
 - Socket events: Logged to browser console with `SOCKET:` prefix
 
-### 9.3 CSV Import Troubleshooting
+### 10.3 CSV Import Troubleshooting
 
 **Problem: "Missing task name" errors**
 - **Cause:** Column names not matching expected format
@@ -355,11 +424,11 @@ node server.js
 | Required | Alternatives |
 |----------|-------------|
 | name | task, task name, title |
-| importance | importance |
-| urgency | urgency |
-| done | done |
+| importance | important |
+| urgency | urgent |
+| done | done, status (completed) |
 | link | url |
-| due_date | duedate, due date |
+| due_date | duedate, due date, due |
 | notes | note, description |
 | parent_id | parentid, parent id |
 
@@ -375,7 +444,7 @@ node server.js
 - First row MUST be column headers
 - At minimum, must have a "name" column
 
-### 9.4 Dependency Updates
+### 10.4 Dependency Updates
 Current stable versions (DO NOT update without testing):
 ```json
 {
@@ -392,16 +461,16 @@ Current stable versions (DO NOT update without testing):
 
 ---
 
-## 10. SUCCESS METRICS
+## 11. SUCCESS METRICS
 
-### 10.1 Core Functionality
+### 11.1 Core Functionality
 - ✅ Users can create/edit/delete tasks
 - ✅ Users can visualize task priorities
 - ✅ Users can import tasks from Google Sheets
 - ✅ Multiple users can work simultaneously (via Socket.IO)
 - ✅ Data persists across sessions
 
-### 10.2 User Experience
+### 11.2 User Experience
 - ✅ Intuitive task prioritization
 - ✅ Minimal friction for bulk imports
 - ✅ Real-time updates without refresh
@@ -409,16 +478,16 @@ Current stable versions (DO NOT update without testing):
 
 ---
 
-## 11. CONTACT & GOVERNANCE
+## 12. CONTACT & GOVERNANCE
 
-### 11.1 Change Request Process
+### 12.1 Change Request Process
 All changes must:
 1. Reference this PRD
 2. Update this document if specifications change
 3. Maintain backward compatibility with existing data
 4. Test CSV import functionality
 
-### 11.2 This Document
+### 12.2 This Document
 - **Authority:** This PRD is the single source of truth
 - **Updates:** Version number must increment on changes
 - **AI Instructions:** AI assistants MUST read this PRD before making changes

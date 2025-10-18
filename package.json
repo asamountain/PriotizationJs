@@ -6,6 +6,11 @@
 	  "scripts": {
 	  	  "start": "node server.js",
 	  	  "start:open": "OPEN_BROWSER=true node server.js",
+	  	  "clear-imports": "node clear-imported-tasks.js",
+	  	  "check-priorities": "node fix-empty-priorities.js",
+	  	  "randomize-priorities": "node randomize-priorities.js",
+	  	  "push": "./git-push.sh",
+	  	  "quick-push": "./git-quick-push.sh",
 	  	  "test": "echo \"Error: no test specified\" && exit 1"
 	  },
 	  "keywords": [],

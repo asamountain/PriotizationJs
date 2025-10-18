@@ -118,6 +118,21 @@ window.addEventListener('DOMContentLoaded', () => {
         csvFile: null,
         csvImporting: false,
         csvImportResult: null,
+        taskSortBy: localStorage.getItem('taskSortBy') || 'priority-high', // Default sort
+        taskSortOptions: [
+          { value: 'priority-high', title: '🔥 Priority (High → Low)' },
+          { value: 'priority-low', title: '❄️ Priority (Low → High)' },
+          { value: 'importance-high', title: '⭐ Importance (High → Low)' },
+          { value: 'importance-low', title: '⭐ Importance (Low → High)' },
+          { value: 'urgency-high', title: '⚡ Urgency (High → Low)' },
+          { value: 'urgency-low', title: '⚡ Urgency (Low → High)' },
+          { value: 'newest', title: '🆕 Newest First' },
+          { value: 'oldest', title: '📅 Oldest First' },
+          { value: 'due-date', title: '⏰ Due Date (Closest)' },
+          { value: 'name-az', title: '🔤 Name (A → Z)' }
+        ],
+        leftPanelWidth: parseFloat(localStorage.getItem('leftPanelWidth')) || 55,
+        isResizing: false,
       };
     },
     computed: {
@@ -126,6 +141,74 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       hasCompletedTasks() {
         return this.completedTasks && this.completedTasks.length > 0;
+      },
+      chartStyle() {
+        // In split view, chart always fills its container
+        return {
+          width: '100%',
+          height: '100%',
+          position: 'relative',
+          overflow: 'visible'
+        };
+      },
+      sortedActiveTasks() {
+        if (!this.activeTasks || this.activeTasks.length === 0) {
+          return [];
+        }
+        
+        const tasks = [...this.activeTasks];
+        
+        switch (this.taskSortBy) {
+          case 'priority-high':
+            return tasks.sort((a, b) => {
+              const priorityA = a.importance * a.urgency;
+              const priorityB = b.importance * b.urgency;
+              return priorityB - priorityA;
+            });
+          
+          case 'priority-low':
+            return tasks.sort((a, b) => {
+              const priorityA = a.importance * a.urgency;
+              const priorityB = b.importance * b.urgency;
+              return priorityA - priorityB;
+            });
+          
+          case 'importance-high':
+            return tasks.sort((a, b) => b.importance - a.importance);
+          
+          case 'importance-low':
+            return tasks.sort((a, b) => a.importance - b.importance);
+          
+          case 'urgency-high':
+            return tasks.sort((a, b) => b.urgency - a.urgency);
+          
+          case 'urgency-low':
+            return tasks.sort((a, b) => a.urgency - b.urgency);
+          
+          case 'newest':
+            return tasks.sort((a, b) => {
+              return new Date(b.created_at) - new Date(a.created_at);
+            });
+          
+          case 'oldest':
+            return tasks.sort((a, b) => {
+              return new Date(a.created_at) - new Date(b.created_at);
+            });
+          
+          case 'due-date':
+            return tasks.sort((a, b) => {
+              if (!a.due_date && !b.due_date) return 0;
+              if (!a.due_date) return 1;
+              if (!b.due_date) return -1;
+              return new Date(a.due_date) - new Date(b.due_date);
+            });
+          
+          case 'name-az':
+            return tasks.sort((a, b) => a.name.localeCompare(b.name));
+          
+          default:
+            return tasks;
+        }
       }
     },
     methods: {
@@ -166,10 +249,10 @@ window.addEventListener('DOMContentLoaded', () => {
         taskOperations.toggleDone(task.id);
       },
       
-      deleteTask(taskId) {
-        if (confirm('Are you sure you want to delete this task?')) {
-          taskOperations.deleteTask(taskId);
-        }
+      deleteTask(taskId, taskName) {
+        // One-click delete - no confirmation dialog
+        taskOperations.deleteTask(taskId);
+        this.showNotification(`Deleted: ${taskName || 'Task'}`, 'info');
       },
       
       getSubtasksForTask(taskId) {
@@ -526,6 +609,63 @@ window.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/api/csv-template';
         this.showNotification('Downloading CSV template...', 'info');
       },
+
+      // Resize panel methods
+      startResize(e) {
+        this.isResizing = true;
+        document.addEventListener('mousemove', this.handleResize);
+        document.addEventListener('mouseup', this.stopResize);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+      },
+
+      handleResize(e) {
+        if (!this.isResizing) return;
+
+        const container = this.$refs.splitContainer;
+        if (!container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+
+        // Constrain between 30% and 70%
+        if (newLeftWidth >= 30 && newLeftWidth <= 70) {
+          this.leftPanelWidth = newLeftWidth;
+          
+          // Trigger chart redraw after resize
+          this.$nextTick(() => {
+            if (chartVisualization && typeof chartVisualization.initializeChart === 'function') {
+              chartVisualization.initializeChart();
+            }
+          });
+        }
+      },
+
+      stopResize() {
+        if (this.isResizing) {
+          this.isResizing = false;
+          document.removeEventListener('mousemove', this.handleResize);
+          document.removeEventListener('mouseup', this.stopResize);
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          
+          // Save preference
+          localStorage.setItem('leftPanelWidth', this.leftPanelWidth);
+        }
+      },
+    },
+    watch: {
+      taskSortBy(newValue) {
+        // Save sort preference to localStorage
+        localStorage.setItem('taskSortBy', newValue);
+      }
+    },
+    beforeUnmount() {
+      // Clean up resize listeners
+      if (this.isResizing) {
+        document.removeEventListener('mousemove', this.handleResize);
+        document.removeEventListener('mouseup', this.stopResize);
+      }
     },
     mounted() {
       // Initialize socket connection first

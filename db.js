@@ -42,7 +42,10 @@ class Database {
         `ALTER TABLE tasks ADD COLUMN due_date TEXT NULL`,
         `ALTER TABLE tasks ADD COLUMN link TEXT NULL`,
         `ALTER TABLE tasks ADD COLUMN completed_at TEXT NULL`,
-        `ALTER TABLE tasks ADD COLUMN notes TEXT NULL`
+        `ALTER TABLE tasks ADD COLUMN notes TEXT NULL`,
+        `ALTER TABLE tasks ADD COLUMN progress INTEGER NULL`,
+        `ALTER TABLE tasks ADD COLUMN category TEXT NULL`,
+        `ALTER TABLE tasks ADD COLUMN status TEXT NULL`
       ];
       
       this.db.serialize(() => {
@@ -320,18 +323,24 @@ class Database {
           }
 
           // Set defaults for missing values
-          const importance = task.importance !== undefined ? Number(task.importance) : 5;
-          const urgency = task.urgency !== undefined ? Number(task.urgency) : 5;
+          // Handle empty strings and undefined/null values
+          const importanceNum = Number(task.importance);
+          const urgencyNum = Number(task.urgency);
+          const importance = (task.importance && !isNaN(importanceNum)) ? importanceNum : 5;
+          const urgency = (task.urgency && !isNaN(urgencyNum)) ? urgencyNum : 5;
           const done = task.done === "true" || task.done === "1" || task.done === 1 || task.done === true ? 1 : 0;
           const link = task.link || null;
           const due_date = task.due_date || null;
           const notes = task.notes || null;
           const parent_id = task.parent_id || null;
+          const progress = task.progress ? Number(task.progress) : null;
+          const category = task.category || null;
+          const status = task.status || null;
 
           // Insert new task
           db.run(
-            "INSERT INTO tasks (name, importance, urgency, done, link, due_date, notes, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [task.name, importance, urgency, done, link, due_date, notes, parent_id],
+            "INSERT INTO tasks (name, importance, urgency, done, link, due_date, notes, parent_id, progress, category, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [task.name, importance, urgency, done, link, due_date, notes, parent_id, progress, category, status],
             function (err) {
               if (err) {
                 console.error("Error importing task:", err);

@@ -75,16 +75,31 @@ app.post("/api/import-csv", upload.single("csvFile"), async (req, res) => {
             return normalized;
         });
 
-        // Map to expected format
+        // Helper function to convert text urgency to numeric
+        const parseUrgency = (value) => {
+            if (!value) return undefined;
+            const val = value.toString().toLowerCase();
+            if (val.includes('urgent') && !val.includes('not')) return 9; // "Urgent" → 9
+            if (val.includes('not urgent') || val.includes('not_urgent')) return 3; // "Not Urgent" → 3
+            // Try to parse as number
+            const num = Number(value);
+            return !isNaN(num) ? num : undefined;
+        };
+
+        // Map to expected format with flexible column matching
         const tasksToImport = normalizedRecords.map(record => ({
             name: record.name || record.task || record['task name'] || record.title,
-            importance: record.importance,
-            urgency: record.urgency,
-            done: record.done,
+            importance: record.importance || record.important,
+            urgency: parseUrgency(record.urgency || record.urgent),
+            done: record.done || record.status === 'completed',
             link: record.link || record.url,
-            due_date: record.due_date || record.duedate || record['due date'],
+            due_date: record.due_date || record.duedate || record['due date'] || record.due,
             notes: record.notes || record.note || record.description,
-            parent_id: record.parent_id || record.parentid || record['parent id']
+            parent_id: record.parent_id || record.parentid || record['parent id'],
+            // Store additional metadata that might be useful
+            progress: record.progress,
+            category: record.category,
+            status: record.status
         }));
 
         console.log("Tasks to import sample:", tasksToImport[0]);
