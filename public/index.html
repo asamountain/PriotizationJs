@@ -340,8 +340,11 @@
                                     <v-list-item
                                         :value="task.id"
                                         @click="selectTask(task)"
+                                        @dblclick="editTaskNotes(task)"
                                         :data-task-id="task.id" 
                                         class="task"
+                                        style="cursor: pointer;"
+                                        title="Double-click to edit notes"
                                     >
                                         <template v-slot:prepend>
                                             <v-checkbox 
@@ -621,7 +624,10 @@
                                         <v-list-item
                                             :value="task.id"
                                             @click="selectTask(task)"
-                                    :data-task-id="task.id" 
+                                            @dblclick="editTaskNotes(task)"
+                                    :data-task-id="task.id"
+                                            style="cursor: pointer;"
+                                            title="Double-click to edit notes" 
                                             class="task completed-task"
                                         >
                                             <template v-slot:prepend>
