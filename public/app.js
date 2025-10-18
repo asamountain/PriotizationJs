@@ -804,8 +804,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Mount the app to the DOM
   app.mount('#app');
   
-  // Make app globally available
-  window.app = app._instance.proxy;
+  // window.app is already set in the mounted() hook above
 });
 
 // Now these exports will be valid since the variables are defined at the top level
