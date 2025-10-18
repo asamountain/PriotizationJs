@@ -115,6 +115,9 @@ window.addEventListener('DOMContentLoaded', () => {
         editingNotes: '',
         currentTask: null,
         noteTaskId: null,
+        csvFile: null,
+        csvImporting: false,
+        csvImportResult: null,
       };
     },
     computed: {
@@ -466,6 +469,63 @@ window.addEventListener('DOMContentLoaded', () => {
         this.editingNotes = '';
         this.noteTaskId = null;
       },
+
+      // CSV Import methods
+      async importCSV() {
+        if (!this.csvFile) {
+          this.showNotification('Please select a CSV file', 'error');
+          return;
+        }
+
+        this.csvImporting = true;
+        this.csvImportResult = null;
+
+        try {
+          const formData = new FormData();
+          formData.append('csvFile', this.csvFile[0]);
+
+          const response = await fetch('/api/import-csv', {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            this.csvImportResult = {
+              success: true,
+              message: result.message,
+              details: result.details
+            };
+            this.showNotification(result.message, 'success');
+            
+            // Clear the file input
+            this.csvFile = null;
+            
+            // Refresh tasks - socket will handle this automatically
+          } else {
+            this.csvImportResult = {
+              success: false,
+              message: result.error || 'Failed to import CSV'
+            };
+            this.showNotification('Failed to import CSV: ' + (result.message || 'Unknown error'), 'error');
+          }
+        } catch (error) {
+          console.error('CSV import error:', error);
+          this.csvImportResult = {
+            success: false,
+            message: 'Error uploading file: ' + error.message
+          };
+          this.showNotification('Error uploading CSV file', 'error');
+        } finally {
+          this.csvImporting = false;
+        }
+      },
+
+      downloadCSVTemplate() {
+        window.location.href = '/api/csv-template';
+        this.showNotification('Downloading CSV template...', 'info');
+      },
     },
     mounted() {
       // Initialize socket connection first
@@ -490,6 +550,12 @@ window.addEventListener('DOMContentLoaded', () => {
         if (data && data.data) {
           this.updateTasks(data.data);
         }
+      });
+
+      this.socket.on('csvImported', (result) => {
+        console.log('CSV import completed:', result);
+        // Refresh the task list
+        this.socket.emit('updateTasks');
       });
       
       // Listen for updates from task modules

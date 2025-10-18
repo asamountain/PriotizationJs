@@ -1,0 +1,7 @@
+name,importance,urgency,done,link,due_date,notes,parent_id
+Complete project documentation,8,7,false,https://docs.example.com,2025-12-31,Need to finish all API documentation sections,
+Review code pull requests,6,9,false,https://github.com/example/repo,2025-11-15,Focus on security and performance issues,
+Update dependencies,5,4,false,,2025-12-01,Check for security vulnerabilities in packages,
+Plan team meeting,7,8,false,,2025-10-25,Discuss Q4 roadmap and priorities,
+Fix production bug,10,10,false,https://jira.example.com/BUG-123,2025-10-20,Critical issue affecting users,
+

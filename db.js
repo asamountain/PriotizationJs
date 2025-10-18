@@ -286,6 +286,87 @@ class Database {
       );
     });
   }
+
+  // Bulk import tasks from CSV
+  async bulkImportTasks(tasks) {
+    return new Promise((resolve, reject) => {
+      const results = {
+        imported: 0,
+        updated: 0,
+        errors: []
+      };
+
+      // Capture db reference to avoid context issues
+      const db = this.db;
+
+      db.serialize(() => {
+        db.run("BEGIN TRANSACTION");
+
+        let completed = 0;
+        const total = tasks.length;
+
+        tasks.forEach((task, index) => {
+          // Check if task has required fields
+          if (!task.name) {
+            results.errors.push({ row: index + 1, error: "Missing task name" });
+            completed++;
+            if (completed === total) {
+              db.run("COMMIT", (err) => {
+                if (err) reject(err);
+                else resolve(results);
+              });
+            }
+            return;
+          }
+
+          // Set defaults for missing values
+          const importance = task.importance !== undefined ? Number(task.importance) : 5;
+          const urgency = task.urgency !== undefined ? Number(task.urgency) : 5;
+          const done = task.done === "true" || task.done === "1" || task.done === 1 || task.done === true ? 1 : 0;
+          const link = task.link || null;
+          const due_date = task.due_date || null;
+          const notes = task.notes || null;
+          const parent_id = task.parent_id || null;
+
+          // Insert new task
+          db.run(
+            "INSERT INTO tasks (name, importance, urgency, done, link, due_date, notes, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [task.name, importance, urgency, done, link, due_date, notes, parent_id],
+            function (err) {
+              if (err) {
+                console.error("Error importing task:", err);
+                results.errors.push({ row: index + 1, task: task.name, error: err.message });
+              } else {
+                results.imported++;
+                console.log("Task imported:", task.name, "ID:", this.lastID);
+              }
+
+              completed++;
+              if (completed === total) {
+                db.run("COMMIT", (commitErr) => {
+                  if (commitErr) {
+                    console.error("Transaction commit failed:", commitErr);
+                    reject(commitErr);
+                  } else {
+                    console.log("Bulk import completed:", results);
+                    resolve(results);
+                  }
+                });
+              }
+            }
+          );
+        });
+
+        // Handle empty array case
+        if (total === 0) {
+          db.run("COMMIT", (err) => {
+            if (err) reject(err);
+            else resolve(results);
+          });
+        }
+      });
+    });
+  }
 }
 
 const database = new Database();
@@ -300,6 +381,7 @@ export const addSubtask = (...args) => database.addSubtask(...args);
 export const updateSubtask = (...args) => database.updateSubtask(...args);
 export const updateTaskNotes = (...args) => database.updateTaskNotes(...args);
 export const editTask = (...args) => database.editTask(...args);
+export const bulkImportTasks = (...args) => database.bulkImportTasks(...args);
 export const initDatabase = async () => {
   try {
     await database.init();

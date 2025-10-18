@@ -153,6 +153,67 @@
                         </v-card-text>
                     </v-card>
 
+                    <!-- CSV Import Card -->
+                    <v-card class="mb-6" elevation="3">
+                        <v-card-title class="text-h5 d-flex align-center">
+                            <v-icon class="me-2" color="success">mdi-file-import</v-icon>
+                            Import Tasks from CSV
+                        </v-card-title>
+                        <v-card-text>
+                            <v-row align="center">
+                                <v-col cols="12" md="6">
+                                    <v-file-input
+                                        v-model="csvFile"
+                                        label="Select CSV file"
+                                        accept=".csv"
+                                        prepend-icon="mdi-file-delimited"
+                                        variant="outlined"
+                                        density="comfortable"
+                                        :loading="csvImporting"
+                                        :disabled="csvImporting"
+                                    ></v-file-input>
+                                </v-col>
+                                <v-col cols="12" md="6" class="d-flex gap-2">
+                                    <v-btn 
+                                        color="success" 
+                                        variant="elevated"
+                                        :loading="csvImporting"
+                                        :disabled="!csvFile || csvImporting"
+                                        @click="importCSV"
+                                    >
+                                        <v-icon start>mdi-upload</v-icon>
+                                        Import CSV
+                                    </v-btn>
+                                    <v-btn 
+                                        color="info" 
+                                        variant="outlined"
+                                        @click="downloadCSVTemplate"
+                                    >
+                                        <v-icon start>mdi-download</v-icon>
+                                        Download Template
+                                    </v-btn>
+                                </v-col>
+                            </v-row>
+                            <v-alert 
+                                v-if="csvImportResult"
+                                :type="csvImportResult.success ? 'success' : 'error'"
+                                class="mt-4"
+                                closable
+                                @click:close="csvImportResult = null"
+                            >
+                                {{ csvImportResult.message }}
+                                <div v-if="csvImportResult.details && csvImportResult.details.errors.length > 0" class="mt-2">
+                                    <strong>Errors:</strong>
+                                    <ul>
+                                        <li v-for="error in csvImportResult.details.errors" :key="error.row">
+                                            Row {{ error.row }}: {{ error.error }}
+                                        </li>
+                                    </ul>
+                                </div>
+                            </v-alert>
+                        </v-card-text>
+                    </v-card>
+
                     <!-- Task form in a card -->
                     <v-card class="mb-6" elevation="3">
                         <v-card-title class="text-h5">Add New Task</v-card-title>

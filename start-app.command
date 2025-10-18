@@ -6,9 +6,8 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Change to the project directory
 cd "$DIR"
 
-# Start the server
+# Start the server without auto-opening browser (reuse existing tab)
 node server.js
 
-# The browser opening should now be handled inside server.js
-# If there's a line like this, remove it:
-# open "http://localhost:3000"
+# If you want to auto-open browser, use this instead:
+# OPEN_BROWSER=true node server.js
