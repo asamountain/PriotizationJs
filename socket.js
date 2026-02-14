@@ -205,16 +205,13 @@ const setupSocket = (io) => {
       try {
         console.log("Fetching details for task ID:", taskId);
         
-        // Get the specific task details from the database
-        const task = await new Promise((resolve, reject) => {
-          database.db.get("SELECT * FROM tasks WHERE id = ?", [taskId], (err, row) => {
-            if (err) {
-              reject(err);
-              return;
-            }
-            resolve(row);
-          });
-        });
+        // Use the database query abstraction to work with both SQLite and Postgres
+        const tasks = await database.query(
+          database.pool ? "SELECT * FROM tasks WHERE id = $1" : "SELECT * FROM tasks WHERE id = ?",
+          [taskId]
+        );
+        
+        const task = tasks[0];
         
         if (task) {
           console.log("Task details retrieved:", task);

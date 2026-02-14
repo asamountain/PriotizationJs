@@ -462,7 +462,8 @@ window.addEventListener('DOMContentLoaded', () => {
         
         // Helper to check if a task's parent exists
         const parentExists = (parentId) => {
-          return tasks.some(t => t.id === parentId);
+          if (!parentId) return false;
+          return tasks.some(t => Number(t.id) === Number(parentId));
         };
 
         // A task is a "root" if it has no parent_id OR if its parent doesn't exist
@@ -475,46 +476,24 @@ window.addEventListener('DOMContentLoaded', () => {
         this.activeTasks = rawActive;
         this.completedTasks = rawCompleted;
         
-        // Debug: Log information about tasks with links
-        console.log('Tasks with links:');
-        tasks.forEach(task => {
-          if (task.link) {
-            console.log(`Task ${task.id} (${task.name}): ${task.link}`);
-          }
-        });
-        
-        // Debug: Count of subtasks with links
-        const subtasks = tasks.filter(task => task.parent_id);
-        const subtasksWithLinks = subtasks.filter(task => task.link);
-        console.log(`Subtasks with links: ${subtasksWithLinks.length} out of ${subtasks.length}`);
-        if (subtasksWithLinks.length > 0) {
-          console.log('Subtasks with links:', subtasksWithLinks);
-        }
-        
         // Re-render the chart with updated tasks (only if chart is initialized)
-        console.log('Updating chart with', tasks.length, 'tasks');
         if (chartVisualization && typeof chartVisualization.renderChart === 'function' && chartVisualization.dotsGroup) {
           chartVisualization.renderChart(tasks);
-        } else {
-          console.log('Chart not yet initialized, skipping render');
         }
       },
-      
+
       formatDate(dateString) {
         if (!dateString) return '';
         const date = new Date(dateString);
         return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       },
-      
+
       formatLinkDisplay(url) {
         if (!url) return 'No link';
         try {
-          console.log('Formatting link:', url); // Debug logging
           const urlObj = new URL(url);
-          // Show domain and first part of path if exists
           let displayText = urlObj.hostname;
           if (urlObj.pathname && urlObj.pathname !== '/') {
-            // Add first part of path if not too long
             const pathParts = urlObj.pathname.split('/').filter(p => p);
             if (pathParts.length > 0) {
               const firstPart = pathParts[0];
@@ -528,23 +507,8 @@ window.addEventListener('DOMContentLoaded', () => {
           }
           return displayText || url;
         } catch (e) {
-          console.warn('Error formatting link:', e, url);
-          // If not a valid URL, return first part of string with reasonable length
           return url.length > 20 ? url.substring(0, 18) + '...' : url;
         }
-      },
-      
-      // Debug helper for links
-      debugLinkInfo(subtask) {
-        console.log('Subtask link info:', {
-          id: subtask.id,
-          name: subtask.name,
-          hasLink: !!subtask.link,
-          linkValue: subtask.link,
-          linkType: typeof subtask.link,
-          displayValue: this.formatLinkDisplay(subtask.link)
-        });
-        return !!subtask.link;
       },
       
       showNotification(text, color = 'primary', timeout = 3000) {
@@ -557,156 +521,53 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       
       editTaskNotes(task) {
-        console.log("Opening notes for task:", task.id, task.name);
-        
-        // Force fetch the latest task data from the server to ensure we have latest notes
         const socket = this.socket || window.socket;
         if (socket) {
           socket.emit('getTaskDetails', { taskId: task.id });
-          
-          // Set up a one-time listener for the response
           socket.once('taskDetails', (taskData) => {
-            console.log("Received task details:", taskData);
             if (taskData && taskData.id === task.id) {
               this.currentTask = taskData;
               this.editingNotes = taskData.notes || '';
               this.noteTaskId = task.id;
-              
-              console.log("Setting notes to:", this.editingNotes);
               this.showNotesDialog = true;
             }
           });
-        } else {
-          // Fallback to using local data if socket isn't available
-          const latestTask = this.tasks.find(t => t.id === task.id);
-          if (latestTask) {
-            console.log("Using local task data:", latestTask);
-            this.currentTask = { ...latestTask };
-            this.editingNotes = latestTask.notes || '';
-            this.noteTaskId = task.id;
-            
-            console.log("Setting notes to:", this.editingNotes);
-            this.showNotesDialog = true;
-          } else {
-            console.error("Task not found in local data");
-          }
         }
-      },
-      
-      editSubtaskNotes(subtask) {
-        this.currentTask = subtask;
-        this.editingNotes = subtask.notes || '';
-        this.showNotesDialog = true;
-      },
-      
-      showTaskNotes(task) {
-        this.currentTask = task;
-        this.editingNotes = task.notes || '';
-        this.showNotesDialog = true;
-      },
-      
-      closeNotesDialog() {
-        console.log("Closing notes dialog");
-        this.showNotesDialog = false;
-        this.currentTask = null;
-        this.editingNotes = '';
-        this.noteTaskId = null;
       },
       
       saveTaskNotes() {
-        console.log("Saving notes for task:", this.currentTask?.id);
-        if (!this.currentTask) {
-          console.error("No current task selected");
-          return;
-        }
-        
-        console.log("Notes content:", this.editingNotes);
-        
-        // Store notes in database through socket
+        if (!this.currentTask) return;
         taskOperations.updateTaskNotes(this.currentTask.id, this.editingNotes);
-        
-        // Update notes in local data using Vue 3 reactivity - fixed
         const taskIndex = this.tasks.findIndex(t => t.id === this.currentTask.id);
         if (taskIndex >= 0) {
-          console.log("Updating local task data with new notes");
-          // Vue 3 way - directly modify the array
-          this.tasks[taskIndex] = { 
-            ...this.tasks[taskIndex], 
-            notes: this.editingNotes 
-          };
+          this.tasks[taskIndex] = { ...this.tasks[taskIndex], notes: this.editingNotes };
         }
-        
-        // Show notification
-        this.showNotification(`Notes ${this.editingNotes ? 'saved' : 'cleared'} for task: ${this.currentTask.name}`, 'success');
-        
-        // Close dialog
         this.showNotesDialog = false;
-        this.currentTask = null;
-        this.editingNotes = '';
-        this.noteTaskId = null;
       },
 
-      // CSV Import methods
       async importCSV() {
         if (!this.csvFile) {
           this.showNotification('Please select a CSV file', 'error');
           return;
         }
-
         this.csvImporting = true;
-        this.csvImportResult = null;
-
         try {
           const formData = new FormData();
           formData.append('csvFile', this.csvFile[0]);
-
-          const response = await fetch('/api/import-csv', {
-            method: 'POST',
-            body: formData
-          });
-
+          const response = await fetch('/api/import-csv', { method: 'POST', body: formData });
           const result = await response.json();
-
           if (response.ok) {
-            this.csvImportResult = {
-              success: true,
-              message: result.message,
-              details: result.details
-            };
             this.showNotification(result.message, 'success');
-            
-            // Clear the file input and close dialog
             this.csvFile = null;
-            
-            // Close dialog after successful import
-            setTimeout(() => {
-              this.showCsvImportDialog = false;
-              this.csvImportResult = null;
-            }, 2000);
-            
-            // Refresh tasks - socket will handle this automatically
+            setTimeout(() => { this.showCsvImportDialog = false; }, 2000);
           } else {
-            this.csvImportResult = {
-              success: false,
-              message: result.error || 'Failed to import CSV'
-            };
             this.showNotification('Failed to import CSV: ' + (result.message || 'Unknown error'), 'error');
           }
         } catch (error) {
-          console.error('CSV import error:', error);
-          this.csvImportResult = {
-            success: false,
-            message: 'Error uploading file: ' + error.message
-          };
           this.showNotification('Error uploading CSV file', 'error');
         } finally {
           this.csvImporting = false;
         }
-      },
-
-      downloadCSVTemplate() {
-        window.location.href = '/api/csv-template';
-        this.showNotification('Downloading CSV template...', 'info');
       },
 
       exportTasks() {
@@ -715,27 +576,12 @@ window.addEventListener('DOMContentLoaded', () => {
           this.showNotification('No tasks to export', 'warning');
           return;
         }
-
-        // Define headers
-        const headers = [
-          'name', 'importance', 'urgency', 'done', 'link', 'due_date', 
-          'notes', 'parent_id', 'created_at', 'completed_at', 
-          'total_time_spent', 'pomodoro_count', 'category', 'status'
-        ];
-
-        // Create CSV content
-        const csvRows = [];
-        csvRows.push(headers.join(','));
-
+        const headers = ['id', 'name', 'importance', 'urgency', 'done', 'link', 'due_date', 'notes', 'parent_id', 'created_at', 'completed_at', 'total_time_spent', 'pomodoro_count', 'category', 'status'];
+        const csvRows = [headers.join(',')];
         for (const task of tasks) {
           const values = headers.map(header => {
-            let val = task[header];
-            if (val === null || val === undefined) val = '';
-            
-            // Format boolean
+            let val = task[header] ?? '';
             if (header === 'done') val = val ? 'true' : 'false';
-            
-            // Escape commas, quotes, and newlines
             let stringVal = val.toString();
             if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
               stringVal = `"${stringVal.replace(/"/g, '""')}"`;
@@ -744,20 +590,12 @@ window.addEventListener('DOMContentLoaded', () => {
           });
           csvRows.push(values.join(','));
         }
-
-        // Generate download
-        const csvContent = "\uFEFF" + csvRows.join('\n'); // Add BOM for Excel compatibility
+        const csvContent = "\uFEFF" + csvRows.join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        
-        link.setAttribute('href', url);
+        link.setAttribute('href', URL.createObjectURL(blob));
         link.setAttribute('download', `tasks-export-${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
-        
         this.showNotification('Tasks exported successfully', 'success');
       },
 

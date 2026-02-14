@@ -99,18 +99,21 @@ app.post("/api/import-csv", requireAuth, upload.single("csvFile"), async (req, r
 
         // Map to expected format with flexible column matching
         const tasksToImport = normalizedRecords.map(record => ({
+            id: record.id, // Capture original ID for mapping
             name: record.name || record.task || record['task name'] || record.title,
-            importance: record.importance || record.important,
-            urgency: parseUrgency(record.urgency || record.urgent),
-            done: record.done || record.status === 'completed',
-            link: record.link || record.url,
-            due_date: record.due_date || record.duedate || record['due date'] || record.due,
-            notes: record.notes || record.note || record.description,
-            parent_id: record.parent_id || record.parentid || record['parent id'],
+            importance: Math.round(Number(record.importance || record.important) || 5),
+            urgency: Math.round(Number(parseUrgency(record.urgency || record.urgent)) || 5),
+            done: record.done === 'true' || record.done === true || record.status === 'completed',
+            link: record.link || record.url || null,
+            due_date: record.due_date || record.duedate || record['due date'] || record.due || null,
+            notes: record.notes || record.note || record.description || null,
+            parent_id: record.parent_id || record.parentid || record['parent id'] || null,
+            total_time_spent: Math.round(Number(record.total_time_spent) || 0),
+            pomodoro_count: Math.round(Number(record.pomodoro_count) || 0),
             // Store additional metadata that might be useful
-            progress: record.progress,
-            category: record.category,
-            status: record.status
+            progress: record.progress ? Math.round(Number(record.progress)) : null,
+            category: record.category || null,
+            status: record.status || null
         }));
 
         console.log("Tasks to import sample:", tasksToImport[0]);

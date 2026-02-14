@@ -131,24 +131,49 @@ class Database {
       ? "SELECT * FROM tasks WHERE (user_id = $1 OR user_id IS NULL) ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, importance DESC, urgency DESC"
       : "SELECT * FROM tasks WHERE user_id IS NULL ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, importance DESC, urgency DESC";
     
-    // SQLite uses ?, PG uses $1
     const finalQuery = this.pool ? query : query.replace('$1', '?');
     const params = userId ? [userId] : [];
     return this.query(finalQuery, params);
   }
 
   async addTask(task, userId) {
+    const importance = Math.round(Number(task.importance) || 5);
+    const urgency = Math.round(Number(task.urgency) || 5);
+    const totalTime = Math.round(Number(task.total_time_spent) || 0);
+    const pomodoros = Math.round(Number(task.pomodoro_count) || 0);
+
     if (this.pool) {
       const res = await this.pool.query(
-        "INSERT INTO tasks (name, importance, urgency, user_id) VALUES ($1, $2, $3, $4) RETURNING id",
-        [task.name, task.importance, task.urgency, userId || null]
+        `INSERT INTO tasks (
+          name, importance, urgency, user_id, done, link, due_date, 
+          notes, parent_id, total_time_spent, pomodoro_count, category, status,
+          created_at, completed_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 
+          COALESCE($14, CURRENT_TIMESTAMP), $15) RETURNING id`,
+        [
+          task.name, importance, urgency, userId || null, !!task.done, 
+          task.link || null, task.due_date || null, task.notes || null, 
+          task.parent_id || null, totalTime, pomodoros, 
+          task.category || null, task.status || null,
+          task.created_at || null, task.completed_at || null
+        ]
       );
       return res.rows[0].id;
     } else {
       return new Promise((resolve, reject) => {
         this.db.run(
-          "INSERT INTO tasks (name, importance, urgency, user_id) VALUES (?, ?, ?, ?)",
-          [task.name, task.importance, task.urgency, userId || null],
+          `INSERT INTO tasks (
+            name, importance, urgency, user_id, done, link, due_date, 
+            notes, parent_id, total_time_spent, pomodoro_count, category, status,
+            created_at, completed_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            task.name, importance, urgency, userId || null, task.done ? 1 : 0, 
+            task.link || null, task.due_date || null, task.notes || null, 
+            task.parent_id || null, totalTime, pomodoros, 
+            task.category || null, task.status || null,
+            task.created_at || null, task.completed_at || null
+          ],
           function(err) {
             if (err) reject(err);
             else resolve(this.lastID);
@@ -156,6 +181,15 @@ class Database {
         );
       });
     }
+  }
+
+  async modifyTask(task) {
+    const importance = Math.round(Number(task.importance) || 5);
+    const urgency = Math.round(Number(task.urgency) || 5);
+    const q = this.pool
+      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3 WHERE id = $4"
+      : "UPDATE tasks SET name = ?, importance = ?, urgency = ? WHERE id = ?";
+    await this.query(q, [task.name, importance, urgency, task.id]);
   }
 
   async deleteTask(id) {
@@ -179,11 +213,17 @@ class Database {
     return task;
   }
 
+  async addSubtask(subtask, parentId, userId) {
+    return this.addTask({ ...subtask, parent_id: parentId }, userId);
+  }
+
   async updateSubtask(subtask) {
+    const importance = Math.round(Number(subtask.importance) || 5);
+    const urgency = Math.round(Number(subtask.urgency) || 5);
     const q = this.pool 
       ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6 WHERE id = $7"
       : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, parent_id = ?, link = ?, due_date = ? WHERE id = ?";
-    await this.query(q, [subtask.name, subtask.importance, subtask.urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.id]);
+    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.id]);
   }
 
   async updateTaskNotes(taskId, notes) {
@@ -192,36 +232,74 @@ class Database {
   }
 
   async editTask(task) {
+    const importance = Math.round(Number(task.importance) || 5);
+    const urgency = Math.round(Number(task.urgency) || 5);
     const q = this.pool
       ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7 WHERE id = $8"
       : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, link = ?, due_date = ?, notes = ?, status = ? WHERE id = ?";
-    await this.query(q, [task.name, task.importance, task.urgency, task.link, task.due_date, task.notes, task.status, task.id]);
+    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.id]);
   }
 
   async bulkImportTasks(tasks, userId) {
     const results = { imported: 0, updated: 0, errors: [] };
+    const idMap = new Map(); // Map original IDs from CSV to new DB IDs
+    const subtasksToUpdate = []; // Queue of subtasks to link once parents are in
+
+    console.log(`Starting bulk import of ${tasks.length} tasks...`);
+
+    // Phase 1: Create all tasks (temporarily without parents to avoid FK errors)
     for (let i = 0; i < tasks.length; i++) {
       const task = tasks[i];
       if (!task.name) continue;
 
-      const existing = await this.query(
-        this.pool ? "SELECT id, user_id FROM tasks WHERE name = $1" : "SELECT id, user_id FROM tasks WHERE name = ?",
-        [task.name]
-      );
+      try {
+        const existing = await this.query(
+          this.pool ? "SELECT id, user_id FROM tasks WHERE name = $1 AND (user_id = $2 OR user_id IS NULL)" : "SELECT id, user_id FROM tasks WHERE name = ? AND (user_id = ? OR user_id IS NULL)",
+          [task.name, userId]
+        );
 
-      if (existing.length > 0) {
-        if (userId && existing[0].user_id === null) {
-          await this.query(this.pool ? "UPDATE tasks SET user_id = $1 WHERE id = $2" : "UPDATE tasks SET user_id = ? WHERE id = ?", [userId, existing[0].id]);
+        let finalId;
+        if (existing.length > 0) {
+          finalId = existing[0].id;
+          if (userId && existing[0].user_id === null) {
+            await this.query(this.pool ? "UPDATE tasks SET user_id = $1 WHERE id = $2" : "UPDATE tasks SET user_id = ? WHERE id = ?", [userId, finalId]);
+          }
           results.updated++;
         } else {
-          results.updated++;
+          // IMPORTANT: Insert without parent first to avoid FK constraint errors with old CSV IDs
+          const taskData = { ...task, parent_id: null };
+          finalId = await this.addTask(taskData, userId);
+          results.imported++;
         }
-        continue;
-      }
 
-      await this.addTask(task, userId);
-      results.imported++;
+        // Store mapping of CSV ID -> New Database ID
+        if (task.id) idMap.set(String(task.id), finalId);
+        
+        // If this task is a subtask, queue it for hierarchy linking using the mapping
+        if (task.parent_id) {
+          subtasksToUpdate.push({ taskId: finalId, originalParentId: String(task.parent_id) });
+        }
+      } catch (err) {
+        console.error(`Failed to import row ${i + 1} (${task.name}):`, err.message);
+        results.errors.push({ row: i + 1, task: task.name, error: err.message });
+      }
     }
+
+    // Phase 2: Rebuild hierarchy using the ID map
+    if (subtasksToUpdate.length > 0) {
+      console.log(`Rebuilding hierarchy for ${subtasksToUpdate.length} subtasks...`);
+      for (const link of subtasksToUpdate) {
+        const newParentId = idMap.get(link.originalParentId);
+        if (newParentId) {
+          try {
+            await this.setTaskParent(link.taskId, newParentId);
+          } catch (linkErr) {
+            console.error(`Failed to link task ${link.taskId} to parent ${newParentId}:`, linkErr.message);
+          }
+        }
+      }
+    }
+
     return results;
   }
 
@@ -257,12 +335,27 @@ class Database {
     return { taskId, duration, totalTime: newTotalTime };
   }
 
+  async getTimeLogs(taskId) {
+    const q = this.pool ? "SELECT * FROM time_logs WHERE task_id = $1 ORDER BY created_at DESC" : "SELECT * FROM time_logs WHERE task_id = ? ORDER BY created_at DESC";
+    return this.query(q, [taskId]);
+  }
+
+  async getActiveTimers() {
+    const q = "SELECT id, name, active_timer_start FROM tasks WHERE active_timer_start IS NOT NULL";
+    return this.query(q, []);
+  }
+
   async setTaskParent(taskId, parentId) {
     const q = parentId === null 
       ? (this.pool ? "UPDATE tasks SET parent_id = NULL WHERE id = $1" : "UPDATE tasks SET parent_id = NULL WHERE id = ?")
       : (this.pool ? "UPDATE tasks SET parent_id = $1 WHERE id = $2" : "UPDATE tasks SET parent_id = ? WHERE id = ?");
     const params = parentId === null ? [taskId] : [parentId, taskId];
     await this.query(q, params);
+  }
+
+  async updateTaskStatus(taskId, status) {
+    const q = this.pool ? "UPDATE tasks SET status = $1 WHERE id = $2" : "UPDATE tasks SET status = ? WHERE id = ?";
+    await this.query(q, [status, taskId]);
   }
 
   async upsertUser(user) {
@@ -291,15 +384,20 @@ class Database {
 const database = new Database();
 export const getTaskData = (userId) => database.getTaskData(userId);
 export const addTask = (task, userId) => database.addTask(task, userId);
+export const modifyTask = (task) => database.modifyTask(task);
 export const deleteTask = (id) => database.deleteTask(id);
 export const toggleTaskDone = (id) => database.toggleTaskDone(id);
+export const addSubtask = (s, p, u) => database.addSubtask(s, p, u);
 export const updateSubtask = (s) => database.updateSubtask(s);
 export const updateTaskNotes = (id, n) => database.updateTaskNotes(id, n);
 export const editTask = (t) => database.editTask(t);
 export const bulkImportTasks = (t, u) => database.bulkImportTasks(t, u);
 export const startTimer = (id) => database.startTimer(id);
 export const stopTimer = (id) => database.stopTimer(id);
+export const getTimeLogs = (id) => database.getTimeLogs(id);
+export const getActiveTimers = () => database.getActiveTimers();
 export const setTaskParent = (id, p) => database.setTaskParent(id, p);
+export const updateTaskStatus = (id, s) => database.updateTaskStatus(id, s);
 export const upsertUser = (u) => database.upsertUser(u);
 export const initDatabase = () => database.init();
 export default database;

@@ -1,76 +1,60 @@
 # Priority Task Manager 📋
 
-**Welcome to Priority Task Manager!** This simple app helps you organize your tasks based on their importance and urgency.
+**Welcome to Priority Task Manager!** This application helps you organize tasks based on the Eisenhower Matrix (Importance vs. Urgency) with real-time synchronization across all your devices.
 
-## What This App Does ✨
+## Key Features ✨
 
-- Helps you organize tasks by priority and urgency
-- Shows your tasks in a visual chart
-- Lets you mark tasks as done when you complete them
-- Automatically saves your tasks
+- **Google OAuth Sync**: Log in to sync your tasks and priorities across laptops and mobile devices.
+- **Eisenhower Matrix**: Visual scatter-plot chart to help you prioritize what matters.
+- **Recursive Subtasks**: Create infinitely nested task hierarchies.
+- **Time Tracking**: Built-in Pomodoro timer and session logging for every task.
+- **Cloud Database**: Support for PostgreSQL (Cloud) with local SQLite fallback.
+- **Perfect Data Migration**: Export and Import CSV with 100% hierarchy preservation.
 
-## Getting Started (Super Easy!) 🚀
+## Getting Started 🚀
 
-### First Time Setup
+### 1. First Time Setup
+Make sure you have [Node.js](https://nodejs.org/) installed.
+```bash
+git clone https://github.com/asamountain/PriotizationNodeJs.git
+cd PriotizationNodeJs
+npm install
+```
 
-1. **Download** the app folder to your computer
-2. **Open** your computer's Terminal or Command Prompt
-   - On Mac: Press `Cmd+Space` and search for "Terminal"
-   - On Windows: Press `Win+R`, type "cmd" and press Enter
-3. **Navigate** to where you saved the app folder
-   ```
-   cd path/to/priority-task-app
-   ```
-4. **Install** the necessary parts:
-   ```
-   npm install
-   ```
+### 2. Configure Environment (`.env`)
+Copy `.env.example` to `.env` and fill in your credentials:
+- **Google OAuth**: Get these from the [Google Cloud Console](https://console.cloud.google.com/).
+- **Cloud Database**: Use [Neon.tech](https://neon.tech/) for a free PostgreSQL instance.
+- **Base URL**: Set to `http://localhost:3000` for local or your live URL for production.
 
-### Starting the App
-
+### 3. Starting the App
 #### On Mac:
-Just double-click the `start-app.command` file!
-
+Double-click `start-app.command` or run `npm start`.
 #### On Windows:
-Just double-click the `start-app.bat` file!
+Run `npm start` in your terminal.
 
-The app will automatically:
-1. Start the server
-2. Open in your web browser
+## How to Sync Across Devices 🔄
 
-## Using the App 🖱️
+1.  **Configure `.env`**: Ensure `DATABASE_URL` (Postgres) and Google OAuth keys are set.
+2.  **Log In**: Click the "Login with Google" button.
+3.  **Automatic Sync**: Any task you add while logged in is instantly saved to the cloud and available on any other device you log into.
 
-1. **Add a task**: Type your task description, set its urgency and importance, and click "Add Task"
-2. **Mark as done**: Click the "Done" button next to any completed task
-3. **Delete a task**: Click the "Delete" button to remove a task
-4. **Switch themes**: Click the theme button to change between light and dark mode
+## CSV Import/Export Tips 📂
+
+- **Hierarchy**: To move tasks between different environments, use the **Export** button (Download icon) to generate a CSV with IDs.
+- **Importing**: When importing, the system automatically rebuilds your subtask hierarchy and "claims" any anonymous tasks for your logged-in account.
+- **No Duplicates**: The system checks for existing task names to prevent double entries.
+
+## Guides & Documentation 📖
+
+- [GOOGLE_SHEETS_IMPORT_GUIDE.md](./GOOGLE_SHEETS_IMPORT_GUIDE.md) - How to format your bulk uploads.
+- [POMODORO_TIMER_GUIDE.md](./POMODORO_TIMER_GUIDE.md) - Using the productivity timer.
+- [ANALYTICS_GUIDE.md](./ANALYTICS_GUIDE.md) - Understanding your task insights.
 
 ## Troubleshooting 🔍
 
-### Multiple browser windows open?
-If you see two browser windows (one on port 3000 and another on a different port):
-- Close both windows
-- Open your Terminal/Command Prompt
-- Type `killall node` (Mac) or `taskkill /F /IM node.exe` (Windows)
-- Start the app again
+- **Unknown authentication strategy "google"**: Ensure your `.env` file has valid `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Restart the server completely.
+- **Tasks not appearing**: Ensure you are logged into the same account on both devices. Check the browser console for sync errors.
 
-### App not starting?
-1. Make sure you've installed all the necessary parts:
-   ```
-   cd path/to/priority-task-app
-   npm install
-   ```
-2. Try starting manually:
-   ```
-   node server.js
-   ```
-
-### Other problems?
-Try these steps:
-1. Close the app completely
-2. Restart your computer
-3. Start the app again
-
-## That's It! 🎉
-
-You're all set to start organizing your tasks! If you have questions, don't worry - everyone starts somewhere. Enjoy using your new Priority Task Manager!
+---
+Enjoy using your new Priority Task Manager!
