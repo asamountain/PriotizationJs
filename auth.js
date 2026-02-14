@@ -31,7 +31,7 @@ export function setupAuth(app) {
         console.log('Auth Debug: Registering Google Strategy...');
         console.log('Auth Debug: GOOGLE_CLIENT_ID (first 5 chars):', GOOGLE_CLIENT_ID.substring(0, 5));
         
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
         
         const strategy = new GoogleStrategy({
             clientID: GOOGLE_CLIENT_ID,
