@@ -189,10 +189,10 @@ export class ChartVisualization {
     
     // Quadrant 1: Important & Urgent (top-right) - Error color
     const q1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    q1.setAttribute('x', '400');
-    q1.setAttribute('y', '40');
-    q1.setAttribute('width', '360');
-    q1.setAttribute('height', '260');
+    q1.setAttribute('x', '50%');
+    q1.setAttribute('y', '6%');
+    q1.setAttribute('width', '45%');
+    q1.setAttribute('height', '44%');
     q1.setAttribute('fill', this.vuetifyColors.error);
     q1.setAttribute('opacity', '0.05');
     q1.setAttribute('rx', '2');
@@ -203,10 +203,10 @@ export class ChartVisualization {
     
     // Quadrant 2: Important & Not Urgent (bottom-right) - Success color
     const q2 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    q2.setAttribute('x', '400');
-    q2.setAttribute('y', '300');
-    q2.setAttribute('width', '360');
-    q2.setAttribute('height', '260');
+    q2.setAttribute('x', '50%');
+    q2.setAttribute('y', '50%');
+    q2.setAttribute('width', '45%');
+    q2.setAttribute('height', '44%');
     q2.setAttribute('fill', this.vuetifyColors.success);
     q2.setAttribute('opacity', '0.05');
     q2.setAttribute('rx', '2');
@@ -217,10 +217,10 @@ export class ChartVisualization {
     
     // Quadrant 3: Not Important & Urgent (top-left) - Warning color
     const q3 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    q3.setAttribute('x', '40');
-    q3.setAttribute('y', '40');
-    q3.setAttribute('width', '360');
-    q3.setAttribute('height', '260');
+    q3.setAttribute('x', '5%');
+    q3.setAttribute('y', '6%');
+    q3.setAttribute('width', '45%');
+    q3.setAttribute('height', '44%');
     q3.setAttribute('fill', this.vuetifyColors.warning);
     q3.setAttribute('opacity', '0.05');
     q3.setAttribute('rx', '2');
@@ -231,10 +231,10 @@ export class ChartVisualization {
     
     // Quadrant 4: Not Important & Not Urgent (bottom-left) - Info color
     const q4 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    q4.setAttribute('x', '40');
-    q4.setAttribute('y', '300');
-    q4.setAttribute('width', '360');
-    q4.setAttribute('height', '260');
+    q4.setAttribute('x', '5%');
+    q4.setAttribute('y', '50%');
+    q4.setAttribute('width', '45%');
+    q4.setAttribute('height', '44%');
     q4.setAttribute('fill', this.vuetifyColors.info);
     q4.setAttribute('opacity', '0.05');
     q4.setAttribute('rx', '2');
@@ -248,27 +248,27 @@ export class ChartVisualization {
     
     // Add axes lines
     const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    xAxis.setAttribute('x1', '40');
-    xAxis.setAttribute('y1', '300');
-    xAxis.setAttribute('x2', '760');
-    xAxis.setAttribute('y2', '300');
+    xAxis.setAttribute('x1', '5%');
+    xAxis.setAttribute('y1', '50%');
+    xAxis.setAttribute('x2', '95%');
+    xAxis.setAttribute('y2', '50%');
     xAxis.setAttribute('stroke', 'var(--v-border, rgba(0,0,0,0.12))');
     xAxis.setAttribute('stroke-width', '2');
     parentGroup.appendChild(xAxis);
     
     const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    yAxis.setAttribute('x1', '400');
-    yAxis.setAttribute('y1', '40');
-    yAxis.setAttribute('x2', '400');
-    yAxis.setAttribute('y2', '560');
+    yAxis.setAttribute('x1', '50%');
+    yAxis.setAttribute('y1', '6%');
+    yAxis.setAttribute('x2', '50%');
+    yAxis.setAttribute('y2', '94%');
     yAxis.setAttribute('stroke', 'var(--v-border, rgba(0,0,0,0.12))');
     yAxis.setAttribute('stroke-width', '2');
     parentGroup.appendChild(yAxis);
     
     // Add axis labels in Vuetify typography style
     const importanceLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    importanceLabel.setAttribute('x', '400');
-    importanceLabel.setAttribute('y', '580');
+    importanceLabel.setAttribute('x', '50%');
+    importanceLabel.setAttribute('y', '98%');
     importanceLabel.setAttribute('text-anchor', 'middle');
     importanceLabel.setAttribute('font-family', 'Roboto, sans-serif');
     importanceLabel.setAttribute('font-size', '14px');
@@ -278,14 +278,14 @@ export class ChartVisualization {
     parentGroup.appendChild(importanceLabel);
     
     const urgencyLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    urgencyLabel.setAttribute('transform', 'rotate(-90)');
-    urgencyLabel.setAttribute('x', '-300');
-    urgencyLabel.setAttribute('y', '20');
+    urgencyLabel.setAttribute('x', '2%');
+    urgencyLabel.setAttribute('y', '50%');
     urgencyLabel.setAttribute('text-anchor', 'middle');
     urgencyLabel.setAttribute('font-family', 'Roboto, sans-serif');
     urgencyLabel.setAttribute('font-size', '14px');
     urgencyLabel.setAttribute('font-weight', '500');
     urgencyLabel.setAttribute('fill', 'var(--v-text-primary, rgba(0,0,0,0.87))');
+    urgencyLabel.setAttribute('transform', 'rotate(-90, 20, 300)');
     urgencyLabel.textContent = 'URGENCY';
     parentGroup.appendChild(urgencyLabel);
   }

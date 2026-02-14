@@ -42,13 +42,29 @@ const setupSocket = (io) => {
   };
   io.on("connection", (socket) => {
     console.log("New client connected");
+    
+    // Store userId on the socket
+    socket.userId = null;
 
-    // Send initial data with processed numeric values
-    getTaskData()
+    // Handle authentication from client
+    socket.on("authenticate", async (userId) => {
+      console.log(`SOCKET: Authenticating socket for user: ${userId}`);
+      socket.userId = userId;
+      
+      // Refresh data for this specific user
+      try {
+        const data = await getTaskData(socket.userId);
+        socket.emit("initialData", { data: processTaskData(data) });
+      } catch (error) {
+        console.error("Failed to fetch data after auth:", error);
+      }
+    });
+
+    // Send initial data (public tasks initially, or user tasks if already auth'd)
+    getTaskData(socket.userId)
       .then((data) => {
         const processedData = processTaskData(data);
         console.log("Initial data fetched:", processedData.length, "items");
-        console.log("Sample data:", processedData.slice(0, 2));
         socket.emit("initialData", { data: processedData });
       })
       .catch((error) => {
@@ -58,12 +74,21 @@ const setupSocket = (io) => {
 
     socket.on("addTask", async (task) => {
       try {
-        console.log("Adding task:", task);
-        const taskId = await addTask(task);
+        console.log(`Adding task for user ${socket.userId || 'anonymous'}:`, task);
+        const taskId = await addTask(task, socket.userId);
         console.log("Task added successfully, ID:", taskId);
 
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        // Use io.to(...) or just io.emit but we should filter by user
+        // For simplicity now, we'll emit to all but the client will only see their own when they request
+        // Better: broadcast only to this user's rooms
+        if (socket.userId) {
+          // If we had rooms, we'd use io.to(socket.userId).emit(...)
+          socket.emit("updateTasks", { data: processTaskData(data) });
+          // Also emit to other sockets of the same user if we implement rooms
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
       } catch (error) {
         console.error("Failed to add task:", error);
       }
@@ -71,11 +96,13 @@ const setupSocket = (io) => {
 
     socket.on("modifyTask", async (task) => {
       try {
-        console.log("Modifying task:", task);
         await modifyTask(task);
-
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
       } catch (error) {
         console.error("Failed to modify task:", error);
       }
@@ -83,21 +110,22 @@ const setupSocket = (io) => {
 
     socket.on("deleteTask", async (id) => {
       try {
-        console.log("Deleting task with ID:", id);
         await deleteTask(id);
-
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
       } catch (error) {
         console.error("Failed to delete task:", error);
       }
     });
 
-    socket.on("updateTasks", async (task) => {
+    socket.on("updateTasks", async () => {
       try {
-        const data = await getTaskData();
-        const processedData = processTaskData(data);
-        io.emit("updateTasks", { data: processedData });
+        const data = await getTaskData(socket.userId);
+        socket.emit("updateTasks", { data: processTaskData(data) });
       } catch (error) {
         console.error("Failed to update tasks:", error);
       }
@@ -105,11 +133,13 @@ const setupSocket = (io) => {
 
     socket.on("toggleDone", async (id) => {
       try {
-        console.log("Toggling done status for task with ID:", id);
         await toggleTaskDone(id);
-
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
       } catch (error) {
         console.error("Failed to toggle task done status:", error);
       }
@@ -117,12 +147,13 @@ const setupSocket = (io) => {
 
     socket.on("addSubtask", async ({ subtask, parentId }) => {
       try {
-        console.log("Adding subtask:", subtask, "to parent:", parentId);
-        const subtaskId = await database.addSubtask(subtask, parentId);
-        console.log("Subtask added successfully, ID:", subtaskId);
-
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const subtaskId = await database.addSubtask(subtask, parentId, socket.userId);
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
       } catch (error) {
         console.error("Failed to add subtask:", error);
       }
@@ -130,12 +161,13 @@ const setupSocket = (io) => {
 
     socket.on("updateSubtask", async ({ subtask }) => {
       try {
-        console.log("Updating subtask:", subtask);
         await database.updateSubtask(subtask);
-        console.log("Subtask updated successfully");
-
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
       } catch (error) {
         console.error("Failed to update subtask:", error);
       }
@@ -143,12 +175,13 @@ const setupSocket = (io) => {
 
     socket.on("editTask", async (task) => {
       try {
-        console.log("Editing task:", task);
         await editTask(task);
-        console.log("Task edited successfully");
-
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
       } catch (error) {
         console.error("Failed to edit task:", error);
       }
@@ -156,20 +189,15 @@ const setupSocket = (io) => {
 
     socket.on("updateTaskNotes", async ({ taskId, notes }) => {
       try {
-        console.log("SOCKET: Received updateTaskNotes request");
-        console.log("SOCKET: Task ID:", taskId);
-        console.log("SOCKET: Notes content:", notes);
-        
         await updateTaskNotes(taskId, notes);
-        console.log("SOCKET: Notes updated successfully");
-
-        // Send updated data back to all clients
-        const data = await getTaskData();
-        console.log("SOCKET: Sending updated task data to clients");
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
       } catch (error) {
         console.error("Failed to update task notes:", error);
-        socket.emit("error", { message: "Failed to update notes" });
       }
     });
 
@@ -223,8 +251,12 @@ const setupSocket = (io) => {
       try {
         console.log("Starting timer for task:", taskId);
         const result = await startTimer(taskId);
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
         socket.emit("timerStarted", result);
       } catch (error) {
         console.error("Failed to start timer:", error);
@@ -236,8 +268,12 @@ const setupSocket = (io) => {
       try {
         console.log("Stopping timer for task:", taskId);
         const result = await stopTimer(taskId);
-        const data = await getTaskData();
-        io.emit("updateTasks", { data: processTaskData(data) });
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
         socket.emit("timerStopped", result);
       } catch (error) {
         console.error("Failed to stop timer:", error);
@@ -259,17 +295,40 @@ const setupSocket = (io) => {
     // Set task parent (create subtask relationship)
     socket.on("setTaskParent", async ({ taskId, parentId }) => {
       try {
-        console.log(`Setting parent for task ${taskId} to ${parentId}`);
+        console.log(`SOCKET: Setting parent for task ${taskId} to ${parentId} (user: ${socket.userId || 'anonymous'})`);
         await setTaskParent(taskId, parentId);
         
         // Broadcast updated tasks to all clients
-        const tasks = await getTaskData();
-        io.emit("tasksUpdated", processTaskData(tasks));
+        const tasks = await getTaskData(socket.userId);
+        console.log(`SOCKET: Fetched ${tasks.length} tasks after parent change`);
+        
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(tasks) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(tasks) });
+        }
         
         socket.emit("taskParentSet", { taskId, parentId });
       } catch (error) {
         console.error("Failed to set task parent:", error);
         socket.emit("setTaskParentError", { error: error.message });
+      }
+    });
+
+    socket.on("updateTaskStatus", async ({ taskId, status }) => {
+      try {
+        console.log(`Updating status for task ${taskId} to ${status}`);
+        await database.updateTaskStatus(taskId, status);
+        
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
+      } catch (error) {
+        console.error("Failed to update task status:", error);
+        socket.emit("error", { message: "Failed to update status" });
       }
     });
 

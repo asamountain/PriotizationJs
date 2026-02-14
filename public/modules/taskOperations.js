@@ -344,7 +344,19 @@ export class TaskOperations {
             }
           });
         }, 500);
-      });
-    });
-  }
-} 
+            });
+          });
+        }
+      
+        toggleTaskStatus(taskId, currentStatus) {
+          const newStatus = currentStatus === 'Not Sure' ? null : 'Not Sure';
+          const socket = window.app?.socket || 
+                        (typeof io !== 'undefined' ? io(window.location.origin) : null);
+          
+          if (socket) {
+            socket.emit('updateTaskStatus', { taskId, status: newStatus });
+            console.log(`Toggled status for task ${taskId} to ${newStatus}`);
+          }
+        }
+      } 
+       

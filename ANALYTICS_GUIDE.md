@@ -408,3 +408,4 @@ The Analytics dashboard transforms your raw time tracking data into actionable i
 
 **Made with ❤️ for productive developers**
 
+

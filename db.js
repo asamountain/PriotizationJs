@@ -36,7 +36,9 @@ class Database {
           done BOOLEAN DEFAULT 0,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP,
           parent_id INTEGER NULL,
-          FOREIGN KEY (parent_id) REFERENCES tasks(id)
+          user_id TEXT NULL,
+          FOREIGN KEY (parent_id) REFERENCES tasks(id),
+          FOREIGN KEY (user_id) REFERENCES users(id)
         )`,
         // Add migrations for new columns
         `ALTER TABLE tasks ADD COLUMN due_date TEXT NULL`,
@@ -46,6 +48,7 @@ class Database {
         `ALTER TABLE tasks ADD COLUMN progress INTEGER NULL`,
         `ALTER TABLE tasks ADD COLUMN category TEXT NULL`,
         `ALTER TABLE tasks ADD COLUMN status TEXT NULL`,
+        `ALTER TABLE tasks ADD COLUMN user_id TEXT NULL`,
         // Pomodoro/Time tracking columns
         `ALTER TABLE tasks ADD COLUMN total_time_spent INTEGER DEFAULT 0`,
         `ALTER TABLE tasks ADD COLUMN active_timer_start TEXT NULL`,
@@ -62,6 +65,16 @@ class Database {
           notes TEXT NULL,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        )`,
+        // Create users table for OAuth
+        `CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL,
+          name TEXT,
+          avatar TEXT,
+          provider TEXT DEFAULT 'google',
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          last_login TEXT DEFAULT CURRENT_TIMESTAMP
         )`
       ];
       
@@ -82,29 +95,33 @@ class Database {
   }
 
   // Your existing CRUD operations here
-  async getTaskData() {
+  async getTaskData(userId) {
     return new Promise((resolve, reject) => {
-      this.db.all(
-        "SELECT * FROM tasks ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, importance DESC, urgency DESC",
-        [],
-        (err, rows) => {
+      // If userId is provided, show both their tasks AND anonymous tasks (to prevent disappearance)
+      const query = userId 
+        ? "SELECT * FROM tasks WHERE (user_id = ? OR user_id IS NULL) ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, importance DESC, urgency DESC"
+        : "SELECT * FROM tasks WHERE user_id IS NULL ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, importance DESC, urgency DESC";
+      
+      const params = userId ? [userId] : [];
+
+      this.db.all(query, params, (err, rows) => {
           if (err) {
             console.error("Error fetching tasks:", err);
             reject(err);
             return;
           }
           resolve(rows);
-          console.log("Tasks fetched:", rows.length);
+          console.log(`Tasks fetched for user ${userId || 'anonymous'}:`, rows.length);
         }
       );
     });
   }
 
-  async addTask(task) {
+  async addTask(task, userId) {
     return new Promise((resolve, reject) => {
       this.db.run(
-        "INSERT INTO tasks (name, importance, urgency) VALUES (?, ?, ?)",
-        [task.name, task.importance, task.urgency],
+        "INSERT INTO tasks (name, importance, urgency, user_id) VALUES (?, ?, ?, ?)",
+        [task.name, task.importance, task.urgency, userId || null],
         function (err) {
           if (err) {
             console.error("Error adding task:", err);
@@ -112,7 +129,7 @@ class Database {
             return;
           }
           resolve(this.lastID);
-          console.log("Task added:", this.lastID);
+          console.log("Task added:", this.lastID, "for user:", userId || 'anonymous');
         }
       );
     });
@@ -193,11 +210,11 @@ class Database {
   }
 
   // Add a subtask to a parent task
-  async addSubtask(subtask, parentId) {
+  async addSubtask(subtask, parentId, userId) {
     return new Promise((resolve, reject) => {
       this.db.run(
-        "INSERT INTO tasks (name, importance, urgency, parent_id, link, due_date) VALUES (?, ?, ?, ?, ?, ?)",
-        [subtask.name, subtask.importance, subtask.urgency, parentId, subtask.link, subtask.due_date],
+        "INSERT INTO tasks (name, importance, urgency, parent_id, link, due_date, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [subtask.name, subtask.importance, subtask.urgency, parentId, subtask.link, subtask.due_date, userId || null],
         function (err) {
           if (err) {
             console.error("Error adding subtask:", err);
@@ -205,7 +222,7 @@ class Database {
             return;
           }
           resolve(this.lastID);
-          console.log("Subtask added:", this.lastID, "to parent:", parentId);
+          console.log("Subtask added:", this.lastID, "to parent:", parentId, "for user:", userId || 'anonymous');
         }
       );
     });
@@ -292,8 +309,8 @@ class Database {
   async editTask(task) {
     return new Promise((resolve, reject) => {
       this.db.run(
-        "UPDATE tasks SET name = ?, importance = ?, urgency = ?, link = ?, due_date = ?, notes = ? WHERE id = ?",
-        [task.name, task.importance, task.urgency, task.link, task.due_date, task.notes, task.id],
+        "UPDATE tasks SET name = ?, importance = ?, urgency = ?, link = ?, due_date = ?, notes = ?, status = ? WHERE id = ?",
+        [task.name, task.importance, task.urgency, task.link, task.due_date, task.notes, task.status, task.id],
         function (err) {
           if (err) {
             console.error("Error editing task:", err);
@@ -308,7 +325,7 @@ class Database {
   }
 
   // Bulk import tasks from CSV
-  async bulkImportTasks(tasks) {
+  async bulkImportTasks(tasks, userId) {
     return new Promise((resolve, reject) => {
       const results = {
         imported: 0,
@@ -354,34 +371,71 @@ class Database {
           const category = task.category || null;
           const status = task.status || null;
 
-          // Insert new task
-          db.run(
-            "INSERT INTO tasks (name, importance, urgency, done, link, due_date, notes, parent_id, progress, category, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [task.name, importance, urgency, done, link, due_date, notes, parent_id, progress, category, status],
-            function (err) {
+          // Check for duplicates or anonymous tasks to claim
+          db.get(
+            "SELECT id, user_id FROM tasks WHERE name = ?",
+            [task.name],
+            (err, existingTask) => {
               if (err) {
-                console.error("Error importing task:", err);
+                console.error("Error checking for duplicate:", err);
                 results.errors.push({ row: index + 1, task: task.name, error: err.message });
-              } else {
-                results.imported++;
-                console.log("Task imported:", task.name, "ID:", this.lastID);
+                completed++;
+                if (completed === total) finalizeImport();
+                return;
               }
 
-              completed++;
-              if (completed === total) {
-                db.run("COMMIT", (commitErr) => {
-                  if (commitErr) {
-                    console.error("Transaction commit failed:", commitErr);
-                    reject(commitErr);
-                  } else {
-                    console.log("Bulk import completed:", results);
-                    resolve(results);
+              // If task exists
+              if (existingTask) {
+                // If I am logged in and the existing task is anonymous, claim it
+                if (userId && existingTask.user_id === null) {
+                  db.run("UPDATE tasks SET user_id = ? WHERE id = ?", [userId, existingTask.id]);
+                  results.updated++;
+                } else if (existingTask.user_id === userId || (existingTask.user_id === null && userId === null)) {
+                  // Already exists for me, just skip/update
+                  results.updated++;
+                } else {
+                  // It belongs to someone else, so we DO create a new one for this user
+                  insertNewTask();
+                  return;
+                }
+                completed++;
+                if (completed === total) finalizeImport();
+                return;
+              }
+
+              insertNewTask();
+
+              function insertNewTask() {
+                db.run(
+                  "INSERT INTO tasks (name, importance, urgency, done, link, due_date, notes, parent_id, progress, category, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                  [task.name, importance, urgency, done, link, due_date, notes, parent_id, progress, category, status, userId || null],
+                  function (insertErr) {
+                    if (insertErr) {
+                      console.error("Error importing task:", insertErr);
+                      results.errors.push({ row: index + 1, task: task.name, error: insertErr.message });
+                    } else {
+                      results.imported++;
+                    }
+                    completed++;
+                    if (completed === total) finalizeImport();
                   }
-                });
+                );
               }
             }
           );
         });
+
+        const finalizeImport = () => {
+          db.run("COMMIT", (commitErr) => {
+            if (commitErr) {
+              console.error("Transaction commit failed:", commitErr);
+              reject(commitErr);
+            } else {
+              console.log("Bulk import completed:", results);
+              resolve(results);
+            }
+          });
+        };
 
         // Handle empty array case
         if (total === 0) {
@@ -498,17 +552,64 @@ class Database {
   // Set parent for a task (creates subtask relationship)
   // Preserves ALL timer data - only updates parent_id
   async setTaskParent(taskId, parentId) {
+    console.log(`DATABASE: Setting task ${taskId} parent to ${parentId}`);
     return new Promise((resolve, reject) => {
-      this.db.run(
-        `UPDATE tasks SET parent_id = ? WHERE id = ?`,
-        [parentId, taskId],
-        function (err) {
+      // Use COALESCE or explicit NULL handling
+      const query = parentId === null 
+        ? "UPDATE tasks SET parent_id = NULL WHERE id = ?"
+        : "UPDATE tasks SET parent_id = ? WHERE id = ?";
+      
+      const params = parentId === null ? [taskId] : [parentId, taskId];
+
+      this.db.run(query, params, function (err) {
           if (err) {
             console.error("Error setting task parent:", err);
             reject(err);
             return;
           }
+          console.log(`DATABASE: Task ${taskId} parent set to ${parentId}. Rows affected: ${this.changes}`);
           resolve({ taskId, parentId, changes: this.changes });
+        }
+      );
+    });
+  }
+
+  async updateTaskStatus(taskId, status) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `UPDATE tasks SET status = ? WHERE id = ?`,
+        [status, taskId],
+        function (err) {
+          if (err) {
+            console.error("Error updating task status:", err);
+            reject(err);
+            return;
+          }
+          resolve({ taskId, status, changes: this.changes });
+        }
+      );
+    });
+  }
+
+  async upsertUser(user) {
+    return new Promise((resolve, reject) => {
+      const now = new Date().toISOString();
+      this.db.run(
+        `INSERT INTO users (id, email, name, avatar, provider, last_login)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+         email = excluded.email,
+         name = excluded.name,
+         avatar = excluded.avatar,
+         last_login = excluded.last_login`,
+        [user.id, user.email, user.name, user.avatar, user.provider || 'google', now],
+        function (err) {
+          if (err) {
+            console.error("Error upserting user:", err);
+            reject(err);
+            return;
+          }
+          resolve(user);
         }
       );
     });
@@ -533,6 +634,8 @@ export const stopTimer = (...args) => database.stopTimer(...args);
 export const getTimeLogs = (...args) => database.getTimeLogs(...args);
 export const getActiveTimers = (...args) => database.getActiveTimers(...args);
 export const setTaskParent = (...args) => database.setTaskParent(...args);
+export const updateTaskStatus = (...args) => database.updateTaskStatus(...args);
+export const upsertUser = (...args) => database.upsertUser(...args);
 export const initDatabase = async () => {
   try {
     await database.init();

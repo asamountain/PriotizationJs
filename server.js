@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -5,8 +6,10 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { initDatabase, bulkImportTasks } from "./db.js";
 import setupSocket from "./socket.js";
+import { setupAuth, requireAuth } from "./auth.js";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
+import { stringify } from "csv-stringify/sync";
 import { readFileSync, unlinkSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +27,9 @@ const io = new Server(server);
 app.use(express.static(join(__dirname, "public")));
 app.use(express.json());
 
+// Setup authentication
+setupAuth(app);
+
 // Setup socket connection
 setupSocket(io);
 
@@ -38,7 +44,7 @@ app.get("/analytics", (req, res) => {
 });
 
 // CSV Import endpoint
-app.post("/api/import-csv", upload.single("csvFile"), async (req, res) => {
+app.post("/api/import-csv", requireAuth, upload.single("csvFile"), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: "No file uploaded" });
@@ -109,8 +115,9 @@ app.post("/api/import-csv", upload.single("csvFile"), async (req, res) => {
 
         console.log("Tasks to import sample:", tasksToImport[0]);
 
-        // Import tasks into database
-        const result = await bulkImportTasks(tasksToImport);
+        // Import tasks into database with userId
+        const userId = req.user ? req.user.id : null;
+        const result = await bulkImportTasks(tasksToImport, userId);
 
         // Clean up uploaded file
         unlinkSync(req.file.path);
@@ -155,8 +162,63 @@ Another Task,5,5,false,,,,`;
     res.send(template);
 });
 
+// CSV Export endpoint
+app.get("/api/export-csv", requireAuth, async (req, res) => {
+    try {
+        const { getTaskData } = await import("./db.js");
+        const userId = req.user ? req.user.id : null;
+        const tasks = await getTaskData(userId);
+        
+        // Define CSV headers
+        const columns = [
+            'name',
+            'importance',
+            'urgency',
+            'done',
+            'link',
+            'due_date',
+            'notes',
+            'parent_id',
+            'created_at',
+            'completed_at',
+            'total_time_spent',
+            'pomodoro_count',
+            'category',
+            'status'
+        ];
+
+        // Format tasks for CSV
+        const csvData = tasks.map(task => [
+            task.name,
+            task.importance,
+            task.urgency,
+            task.done ? 'true' : 'false',
+            task.link,
+            task.due_date,
+            task.notes,
+            task.parent_id,
+            task.created_at,
+            task.completed_at,
+            task.total_time_spent,
+            task.pomodoro_count,
+            task.category,
+            task.status
+        ]);
+
+        const csvContent = stringify(csvData, { header: true, columns: columns });
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename=tasks-export-${new Date().toISOString().split('T')[0]}.csv`);
+        res.send(csvContent);
+
+    } catch (error) {
+        console.error("CSV export error:", error);
+        res.status(500).json({ error: "Failed to export CSV" });
+    }
+});
+
 // Analytics API endpoint
-app.get("/api/analytics", async (req, res) => {
+app.get("/api/analytics", requireAuth, async (req, res) => {
     try {
         const { getTaskData, getTimeLogs } = await import("./db.js");
         

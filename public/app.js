@@ -26,20 +26,20 @@ window.addEventListener('DOMContentLoaded', () => {
       themes: {
         light: {
           colors: {
-            primary: '#1976D2',
-            secondary: '#9C27B0',
-            accent: '#FF4081',
+            primary: '#1b5e20', // Deep Green
+            secondary: '#7cb342', // Light Green
+            accent: '#c5e1a5', // Very Light Green
             error: '#F44336',
             warning: '#FF9800',
-            info: '#2196F3',
-            success: '#4CAF50',
+            info: '#64B5F6', // Keep info blueish for contrast if needed
+            success: '#81C784', // Subtle green for success
           },
         },
         dark: {
           colors: {
-            primary: '#2196F3',
-            secondary: '#BB86FC',
-            accent: '#03DAC6',
+            primary: '#7cb342', // Light Green for dark mode primary
+            secondary: '#1b5e20', // Deep Green
+            accent: '#c5e1a5', // Very Light Green
             error: '#CF6679',
             warning: '#FFB74D',
             info: '#64B5F6',
@@ -80,6 +80,7 @@ window.addEventListener('DOMContentLoaded', () => {
         showSubtaskModal: false,
         parentId: null,
         showCompletedSubtasks: false,
+        showNotSureTasks: false,
         taskSectionOpen: {
           active: true,
           completed: false
@@ -150,10 +151,30 @@ window.addEventListener('DOMContentLoaded', () => {
         breakTask: null,
         breakType: 'short', // 'short' (5min) or 'long' (15min)
         breakTimeRemaining: 0,
-        breakInterval: null
+        breakInterval: null,
+        // Drag and drop state
+        draggedTask: null,
+        dragOverTaskId: null,
+        expandedTasks: new Set(),
+        // Authentication state
+        user: null,
+        authConfig: {
+          googleEnabled: false
+        },
+        hoveredTaskId: null
       };
     },
     computed: {
+      hoveredTaskAncestors() {
+        if (!this.hoveredTaskId) return new Set();
+        const ancestors = new Set();
+        let current = this.tasks.find(t => t.id === this.hoveredTaskId);
+        while (current && current.parent_id) {
+          ancestors.add(current.parent_id);
+          current = this.tasks.find(t => t.id === current.parent_id);
+        }
+        return ancestors;
+      },
       currentTheme() {
         return this.isDarkTheme ? 'dark' : 'light';
       },
@@ -174,7 +195,12 @@ window.addEventListener('DOMContentLoaded', () => {
           return [];
         }
         
-        const tasks = [...this.activeTasks];
+        let tasks = [...this.activeTasks];
+
+        // Filter out "Not Sure" tasks if hidden
+        if (!this.showNotSureTasks) {
+          tasks = tasks.filter(task => task.status !== 'Not Sure');
+        }
         
         switch (this.taskSortBy) {
           case 'priority-high':
@@ -274,8 +300,13 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       
       getSubtasksForTask(taskId) {
-        const subtasks = this.tasks.filter(task => task.parent_id === taskId);
+        let subtasks = this.tasks.filter(task => task.parent_id === taskId);
         
+        // Filter out "Not Sure" subtasks if hidden
+        if (!this.showNotSureTasks) {
+          subtasks = subtasks.filter(task => task.status !== 'Not Sure');
+        }
+
         // Debug logging for subtasks with links
         subtasks.forEach(subtask => {
           if (subtask.link) {
@@ -329,7 +360,10 @@ window.addEventListener('DOMContentLoaded', () => {
       
       editSubtask(subtask) {
         this.editingSubtask = { ...subtask };
-        this.possibleParents = this.activeTasks;
+        this.possibleParents = [
+          { id: null, name: 'No Parent (Root Task)' },
+          ...this.activeTasks.filter(t => t.id !== subtask.id) // Exclude self to avoid circularity
+        ];
         this.showEditForm = true;
       },
       
@@ -339,6 +373,7 @@ window.addEventListener('DOMContentLoaded', () => {
         console.log("UI: Saving subtask edit:");
         console.log("UI: Subtask ID:", this.editingSubtask.id);
         console.log("UI: Subtask link before saving:", this.editingSubtask.link);
+        console.log("UI: Subtask parent_id:", this.editingSubtask.parent_id);
         
         // Ensure link is properly formatted
         if (this.editingSubtask.link && typeof this.editingSubtask.link === 'string') {
@@ -350,7 +385,19 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         
         console.log("UI: Final subtask link value being sent:", this.editingSubtask.link);
+        
+        // Update task content (name, link, etc.)
         taskOperations.updateSubtask(this.editingSubtask);
+
+        // Update parent relationship if changed (including to null)
+        const originalTask = this.tasks.find(t => t.id === this.editingSubtask.id);
+        if (originalTask && originalTask.parent_id !== this.editingSubtask.parent_id) {
+          console.log(`Parent changed from ${originalTask.parent_id} to ${this.editingSubtask.parent_id}`);
+          this.socket.emit('setTaskParent', {
+            taskId: this.editingSubtask.id,
+            parentId: this.editingSubtask.parent_id
+          });
+        }
         
         this.showNotification("Saving subtask with link: " + (this.editingSubtask.link || "none"), "info");
         
@@ -403,10 +450,30 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showCompletedSubtasks = !this.showCompletedSubtasks;
       },
       
+      toggleNotSureTasks() {
+        this.showNotSureTasks = !this.showNotSureTasks;
+        const msg = this.showNotSureTasks ? 'Showing "Not Sure" tasks' : 'Hiding "Not Sure" tasks';
+        this.showNotification(msg, 'info');
+      },
+      
       updateTasks(tasks) {
+        console.log('updateTasks received:', tasks.length, 'tasks');
         this.tasks = tasks;
-        this.activeTasks = tasks.filter(task => !task.done && !task.parent_id);
-        this.completedTasks = tasks.filter(task => task.done && !task.parent_id);
+        
+        // Helper to check if a task's parent exists
+        const parentExists = (parentId) => {
+          return tasks.some(t => t.id === parentId);
+        };
+
+        // A task is a "root" if it has no parent_id OR if its parent doesn't exist
+        const rawActive = tasks.filter(task => !task.done && (!task.parent_id || !parentExists(task.parent_id)));
+        const rawCompleted = tasks.filter(task => task.done && (!task.parent_id || !parentExists(task.parent_id)));
+        
+        console.log('Filtered Active (root/orphaned):', rawActive.length);
+        console.log('Filtered Completed (root/orphaned):', rawCompleted.length);
+
+        this.activeTasks = rawActive;
+        this.completedTasks = rawCompleted;
         
         // Debug: Log information about tasks with links
         console.log('Tasks with links:');
@@ -640,6 +707,58 @@ window.addEventListener('DOMContentLoaded', () => {
       downloadCSVTemplate() {
         window.location.href = '/api/csv-template';
         this.showNotification('Downloading CSV template...', 'info');
+      },
+
+      exportTasks() {
+        const tasks = this.tasks;
+        if (!tasks || tasks.length === 0) {
+          this.showNotification('No tasks to export', 'warning');
+          return;
+        }
+
+        // Define headers
+        const headers = [
+          'name', 'importance', 'urgency', 'done', 'link', 'due_date', 
+          'notes', 'parent_id', 'created_at', 'completed_at', 
+          'total_time_spent', 'pomodoro_count', 'category', 'status'
+        ];
+
+        // Create CSV content
+        const csvRows = [];
+        csvRows.push(headers.join(','));
+
+        for (const task of tasks) {
+          const values = headers.map(header => {
+            let val = task[header];
+            if (val === null || val === undefined) val = '';
+            
+            // Format boolean
+            if (header === 'done') val = val ? 'true' : 'false';
+            
+            // Escape commas, quotes, and newlines
+            let stringVal = val.toString();
+            if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
+              stringVal = `"${stringVal.replace(/"/g, '""')}"`;
+            }
+            return stringVal;
+          });
+          csvRows.push(values.join(','));
+        }
+
+        // Generate download
+        const csvContent = "\uFEFF" + csvRows.join('\n'); // Add BOM for Excel compatibility
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `tasks-export-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        this.showNotification('Tasks exported successfully', 'success');
       },
 
 
@@ -880,45 +999,189 @@ window.addEventListener('DOMContentLoaded', () => {
       // Resize panel methods
       startResize(e) {
         this.isResizing = true;
-        document.addEventListener('mousemove', this.handleResize);
-        document.addEventListener('mouseup', this.stopResize);
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-      },
-
-      handleResize(e) {
-        if (!this.isResizing) return;
-
-        const container = this.$refs.splitContainer;
-        if (!container) return;
-
-        const containerRect = container.getBoundingClientRect();
-        const newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
-
-        // Constrain between 30% and 70%
-        if (newLeftWidth >= 30 && newLeftWidth <= 70) {
-          this.leftPanelWidth = newLeftWidth;
-          
-          // Trigger chart redraw after resize
-          this.$nextTick(() => {
-            if (chartVisualization && typeof chartVisualization.initializeChart === 'function') {
-              chartVisualization.initializeChart();
-            }
-          });
-        }
-      },
-
-      stopResize() {
-        if (this.isResizing) {
+        const move = (e) => {
+          if (!this.isResizing) return;
+          const rect = this.$refs.splitContainer.getBoundingClientRect();
+          const width = ((e.clientX - rect.left) / rect.width) * 100;
+          if (width >= 30 && width <= 70) {
+            this.leftPanelWidth = width;
+            this.$nextTick(() => chartVisualization.initializeChart());
+          }
+        };
+        const stop = () => {
           this.isResizing = false;
-          document.removeEventListener('mousemove', this.handleResize);
-          document.removeEventListener('mouseup', this.stopResize);
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
-          
-          // Save preference
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', stop);
           localStorage.setItem('leftPanelWidth', this.leftPanelWidth);
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', stop);
+      },
+
+      handleDragStart(task, event) {
+        console.log("Dragging task:", task.id, task.name);
+        this.draggedTask = task;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', task.id);
+        
+        // Add dragging class for visual feedback
+        setTimeout(() => {
+          if (event.target && event.target.classList) {
+            event.target.classList.add('dragging');
+          }
+        }, 0);
+      },
+
+      handleDragOver(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        
+        // Find the task element being dragged over
+        const taskEl = event.target.closest('.task, .subtask');
+        if (taskEl) {
+          const taskId = parseInt(taskEl.dataset.taskId || taskEl.dataset.subtaskId);
+          if (taskId && this.draggedTask && taskId !== this.draggedTask.id) {
+            this.dragOverTaskId = taskId;
+            taskEl.classList.add('drag-over');
+          }
         }
+        return false;
+      },
+
+      handleDragLeave(event) {
+        const taskEl = event.target.closest('.task, .subtask');
+        if (taskEl) {
+          taskEl.classList.remove('drag-over');
+        }
+      },
+
+      handleDropOnTask(parentTask, event) {
+        event.stopPropagation();
+        event.preventDefault();
+        
+        // Clear drag-over styling
+        const taskEl = event.target.closest('.task, .subtask');
+        if (taskEl) taskEl.classList.remove('drag-over');
+
+        if (!this.draggedTask || this.draggedTask.id === parentTask.id) {
+          return;
+        }
+
+        // Prevent circular reference
+        if (this.isDescendant(parentTask.id, this.draggedTask.id)) {
+          this.showNotification('Cannot create circular reference!', 'error');
+          return;
+        }
+
+        console.log(`Setting parent of ${this.draggedTask.id} to ${parentTask.id}`);
+        this.socket.emit('setTaskParent', {
+          taskId: this.draggedTask.id,
+          parentId: parentTask.id
+        });
+
+        // Auto-expand parent to show new subtask
+        this.expandedTasks.add(parentTask.id);
+        this.expandedTasks = new Set(this.expandedTasks);
+
+        this.showNotification(`Moved "${this.draggedTask.name}" under "${parentTask.name}"`, 'success');
+      },
+
+      handleDropOnRoot(event) {
+        event.preventDefault();
+        event.target.classList.remove('drag-over');
+        
+        if (!this.draggedTask) return;
+
+        console.log(`Moving ${this.draggedTask.id} to root level`);
+        this.socket.emit('setTaskParent', {
+          taskId: this.draggedTask.id,
+          parentId: null
+        });
+
+        this.showNotification(`Moved "${this.draggedTask.name}" to root level`, 'info');
+      },
+
+      handleDragEnd(event) {
+        if (event.target && event.target.classList) {
+          event.target.classList.remove('dragging');
+        }
+        
+        // Remove drag-over class from all elements
+        document.querySelectorAll('.task, .subtask, .empty-drop-area, #empty-drop-area').forEach(el => {
+          el.classList.remove('drag-over');
+        });
+        
+        this.draggedTask = null;
+        this.dragOverTaskId = null;
+      },
+
+      isDescendant(taskId, potentialAncestorId) {
+        let currentTask = this.tasks.find(t => t.id === taskId);
+        
+        while (currentTask && currentTask.parent_id) {
+          if (currentTask.parent_id === potentialAncestorId) {
+            return true;
+          }
+          currentTask = this.tasks.find(t => t.id === currentTask.parent_id);
+        }
+        
+        return false;
+      },
+
+      toggleExpand(taskId) {
+        if (this.expandedTasks.has(taskId)) {
+          this.expandedTasks.delete(taskId);
+        } else {
+          this.expandedTasks.add(taskId);
+        }
+        // Force reactivity update for Set
+        this.expandedTasks = new Set(this.expandedTasks);
+      },
+
+      isExpanded(taskId) {
+        return this.expandedTasks.has(taskId);
+      },
+
+      toggleNotSure(task) {
+        taskOperations.toggleTaskStatus(task.id, task.status);
+        const statusMsg = task.status === 'Not Sure' ? 'Cleared "Not Sure" status' : 'Tagged as "Not Sure"';
+        this.showNotification(`${statusMsg}: ${task.name}`, 'info');
+      },
+
+      // Authentication methods
+      async checkAuth() {
+        try {
+          // Fetch auth config
+          const configResponse = await fetch('/api/auth/config');
+          if (configResponse.ok) {
+            this.authConfig = await configResponse.json();
+          }
+
+          // Fetch current user
+          const response = await fetch('/api/auth/user');
+          if (response.ok) {
+            this.user = await response.json();
+            console.log('User authenticated:', this.user);
+            
+            // Authenticate socket connection
+            if (this.socket && this.user.id) {
+              this.socket.emit('authenticate', this.user.id);
+            }
+          } else {
+            this.user = null;
+          }
+        } catch (error) {
+          console.error('Error checking auth:', error);
+          this.user = null;
+        }
+      },
+
+      loginWithGoogle() {
+        window.location.href = '/auth/google';
+      },
+
+      logout() {
+        window.location.href = '/auth/logout';
       },
     },
     watch: {
@@ -944,6 +1207,9 @@ window.addEventListener('DOMContentLoaded', () => {
     mounted() {
       // Make app globally available FIRST
       window.app = this;
+      
+      // Check authentication
+      this.checkAuth();
       
       // Initialize chart BEFORE socket connection to avoid race condition
       this.$nextTick(() => {
@@ -1014,6 +1280,171 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
   
+  // Define recursive task-node component
+  app.component('task-node', {
+    props: ['task', 'depth', 'tasks', 'expandedTasks', 'showCompletedSubtasks'],
+    template: `
+      <div 
+        :class="['task-node-container', isHovered ? 'branch-hover' : '']" 
+        @mouseenter.stop="onMouseEnter"
+        @mouseleave.stop="onMouseLeave"
+      >
+        <v-list-item
+          :value="task.id"
+          @click="$root.selectTask(task)"
+          @dblclick="$root.editTaskNotes(task)"
+          :data-task-id="task.id" 
+          :class="['task-item', depth > 0 ? 'subtask' : '', task.active_timer_start ? 'timer-active' : '']"
+          style="cursor: grab;"
+          draggable="true"
+          @dragstart="$root.handleDragStart(task, $event)"
+          @dragover="$root.handleDragOver"
+          @dragleave="$root.handleDragLeave"
+          @drop.stop="$root.handleDropOnTask(task, $event)"
+          @dragend="$root.handleDragEnd"
+        >
+          <template v-slot:prepend>
+            <div class="d-flex align-center toggle-junction">
+              <v-btn
+                v-if="hasChildren"
+                icon
+                size="x-small"
+                variant="text"
+                @click.stop="$root.toggleExpand(task.id)"
+                class="expand-btn"
+              >
+                <v-icon size="18">{{ isExpanded ? 'mdi-menu-down' : 'mdi-menu-right' }}</v-icon>
+              </v-btn>
+              <div v-else class="empty-junction" style="width: 32px;"></div>
+            </div>
+          </template>
+
+          <div class="d-flex flex-column flex-grow-1 py-2">
+            <div class="d-flex align-center mb-1">
+              <v-list-item-title :class="{'text-decoration-line-through': task.done}" class="text-wrap font-weight-bold task-name">
+                {{ task.name }}
+              </v-list-item-title>
+              
+              <v-spacer></v-spacer>
+              
+              <div class="d-flex gap-1 ms-2">
+                <v-chip size="x-small" color="primary" variant="outlined" class="text-caption">I: {{ task.importance }}</v-chip>
+                <v-chip size="x-small" color="secondary" variant="outlined" class="text-caption">U: {{ task.urgency }}</v-chip>
+              </div>
+            </div>
+
+            <v-list-item-subtitle>
+              <div class="d-flex align-center flex-wrap gap-1">
+                <span v-if="task.category" class="text-caption text-uppercase text-purple me-2">{{ task.category }}</span>
+                <span v-if="task.due_date" class="text-caption text-orange d-flex align-center me-2">
+                  <v-icon size="12" class="me-1">mdi-calendar</v-icon>
+                  {{ task.due_date }}
+                </span>
+                <v-btn
+                  v-if="task.link"
+                  size="x-small"
+                  :href="task.link"
+                  target="_blank"
+                  color="primary"
+                  variant="text"
+                  class="px-0 min-width-0 me-2"
+                  @click.stop
+                >
+                  <v-icon start size="12">mdi-link</v-icon>
+                  Link
+                </v-btn>
+              </div>
+              <div v-if="task.notes" class="mt-1 text-caption text-truncate opacity-70">
+                {{ task.notes }}
+              </div>
+            </v-list-item-subtitle>
+          </div>
+
+          <template v-slot:append>
+            <div class="d-flex align-center">
+              <div class="timer-chip d-flex align-center bg-grey-lighten-4 rounded-pill px-2 py-1 me-2">
+                <span class="text-caption font-weight-bold me-1">{{ $root.formatTime(task.active_timer_start ? $root.getElapsedTime(task.active_timer_start) : task.total_time_spent) }}</span>
+                <v-btn
+                  :icon="task.active_timer_start ? 'mdi-stop' : 'mdi-play'"
+                  variant="flat"
+                  size="x-small"
+                  :color="task.active_timer_start ? 'error' : 'success'"
+                  @click.stop="$root.toggleTimer(task)"
+                  class="mini-timer-btn"
+                ></v-btn>
+              </div>
+
+              <v-menu location="bottom end">
+                <template v-slot:activator="{ props }">
+                  <v-btn
+                    icon="mdi-dots-vertical"
+                    variant="text"
+                    size="small"
+                    v-bind="props"
+                    @click.stop
+                  ></v-btn>
+                </template>
+                <v-list density="compact">
+                  <v-list-item @click="$root.toggleNotSure(task)" prepend-icon="mdi-help-circle-outline">
+                    <v-list-item-title>{{ task.status === 'Not Sure' ? 'Clear Not Sure' : 'Mark Not Sure' }}</v-list-item-title>
+                  </v-list-item>
+                  <v-list-item @click="$root.editTaskNotes(task)" prepend-icon="mdi-note-edit">
+                    <v-list-item-title>Notes</v-list-item-title>
+                  </v-list-item>
+                  <v-list-item @click="$root.showAddSubtaskForm(task.id)" prepend-icon="mdi-plus">
+                    <v-list-item-title>Add Subtask</v-list-item-title>
+                  </v-list-item>
+                  <v-list-item @click="depth === 0 ? $root.editTask(task) : $root.editSubtask(task)" prepend-icon="mdi-pencil">
+                    <v-list-item-title>Edit</v-list-item-title>
+                  </v-list-item>
+                  <v-divider></v-divider>
+                  <v-list-item @click="$root.deleteTask(task.id, task.name)" prepend-icon="mdi-delete" color="error">
+                    <v-list-item-title>Delete</v-list-item-title>
+                  </v-list-item>
+                </v-list>
+              </v-menu>
+
+              <v-checkbox 
+                :model-value="task.done" 
+                @change="$root.toggleTaskDone(task)"
+                color="primary"
+                hide-details
+                @click.stop
+                class="ms-2 task-checkbox"
+              ></v-checkbox>
+            </div>
+          </template>
+        </v-list-item>
+
+        <div v-if="hasChildren && isExpanded" class="subtasks-wrapper">
+          <task-node
+            v-for="child in children"
+            :key="child.id"
+            :task="child"
+            :depth="depth + 1"
+            :tasks="tasks"
+            :expanded-tasks="expandedTasks"
+            :show-completed-subtasks="showCompletedSubtasks"
+          ></task-node>
+        </div>
+      </div>
+    `,
+    computed: {
+      children() {
+        return this.tasks.filter(t => Number(t.parent_id) === Number(this.task.id) && (!t.done || this.showCompletedSubtasks));
+      },
+      hasChildren() { return this.children.length > 0; },
+      isExpanded() { return this.expandedTasks.has(this.task.id); },
+      isHovered() { 
+        return this.$root.hoveredTaskId === this.task.id || this.$root.hoveredTaskAncestors.has(this.task.id);
+      }
+    },
+    methods: {
+      onMouseEnter() { this.$root.hoveredTaskId = this.task.id; },
+      onMouseLeave() { this.$root.hoveredTaskId = null; }
+    }
+  });
+
   // Mount Vuetify to the app
   app.use(vuetify);
   

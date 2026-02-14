@@ -1,9 +1,9 @@
 /* Base styles */
 :root {
-    --primary-color: #4a6fdc;
-    --primary-color-rgb: 74, 111, 220;
-    --primary-color-dark: #3a5dbe;
-    --primary-color-light: #6d8ce4;
+    --primary-color: #1b5e20; /* Deep Green */
+    --primary-color-rgb: 27, 94, 32;
+    --primary-color-dark: #003300; /* Darker Green */
+    --primary-color-light: #4c8c4a; /* Lighter Green */
     --error-color: #e74c3c;
     --warning-color: #f39c12;
     --success-color: #2ecc71;
@@ -55,7 +55,7 @@
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-family: 'Times New Roman', serif;
     background: var(--background-primary);
     color: var(--text-primary);
     line-height: 1.6;
@@ -404,18 +404,18 @@ input[type="range"]::-ms-thumb {
 }
 
 .task {
-    padding: 10px;
-    border-bottom: 1px solid var(--border-color);
+    padding: 0px 10px !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03) !important;
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
 
 .task:hover {
-    background-color: rgba(var(--primary-color-rgb), 0.05);
+    background-color: rgba(var(--primary-color-rgb), 0.03) !important;
 }
 
 .task.selected {
-    background-color: rgba(var(--primary-color-rgb), 0.1);
+    background-color: rgba(var(--primary-color-rgb), 0.05) !important;
 }
 
 .task.done {
@@ -557,27 +557,87 @@ input[type="range"]::-ms-thumb {
     position: relative;
 }
 
-.subtasks-container::before {
-    content: '';
-    position: absolute;
-    left: -10px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background-color: var(--primary-color-light);
-    opacity: 0.4;
+/* Tree-like Hierarchical Lines Styling */
+.subtasks-wrapper {
+    position: relative;
+    margin-left: 28px !important; 
+    padding-left: 0px;
+    border-left: 1.5px solid rgba(27, 94, 32, 0.5); /* Primary green vertical trunk */
+    z-index: 1;
+}
+
+.dark-theme .subtasks-wrapper {
+    border-left-color: rgba(76, 140, 74, 0.4); /* Lighter green for dark theme */
 }
 
 .subtask {
-    margin-bottom: 8px;
-    padding: 6px 8px;
-    border-radius: 6px;
-    background-color: rgba(var(--primary-color-rgb), 0.05);
-    transition: all 0.2s ease;
+    margin-bottom: 0px;
+    padding: 2px 8px !important;
+    min-height: 44px !important;
+    border-bottom: none !important;
+    background-color: transparent !important;
+    position: relative;
+    z-index: 2;
+}
+
+/* Horizontal branch line for each subtask */
+.subtask::before {
+    content: "";
+    position: absolute;
+    left: 0; /* Start exactly at the wrapper border */
+    top: 22px; /* Center horizontally in the 44px height */
+    width: 16px; /* Length of the branch */
+    height: 1.5px;
+    background-color: rgba(27, 94, 32, 0.5); /* Primary green for branch */
+    z-index: 1;
+}
+
+.dark-theme .subtask::before {
+    background-color: rgba(76, 140, 74, 0.4); /* Lighter green for dark theme */
+}
+
+/* Special treatment for the last subtask to stop the vertical line */
+.subtask:last-child::after {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: 22px;
+    bottom: 0;
+    width: 4px;
+    background-color: var(--background-primary); /* Matches light theme background */
+    z-index: 2;
+}
+
+.dark-theme .subtask:last-child::after {
+    background-color: var(--dark-background-primary); /* Matches dark theme background */
+}
+
+/* Special treatment for the last subtask to stop the vertical line */
+.subtask:last-child::after {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: 22px;
+    bottom: 0;
+    width: 4px;
+    background-color: var(--background-primary); /* Overlays the continuation of the vertical line */
+    z-index: 2;
+}
+
+.dark-theme .subtask:last-child::after {
+    background-color: var(--dark-background-primary);
+}
+
+.subtask .v-list-item__prepend {
+    padding-left: 18px !important; /* Adjust to clear the branch line */
+}
+
+.subtask .v-list-item-title {
+    font-size: 0.95rem !important;
 }
 
 .subtask:hover {
-    background-color: rgba(var(--primary-color-rgb), 0.1);
+    background-color: rgba(var(--primary-color-rgb), 0.05) !important;
 }
 
 .subtask-info {
@@ -659,6 +719,73 @@ input[type="range"]::-ms-thumb {
     background-color: rgba(var(--primary-color-rgb), 0.1);
 }
 
+/* Minimal Select Styling */
+.minimal-select .v-input__control {
+  min-height: 32px !important;
+  height: 32px !important;
+}
+
+.minimal-select .v-field__overlay {
+  display: none !important;
+}
+
+.minimal-select .v-field {
+  padding-top: 0px !important;
+  border-radius: 0px !important;
+  min-height: 32px !important;
+  height: 32px !important;
+}
+
+.minimal-select .v-field__field {
+  --v-field-padding-start: 4px;
+  --v-field-padding-end: 4px;
+}
+
+.minimal-select .v-field-label {
+  top: 8px !important;
+  font-size: 0.85rem !important;
+  color: var(--text-secondary) !important;
+}
+
+.minimal-select .v-field--dirty .v-field-label {
+  transform: translateY(-50%) scale(0.75) !important;
+  top: 0px !important;
+}
+
+.minimal-select .v-field__input {
+  padding-top: 0px !important;
+  min-height: 32px !important;
+  height: 32px !important;
+}
+
+.minimal-select .v-select__selection-text {
+  font-size: 0.9rem !important;
+}
+
+.minimal-select .v-field__prepend-inner {
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+  align-items: center !important;
+}
+
+.minimal-select .v-field__prepend-inner > .v-icon {
+  font-size: 18px !important;
+}
+
+.minimal-select .v-field__append-inner {
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+  align-items: center !important;
+}
+
+.minimal-select .v-field__append-inner > .v-icon {
+  font-size: 18px !important;
+}
+
+.minimal-select.v-input--density-compact .v-field--variant-underlined .v-field__overlay {
+  height: 1px;
+}
+
 /* Filter button for completed subtasks */
 .filter-toggle {
     background: none;
@@ -709,101 +836,6 @@ input[type="range"]::-ms-thumb {
 .priority-chart {
     width: 100%;
     height: 100%;
-}
-
-/* Modal styles */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.modal-content {
-    background-color: var(--surface-color);
-    width: 90%;
-    max-width: 500px;
-    padding: 20px;
-    border: 1px solid #e0e0e0;
-}
-
-.dark-theme .modal-content {
-    background-color: var(--dark-surface-color);
-    border: 1px solid #333;
-}
-
-.close-button {
-    float: right;
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-    color: var(--text-secondary);
-}
-
-.close-button:hover {
-    color: var(--primary-color);
-}
-
-/* Edit modal */
-.edit-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-  width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.edit-modal-content {
-    background-color: var(--surface-color);
-    width: 90%;
-    max-width: 500px;
-    padding: 20px;
-    position: relative;
-    border: 1px solid #e0e0e0;
-}
-
-.dark-theme .edit-modal-content {
-    background-color: var(--dark-surface-color);
-    border: 1px solid #333;
-}
-
-/* Header controls */
-.header-controls {
-    display: flex;
-    gap: 12px;
-    margin-top: 10px;
-    justify-content: center;
-}
-
-.theme-toggle {
-    background: var(--surface-color);
-    border: 1px solid #e0e0e0;
-    padding: 8px 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-    color: var(--text-secondary);
-}
-
-.theme-toggle:hover {
-    color: var(--primary-color);
-}
-
-.dark-theme .theme-toggle {
-    border: 1px solid #333;
 }
 
 /* Notification styling */
