@@ -26,24 +26,28 @@ window.addEventListener('DOMContentLoaded', () => {
       themes: {
         light: {
           colors: {
-            primary: '#1b5e20', // Deep Green
-            secondary: '#7cb342', // Light Green
-            accent: '#c5e1a5', // Very Light Green
-            error: '#F44336',
-            warning: '#FF9800',
-            info: '#64B5F6', // Keep info blueish for contrast if needed
-            success: '#81C784', // Subtle green for success
+            primary: '#1b5e20', // rgb(27, 94, 32)
+            secondary: '#388e3c', // Mid green
+            accent: '#81c784', // Light green
+            error: '#d32f2f', 
+            warning: '#ffa000',
+            info: '#455a64', // Blue-grey for contrast
+            success: '#2e7d32',
+            background: '#f1f8e9', // Very faint green tint
+            surface: '#ffffff',
           },
         },
         dark: {
           colors: {
-            primary: '#7cb342', // Light Green for dark mode primary
-            secondary: '#1b5e20', // Deep Green
-            accent: '#c5e1a5', // Very Light Green
-            error: '#CF6679',
-            warning: '#FFB74D',
-            info: '#64B5F6',
-            success: '#81C784',
+            primary: '#81c784', // Lighter green for readability on dark
+            secondary: '#4caf50',
+            accent: '#1b5e20',
+            error: '#ff5252',
+            warning: '#ffb74d',
+            info: '#90a4ae',
+            success: '#4caf50',
+            background: '#121212',
+            surface: '#1e1e1e',
           },
         },
       },

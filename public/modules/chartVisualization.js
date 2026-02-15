@@ -7,13 +7,13 @@ export class ChartVisualization {
     this.quadrantStats = { q1: 0, q2: 0, q3: 0, q4: 0 };
     this.tooltipElement = null;
     this.vuetifyColors = {
-      primary: '#1976D2',
-      secondary: '#9C27B0',
-      accent: '#FF4081',
-      error: '#F44336',
-      warning: '#FF9800',
-      info: '#2196F3',
-      success: '#4CAF50',
+      primary: '#1b5e20',
+      secondary: '#388e3c',
+      accent: '#81c784',
+      error: '#c62828', // Red for Q1 urgency
+      warning: '#ef6c00', // Orange for Q3
+      info: '#2e7d32', // Deep green for Q4
+      success: '#689f38', // Lime green for Q2
     };
   }
   

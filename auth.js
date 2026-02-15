@@ -39,6 +39,7 @@ export function setupAuth(app) {
             callbackURL: `${baseUrl}/auth/google/callback`
         }, async (accessToken, refreshToken, profile, done) => {
             try {
+                console.log('Auth Debug: Verify callback triggered for profile:', profile.id);
                 const userData = {
                     id: profile.id,
                     email: profile.emails?.[0]?.value || '',
@@ -48,8 +49,10 @@ export function setupAuth(app) {
                 };
                 
                 await upsertUser(userData);
+                console.log('Auth Debug: User upserted successfully');
                 return done(null, userData);
             } catch (error) {
+                console.error('Auth Debug: Error in verify callback:', error);
                 return done(error);
             }
         });
@@ -62,14 +65,17 @@ export function setupAuth(app) {
         // Auth Routes
         app.get('/auth/google', (req, res, next) => {
             console.log('Auth Debug: /auth/google called');
-            console.log('Auth Debug: Current strategies:', Object.keys(passport._strategies));
             passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
         });
 
         app.get('/auth/google/callback', (req, res, next) => {
             console.log('Auth Debug: /auth/google/callback called');
-            passport.authenticate('google', { failureRedirect: '/' })(req, res, next);
+            passport.authenticate('google', { 
+                failureRedirect: '/',
+                failureFlash: false // Change to true if you have a flash plugin
+            })(req, res, next);
         }, (req, res) => {
+            console.log('Auth Debug: Redirecting to home after successful auth');
             res.redirect('/');
         });
     } else {
@@ -86,10 +92,12 @@ export function setupAuth(app) {
     }
 
     passport.serializeUser((user, done) => {
+        console.log('Auth Debug: Serializing user:', user.id);
         done(null, user);
     });
 
     passport.deserializeUser((user, done) => {
+        // console.log('Auth Debug: Deserializing user:', user.id);
         done(null, user);
     });
 

@@ -148,41 +148,26 @@
 
       /* Branch Path Highlighting */
       .task-node-container.branch-hover > .v-list-item {
-        background-color: #F3F4F6 !important; 
+        background-color: #e8f5e9 !important; /* Very light green highlight */
       }
 
       /* Checkbox & List Item Tweaks */
       .task-item {
         min-height: 54px !important;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.03) !important;
+        border-bottom: 1px solid #c8e6c9 !important;
       }
 
-      .task-checkbox .v-selection-control {
-        min-height: 0 !important;
+      .text-primary {
+        color: #1b5e20 !important;
       }
 
-      .v-list-item:hover {
-        background-color: rgba(25, 118, 210, 0.04) !important;
-      }
-      
-      .gap-2 {
-        gap: 8px;
-      }
-      
-      .text-wrap {
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        word-break: break-word !important;
-      }
-      
       .highlighted-task {
         animation: highlight-pulse 1.5s ease-in-out;
       }
       
       @keyframes highlight-pulse {
         0% { background-color: transparent; }
-        50% { background-color: rgba(25, 118, 210, 0.2); }
+        50% { background-color: rgba(27, 94, 32, 0.1); }
         100% { background-color: transparent; }
       }
       

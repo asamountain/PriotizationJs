@@ -24,6 +24,7 @@ const server = createServer(app);
 const io = new Server(server);
 
 // Middleware
+app.set('trust proxy', 1); // Enable proxy support for secure cookies
 app.use(express.static(join(__dirname, "public")));
 app.use(express.json());
 
@@ -310,6 +311,16 @@ findAvailablePort(3000)
         console.error("Port finding failed:", error);
         process.exit(1);
     });
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('SERVER ERROR:', err.stack);
+    res.status(500).json({
+        error: 'Internal Server Error',
+        message: err.message,
+        path: req.path
+    });
+});
 
 // Error handling
 process.on("unhandledRejection", (error) => {
