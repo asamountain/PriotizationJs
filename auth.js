@@ -32,11 +32,14 @@ export function setupAuth(app) {
         console.log('Auth Debug: GOOGLE_CLIENT_ID (first 5 chars):', GOOGLE_CLIENT_ID.substring(0, 5));
         
         const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
+        const callbackURL = `${baseUrl}/auth/google/callback`;
+        console.log('Auth Debug: Construction Callback URL:', callbackURL);
         
         const strategy = new GoogleStrategy({
             clientID: GOOGLE_CLIENT_ID,
             clientSecret: GOOGLE_CLIENT_SECRET,
-            callbackURL: `${baseUrl}/auth/google/callback`
+            callbackURL: callbackURL,
+            proxy: true // Crucial for Render/Heroku to keep the HTTPS protocol
         }, async (accessToken, refreshToken, profile, done) => {
             try {
                 console.log('Auth Debug: Verify callback triggered for profile:', profile.id);
