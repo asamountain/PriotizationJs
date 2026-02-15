@@ -28,10 +28,13 @@ export function setupAuth(app) {
     }
 
     if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-        console.log('Auth Debug: Registering Google Strategy...');
-        console.log('Auth Debug: GOOGLE_CLIENT_ID (first 5 chars):', GOOGLE_CLIENT_ID.substring(0, 5));
-        
-        const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
+        console.log('--- CREDENTIAL CHECK ---');
+        console.log('Client ID length:', GOOGLE_CLIENT_ID.trim().length);
+        console.log('Client Secret length:', GOOGLE_CLIENT_SECRET.trim().length);
+        if (GOOGLE_CLIENT_SECRET.includes(' ')) console.warn('WARNING: Client Secret contains spaces!');
+        console.log('--- END CHECK ---');
+
+        console.log('Status: Registering Google Oauth Strategy...');
         const callbackURL = `${baseUrl}/auth/google/callback`;
         console.log('Auth Debug: Construction Callback URL:', callbackURL);
         
