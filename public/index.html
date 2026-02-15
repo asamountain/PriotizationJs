@@ -451,7 +451,7 @@
                                         <v-list-item
                                             :value="task.id"
                                             @click="selectTask(task)"
-                                            @dblclick="editTaskNotes(task)"
+                                            @dblclick="showAddSubtaskForm(task.id)"
                                     :data-task-id="task.id"
                                             style="cursor: pointer;" 
                                             class="task completed-task"

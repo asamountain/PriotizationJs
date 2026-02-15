@@ -1134,7 +1134,7 @@ window.addEventListener('DOMContentLoaded', () => {
         <v-list-item
           :value="task.id"
           @click="$root.selectTask(task)"
-          @dblclick="$root.editTaskNotes(task)"
+          @dblclick="$root.showAddSubtaskForm(task.id)"
           :data-task-id="task.id" 
           :class="['task-item', depth > 0 ? 'subtask' : '', task.active_timer_start ? 'timer-active' : '']"
           style="cursor: grab;"
