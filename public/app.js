@@ -26,28 +26,28 @@ window.addEventListener('DOMContentLoaded', () => {
       themes: {
         light: {
           colors: {
-            primary: '#1b5e20', // rgb(27, 94, 32)
-            secondary: '#388e3c', // Mid green
-            accent: '#81c784', // Light green
-            error: '#d32f2f', 
-            warning: '#ffa000',
-            info: '#455a64', // Blue-grey for contrast
-            success: '#2e7d32',
-            background: '#f1f8e9', // Very faint green tint
+            primary: '#255035', // Deep Forest Green
+            secondary: '#449461', // Mid Green
+            accent: '#63D88E', // Seafoam Green
+            error: '#34724B', // Muted dark green
+            warning: '#54B678',
+            info: '#68E195', // Bright Seafoam
+            success: '#449461',
+            background: '#f4f9f6', // Very light clean tint
             surface: '#ffffff',
           },
         },
         dark: {
           colors: {
-            primary: '#81c784', // Lighter green for readability on dark
-            secondary: '#4caf50',
-            accent: '#1b5e20',
-            error: '#ff5252',
-            warning: '#ffb74d',
-            info: '#90a4ae',
-            success: '#4caf50',
-            background: '#121212',
-            surface: '#1e1e1e',
+            primary: '#68E195',
+            secondary: '#449461',
+            accent: '#255035',
+            error: '#34724B',
+            warning: '#54B678',
+            info: '#63D88E',
+            success: '#68E195',
+            background: '#0d1410',
+            surface: '#161f1a',
           },
         },
       },
