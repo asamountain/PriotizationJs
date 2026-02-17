@@ -119,42 +119,76 @@
         }
       }
       
-      /* Task list improvements */
-      .v-list-item {
-        min-height: 54px !important;
-        padding: 6px 12px !important;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-      }
-      
-      /* --- Simple Hierarchical Tree Structure --- */
-      .subtasks-wrapper {
-        margin-left: 24px;
-        position: relative;
+      :root {
+        --golden-ratio: 1.618;
+        --base-space: 8px;
+        --space-1: var(--base-space); /* 8px */
+        --space-2: calc(var(--base-space) * var(--golden-ratio)); /* ~13px */
+        --space-3: calc(calc(var(--base-space) * var(--golden-ratio)) * var(--golden-ratio)); /* ~21px */
       }
 
-      .task-node-container {
+      /* Task list improvements */
+      .v-list-item {
+        min-height: 64px !important;
+        padding: var(--space-1) var(--space-2) !important;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+      
+      .task-item:hover {
+        background-color: rgba(37, 80, 53, 0.04) !important;
+      }
+
+      .gap-golden {
+        gap: var(--space-2) !important;
+      }
+
+      /* --- Simple Hierarchical Tree Structure --- */
+      .subtasks-wrapper {
+        margin-left: var(--space-3);
         position: relative;
-        transition: background-color 0.2s ease;
+        border-left: 1px solid rgba(0, 0, 0, 0.08);
       }
 
       /* Junction Toggle Icons */
       .toggle-junction {
-        width: 32px;
-        height: 54px;
+        width: 44px;
+        height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-
-      /* Branch Path Highlighting */
-      .task-node-container.branch-hover > .v-list-item {
-        background-color: #f1f8f4 !important; /* Very soft forest tint */
+        gap: 4px; /* Tight gap for toggle group */
       }
 
       /* Checkbox & List Item Tweaks */
       .task-item {
-        min-height: 54px !important;
+        min-height: 64px !important;
         border-bottom: 1px solid #e8edea !important;
+      }
+
+      .task-metrics-group {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      /* Icon-only button refinements */
+      .v-btn--icon.v-btn--size-small {
+        width: 32px !important;
+        height: 32px !important;
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 600px) {
+        .v-list-item {
+          padding: var(--space-1) var(--space-1) !important;
+        }
+        .task-metrics-group {
+          gap: var(--space-1) !important;
+        }
+        .timer-display {
+          display: none !important; /* Hide text timer on mobile if needed */
+        }
       }
 
       .text-primary {
@@ -583,7 +617,32 @@
                                 label="Subtask Name"
                                 required
                                 variant="outlined"
-                            ></v-text-field>
+                            >
+                                <template v-slot:prepend-inner>
+                                    <v-menu location="bottom start">
+                                        <template v-slot:activator="{ props }">
+                                            <v-btn icon size="small" variant="text" v-bind="props" class="me-2">
+                                                <v-icon>{{ editingSubtask.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                                            </v-btn>
+                                        </template>
+                                        <v-card max-width="300" class="pa-2">
+                                            <div class="d-flex flex-wrap gap-1 justify-center">
+                                                <v-btn
+                                                    v-for="icon in availableIcons"
+                                                    :key="icon"
+                                                    icon
+                                                    size="small"
+                                                    variant="text"
+                                                    @click="editingSubtask.icon = icon"
+                                                    :color="editingSubtask.icon === icon ? 'primary' : ''"
+                                                >
+                                                    <v-icon>{{ icon }}</v-icon>
+                                                </v-btn>
+                                            </div>
+                                        </v-card>
+                                    </v-menu>
+                                </template>
+                            </v-text-field>
                             
                             <v-text-field
                                 v-model="editingSubtask.link"
@@ -592,27 +651,47 @@
                                 placeholder="Add a URL (http://example.com)"
                             ></v-text-field>
                             
-                            <v-subheader>Importance (1-10)</v-subheader>
+                            <div class="d-flex align-center justify-space-between mb-1 mt-2">
+                                <span class="text-subtitle-2">Importance: {{ editingSubtask.importance }}</span>
+                                <v-chip :color="getPriorityColor(editingSubtask.importance)" size="x-small" variant="flat">
+                                    {{ editingSubtask.importance >= 8 ? 'CRITICAL' : (editingSubtask.importance >= 5 ? 'HIGH' : 'LOW') }}
+                                </v-chip>
+                            </div>
                             <v-slider
                                 v-model="editingSubtask.importance"
                                 min="1"
                                 max="10"
                                 step="1"
-                                show-ticks="always"
-                                color="primary"
-                                thumb-label
-                            ></v-slider>
+                                :color="getPriorityColor(editingSubtask.importance)"
+                                track-color="grey-lighten-3"
+                                hide-details
+                                class="mb-4"
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon size="small" color="grey">mdi-star-outline</v-icon>
+                                </template>
+                            </v-slider>
                             
-                            <v-subheader>Urgency (1-10)</v-subheader>
+                            <div class="d-flex align-center justify-space-between mb-1">
+                                <span class="text-subtitle-2">Urgency: {{ editingSubtask.urgency }}</span>
+                                <v-chip :color="getPriorityColor(editingSubtask.urgency)" size="x-small" variant="flat">
+                                    {{ editingSubtask.urgency >= 8 ? 'IMMEDIATE' : (editingSubtask.urgency >= 5 ? 'SOON' : 'LATER') }}
+                                </v-chip>
+                            </div>
                             <v-slider
                                 v-model="editingSubtask.urgency"
                                 min="1"
                                 max="10"
                                 step="1"
-                                show-ticks="always"
-                                color="secondary"
-                                thumb-label
-                            ></v-slider>
+                                :color="getPriorityColor(editingSubtask.urgency)"
+                                track-color="grey-lighten-3"
+                                hide-details
+                                class="mb-4"
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon size="small" color="grey">mdi-clock-outline</v-icon>
+                                </template>
+                            </v-slider>
                             
                             <v-select
                                 v-model="editingSubtask.parent_id"
@@ -649,7 +728,32 @@
                                 label="Task Name"
                                 required
                                 variant="outlined"
-                            ></v-text-field>
+                            >
+                                <template v-slot:prepend-inner>
+                                    <v-menu location="bottom start">
+                                        <template v-slot:activator="{ props }">
+                                            <v-btn icon size="small" variant="text" v-bind="props" class="me-2">
+                                                <v-icon>{{ editingTask.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                                            </v-btn>
+                                        </template>
+                                        <v-card max-width="300" class="pa-2">
+                                            <div class="d-flex flex-wrap gap-1 justify-center">
+                                                <v-btn
+                                                    v-for="icon in availableIcons"
+                                                    :key="icon"
+                                                    icon
+                                                    size="small"
+                                                    variant="text"
+                                                    @click="editingTask.icon = icon"
+                                                    :color="editingTask.icon === icon ? 'primary' : ''"
+                                                >
+                                                    <v-icon>{{ icon }}</v-icon>
+                                                </v-btn>
+                                            </div>
+                                        </v-card>
+                                    </v-menu>
+                                </template>
+                            </v-text-field>
                             
                             <v-text-field
                                 v-model="editingTask.link"
@@ -658,27 +762,47 @@
                                 placeholder="Add a URL (http://example.com)"
                             ></v-text-field>
                             
-                            <v-subheader>Importance (1-10)</v-subheader>
+                            <div class="d-flex align-center justify-space-between mb-1 mt-2">
+                                <span class="text-subtitle-2">Importance: {{ editingTask.importance }}</span>
+                                <v-chip :color="getPriorityColor(editingTask.importance)" size="x-small" variant="flat">
+                                    {{ editingTask.importance >= 8 ? 'CRITICAL' : (editingTask.importance >= 5 ? 'HIGH' : 'LOW') }}
+                                </v-chip>
+                            </div>
                             <v-slider
                                 v-model="editingTask.importance"
                                 min="1"
                                 max="10"
                                 step="1"
-                                show-ticks="always"
-                                color="primary"
-                                thumb-label
-                            ></v-slider>
+                                :color="getPriorityColor(editingTask.importance)"
+                                track-color="grey-lighten-3"
+                                hide-details
+                                class="mb-4"
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon size="small" color="grey">mdi-star-outline</v-icon>
+                                </template>
+                            </v-slider>
                             
-                            <v-subheader>Urgency (1-10)</v-subheader>
+                            <div class="d-flex align-center justify-space-between mb-1">
+                                <span class="text-subtitle-2">Urgency: {{ editingTask.urgency }}</span>
+                                <v-chip :color="getPriorityColor(editingTask.urgency)" size="x-small" variant="flat">
+                                    {{ editingTask.urgency >= 8 ? 'IMMEDIATE' : (editingTask.urgency >= 5 ? 'SOON' : 'LATER') }}
+                                </v-chip>
+                            </div>
                             <v-slider
                                 v-model="editingTask.urgency"
                                 min="1"
                                 max="10"
                                 step="1"
-                                show-ticks="always"
-                                color="secondary"
-                                thumb-label
-                            ></v-slider>
+                                :color="getPriorityColor(editingTask.urgency)"
+                                track-color="grey-lighten-3"
+                                hide-details
+                                class="mb-4"
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon size="small" color="grey">mdi-clock-outline</v-icon>
+                                </template>
+                            </v-slider>
                             
                             <v-date-picker
                                 v-model="editingTask.due_date"
@@ -815,32 +939,82 @@
                                 required
                                 autofocus
                                 class="mb-3"
-                            ></v-text-field>
+                            >
+                                <template v-slot:prepend-inner>
+                                    <v-menu location="bottom start">
+                                        <template v-slot:activator="{ props }">
+                                            <v-btn icon size="small" variant="text" v-bind="props" class="me-2">
+                                                <v-icon>{{ quickAddTask.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                                            </v-btn>
+                                        </template>
+                                        <v-card max-width="300" class="pa-2">
+                                            <div class="d-flex flex-wrap gap-1 justify-center">
+                                                <v-btn
+                                                    v-for="icon in availableIcons"
+                                                    :key="icon"
+                                                    icon
+                                                    size="small"
+                                                    variant="text"
+                                                    @click="quickAddTask.icon = icon"
+                                                    :color="quickAddTask.icon === icon ? 'primary' : ''"
+                                                >
+                                                    <v-icon>{{ icon }}</v-icon>
+                                                </v-btn>
+                                            </div>
+                                        </v-card>
+                                    </v-menu>
+                                </template>
+                            </v-text-field>
 
                             <v-row class="mb-3">
-                                <v-col cols="6">
-                                    <v-text-field
-                                        v-model.number="quickAddTask.importance"
-                                        label="Importance"
-                                        type="number"
+                                <v-col cols="12">
+                                    <div class="d-flex align-center justify-space-between mb-1">
+                                        <span class="text-subtitle-2">Importance: {{ quickAddTask.importance }}</span>
+                                        <v-chip :color="getPriorityColor(quickAddTask.importance)" size="x-small" variant="flat">
+                                            {{ quickAddTask.importance >= 8 ? 'CRITICAL' : (quickAddTask.importance >= 5 ? 'HIGH' : 'LOW') }}
+                                        </v-chip>
+                                    </div>
+                                    <v-slider
+                                        v-model="quickAddTask.importance"
                                         min="1"
                                         max="10"
-                                        variant="outlined"
-                                        hint="1-10 scale"
-                                        persistent-hint
-                                    ></v-text-field>
+                                        step="1"
+                                        :color="getPriorityColor(quickAddTask.importance)"
+                                        track-color="grey-lighten-3"
+                                        hide-details
+                                    >
+                                        <template v-slot:prepend>
+                                            <v-icon size="small" color="grey">mdi-star-outline</v-icon>
+                                        </template>
+                                        <template v-slot:append>
+                                            <v-icon size="small" :color="getPriorityColor(quickAddTask.importance)">mdi-star</v-icon>
+                                        </template>
+                                    </v-slider>
                                 </v-col>
-                                <v-col cols="6">
-                                    <v-text-field
-                                        v-model.number="quickAddTask.urgency"
-                                        label="Urgency"
-                                        type="number"
+                                
+                                <v-col cols="12" class="mt-2">
+                                    <div class="d-flex align-center justify-space-between mb-1">
+                                        <span class="text-subtitle-2">Urgency: {{ quickAddTask.urgency }}</span>
+                                        <v-chip :color="getPriorityColor(quickAddTask.urgency)" size="x-small" variant="flat">
+                                            {{ quickAddTask.urgency >= 8 ? 'IMMEDIATE' : (quickAddTask.urgency >= 5 ? 'SOON' : 'LATER') }}
+                                        </v-chip>
+                                    </div>
+                                    <v-slider
+                                        v-model="quickAddTask.urgency"
                                         min="1"
                                         max="10"
-                                        variant="outlined"
-                                        hint="1-10 scale"
-                                        persistent-hint
-                                    ></v-text-field>
+                                        step="1"
+                                        :color="getPriorityColor(quickAddTask.urgency)"
+                                        track-color="grey-lighten-3"
+                                        hide-details
+                                    >
+                                        <template v-slot:prepend>
+                                            <v-icon size="small" color="grey">mdi-clock-outline</v-icon>
+                                        </template>
+                                        <template v-slot:append>
+                                            <v-icon size="small" :color="getPriorityColor(quickAddTask.urgency)">mdi-clock-fast</v-icon>
+                                        </template>
+                                    </v-slider>
                                 </v-col>
                             </v-row>
 

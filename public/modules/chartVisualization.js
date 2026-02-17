@@ -770,18 +770,54 @@ export class ChartVisualization {
     taskDot.style.transform = '';
     
     // Also highlight in the task list
-    const taskListItem = document.querySelector(`.task[data-task-id="${taskId}"]`);
-    if (taskListItem) {
-      taskListItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
-      // Add a highlight class
-      taskListItem.classList.add('highlighted-task');
-      
-      // Remove the highlight after 3 seconds
-      setTimeout(() => {
-        taskListItem.classList.remove('highlighted-task');
-      }, 3000);
+    const taskListItem = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+    
+    // If task item is not found, it might be inside a collapsed parent
+    if (!taskListItem && window.app) {
+      // Find the task in the app data
+      const task = window.app.tasks.find(t => t.id == taskId);
+      if (task) {
+        // Expand all ancestors
+        let parentId = task.parent_id;
+        let parentsExpanded = false;
+        
+        while (parentId) {
+          if (!window.app.expandedTasks.has(parentId)) {
+            window.app.toggleExpand(parentId, true);
+            parentsExpanded = true;
+          }
+          const parent = window.app.tasks.find(t => t.id == parentId);
+          parentId = parent ? parent.parent_id : null;
+        }
+        
+        if (parentsExpanded) {
+          // Wait for DOM update
+          setTimeout(() => {
+            const retryItem = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+            if (retryItem) {
+              this.scrollAndHighlight(retryItem);
+            }
+          }, 150);
+          return;
+        }
+      }
     }
+    
+    if (taskListItem) {
+      this.scrollAndHighlight(taskListItem);
+    }
+  }
+
+  scrollAndHighlight(element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // Add a highlight class
+    element.classList.add('highlighted-task');
+    
+    // Remove the highlight after 3 seconds
+    setTimeout(() => {
+      element.classList.remove('highlighted-task');
+    }, 3000);
   }
   
   updateChartColors() {

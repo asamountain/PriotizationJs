@@ -61,7 +61,8 @@ class Database {
         total_time_spent INTEGER DEFAULT 0,
         active_timer_start TEXT,
         pomodoro_count INTEGER DEFAULT 0,
-        last_worked_at TEXT
+        last_worked_at TEXT,
+        icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'
       );
 
       CREATE TABLE IF NOT EXISTS time_logs (
@@ -76,6 +77,31 @@ class Database {
       );
     `;
     await this.pool.query(query);
+    
+    // Migrations for existing tables
+    const migrations = [
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TEXT",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS link TEXT",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notes TEXT",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress INTEGER",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS category TEXT",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS status TEXT",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS total_time_spent INTEGER DEFAULT 0",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS active_timer_start TEXT",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pomodoro_count INTEGER DEFAULT 0",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_worked_at TEXT",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'"
+    ];
+
+    for (const migration of migrations) {
+      try {
+        await this.pool.query(migration);
+      } catch (err) {
+        console.warn(`Migration failed: ${migration}`, err.message);
+      }
+    }
+
     console.log("PostgreSQL Tables verified");
   }
 
@@ -95,6 +121,7 @@ class Database {
       `ALTER TABLE tasks ADD COLUMN active_timer_start TEXT NULL`,
       `ALTER TABLE tasks ADD COLUMN pomodoro_count INTEGER DEFAULT 0`,
       `ALTER TABLE tasks ADD COLUMN last_worked_at TEXT NULL`,
+      `ALTER TABLE tasks ADD COLUMN icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'`,
       `CREATE TABLE IF NOT EXISTS time_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, start_time TEXT NOT NULL, end_time TEXT NULL, duration INTEGER DEFAULT 0, session_type TEXT DEFAULT 'focus', notes TEXT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE)`
     ];
     
@@ -147,15 +174,17 @@ class Database {
         `INSERT INTO tasks (
           name, importance, urgency, user_id, done, link, due_date, 
           notes, parent_id, total_time_spent, pomodoro_count, category, status,
-          created_at, completed_at
+          created_at, completed_at, icon, progress
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 
-          COALESCE($14, CURRENT_TIMESTAMP), $15) RETURNING id`,
+          COALESCE($14, CURRENT_TIMESTAMP), $15, $16, $17) RETURNING id`,
         [
           task.name, importance, urgency, userId || null, !!task.done, 
           task.link || null, task.due_date || null, task.notes || null, 
           task.parent_id || null, totalTime, pomodoros, 
           task.category || null, task.status || null,
-          task.created_at || null, task.completed_at || null
+          task.created_at || null, task.completed_at || null,
+          task.icon || 'mdi-checkbox-blank-circle-outline',
+          task.progress || 0
         ]
       );
       return res.rows[0].id;
@@ -165,14 +194,16 @@ class Database {
           `INSERT INTO tasks (
             name, importance, urgency, user_id, done, link, due_date, 
             notes, parent_id, total_time_spent, pomodoro_count, category, status,
-            created_at, completed_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            created_at, completed_at, icon, progress
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             task.name, importance, urgency, userId || null, task.done ? 1 : 0, 
             task.link || null, task.due_date || null, task.notes || null, 
             task.parent_id || null, totalTime, pomodoros, 
             task.category || null, task.status || null,
-            task.created_at || null, task.completed_at || null
+            task.created_at || null, task.completed_at || null,
+            task.icon || 'mdi-checkbox-blank-circle-outline',
+            task.progress || 0
           ],
           function(err) {
             if (err) reject(err);
@@ -187,9 +218,9 @@ class Database {
     const importance = Math.round(Number(task.importance) || 5);
     const urgency = Math.round(Number(task.urgency) || 5);
     const q = this.pool
-      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3 WHERE id = $4"
-      : "UPDATE tasks SET name = ?, importance = ?, urgency = ? WHERE id = ?";
-    await this.query(q, [task.name, importance, urgency, task.id]);
+      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, icon = $4, progress = $5 WHERE id = $6"
+      : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, icon = ?, progress = ? WHERE id = ?";
+    await this.query(q, [task.name, importance, urgency, task.icon || 'mdi-checkbox-blank-circle-outline', task.progress || 0, task.id]);
   }
 
   async deleteTask(id) {
@@ -221,9 +252,9 @@ class Database {
     const importance = Math.round(Number(subtask.importance) || 5);
     const urgency = Math.round(Number(subtask.urgency) || 5);
     const q = this.pool 
-      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6 WHERE id = $7"
-      : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, parent_id = ?, link = ?, due_date = ? WHERE id = ?";
-    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.id]);
+      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6, icon = $7, notes = $8, status = $9, progress = $10 WHERE id = $11"
+      : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, parent_id = ?, link = ?, due_date = ?, icon = ?, notes = ?, status = ?, progress = ? WHERE id = ?";
+    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.icon || 'mdi-checkbox-blank-circle-outline', subtask.notes, subtask.status, subtask.progress || 0, subtask.id]);
   }
 
   async updateTaskNotes(taskId, notes) {
@@ -235,9 +266,9 @@ class Database {
     const importance = Math.round(Number(task.importance) || 5);
     const urgency = Math.round(Number(task.urgency) || 5);
     const q = this.pool
-      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7 WHERE id = $8"
-      : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, link = ?, due_date = ?, notes = ?, status = ? WHERE id = ?";
-    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.id]);
+      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9 WHERE id = $10"
+      : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, link = ?, due_date = ?, notes = ?, status = ?, icon = ?, progress = ? WHERE id = ?";
+    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', task.progress || 0, task.id]);
   }
 
   async bulkImportTasks(tasks, userId) {
@@ -267,7 +298,7 @@ class Database {
           results.updated++;
         } else {
           // IMPORTANT: Insert without parent first to avoid FK constraint errors with old CSV IDs
-          const taskData = { ...task, parent_id: null };
+          const taskData = { ...task, parent_id: null, icon: task.icon || 'mdi-checkbox-blank-circle-outline', progress: task.progress || 0 };
           finalId = await this.addTask(taskData, userId);
           results.imported++;
         }

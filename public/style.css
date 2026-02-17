@@ -1,3 +1,10 @@
+.text-xxs {
+  font-size: 0.65rem !important;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 /* Base styles */
 :root {
     --primary-color: #1b5e20; /* Deep Green */

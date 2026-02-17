@@ -97,7 +97,8 @@ window.addEventListener('DOMContentLoaded', () => {
           urgency: 5,
           parent_id: null,
           link: '',
-          due_date: null
+          due_date: null,
+          icon: 'mdi-checkbox-blank-circle-outline'
         },
         showTaskEditForm: false,
         editingTask: {
@@ -106,7 +107,8 @@ window.addEventListener('DOMContentLoaded', () => {
           importance: 5,
           urgency: 5,
           link: '',
-          due_date: null
+          due_date: null,
+          icon: 'mdi-checkbox-blank-circle-outline'
         },
         possibleParents: [],
         snackbar: {
@@ -145,8 +147,41 @@ window.addEventListener('DOMContentLoaded', () => {
           importance: 5,
           urgency: 5,
           link: '',
-          notes: ''
+          notes: '',
+          icon: 'mdi-checkbox-blank-circle-outline'
         },
+        availableIcons: [
+          'mdi-checkbox-blank-circle-outline',
+          'mdi-star',
+          'mdi-lightning-bolt',
+          'mdi-fire',
+          'mdi-water',
+          'mdi-earth',
+          'mdi-airballoon',
+          'mdi-rocket',
+          'mdi-target',
+          'mdi-flag',
+          'mdi-alert-circle',
+          'mdi-check-circle',
+          'mdi-clock',
+          'mdi-calendar',
+          'mdi-book',
+          'mdi-code-tags',
+          'mdi-laptop',
+          'mdi-phone',
+          'mdi-email',
+          'mdi-home',
+          'mdi-briefcase',
+          'mdi-account',
+          'mdi-group',
+          'mdi-heart',
+          'mdi-coffee',
+          'mdi-food',
+          'mdi-cart',
+          'mdi-finance',
+          'mdi-chart-line',
+          'mdi-lightbulb'
+        ],
         // Timer state
         timerInterval: null,
         currentTime: Date.now(),
@@ -165,7 +200,9 @@ window.addEventListener('DOMContentLoaded', () => {
         authConfig: {
           googleEnabled: false
         },
-        hoveredTaskId: null
+        hoveredTaskId: null,
+        heartbeatInterval: null,
+        isSessionExpired: false
       };
     },
     computed: {
@@ -970,11 +1007,17 @@ window.addEventListener('DOMContentLoaded', () => {
         return false;
       },
 
-      toggleExpand(taskId) {
-        if (this.expandedTasks.has(taskId)) {
+      toggleExpand(taskId, force) {
+        if (force === true) {
+          this.expandedTasks.add(taskId);
+        } else if (force === false) {
           this.expandedTasks.delete(taskId);
         } else {
-          this.expandedTasks.add(taskId);
+          if (this.expandedTasks.has(taskId)) {
+            this.expandedTasks.delete(taskId);
+          } else {
+            this.expandedTasks.add(taskId);
+          }
         }
         // Force reactivity update for Set
         this.expandedTasks = new Set(this.expandedTasks);
@@ -993,29 +1036,79 @@ window.addEventListener('DOMContentLoaded', () => {
       // Authentication methods
       async checkAuth() {
         try {
-          // Fetch auth config
-          const configResponse = await fetch('/api/auth/config');
-          if (configResponse.ok) {
-            this.authConfig = await configResponse.json();
+          // Fetch auth config if not already fetched
+          if (!this.authConfig.googleEnabled) {
+            const configResponse = await fetch('/api/auth/config');
+            if (configResponse.ok) {
+              this.authConfig = await configResponse.json();
+            }
           }
 
           // Fetch current user
           const response = await fetch('/api/auth/user');
           if (response.ok) {
-            this.user = await response.json();
+            const userData = await response.json();
+            this.user = userData;
+            this.isSessionExpired = false;
             console.log('User authenticated:', this.user);
             
             // Authenticate socket connection
-            if (this.socket && this.user.id) {
-              this.socket.emit('authenticate', this.user.id);
-            }
+            this.authenticateSocket();
           } else {
+            if (this.user) {
+              // User was logged in but session expired
+              this.isSessionExpired = true;
+              this.showNotification('Session expired. Please log in again to save your progress.', 'warning', 10000);
+            }
             this.user = null;
           }
+          
+          // Always start heartbeat to keep server awake and session fresh
+          this.startHeartbeat();
         } catch (error) {
           console.error('Error checking auth:', error);
-          this.user = null;
+          // Start heartbeat anyway to try and maintain connection
+          this.startHeartbeat();
         }
+      },
+
+      authenticateSocket() {
+        if (this.socket && this.user && this.user.id) {
+          console.log('Authenticating socket for user:', this.user.id);
+          this.socket.emit('authenticate', this.user.id);
+        }
+      },
+
+      startHeartbeat() {
+        if (this.heartbeatInterval) return;
+        
+        console.log('Starting heartbeat to keep session/server alive');
+        // Ping every 4 minutes to keep session active (especially for Render spin-down)
+        this.heartbeatInterval = setInterval(async () => {
+          try {
+            const response = await fetch('/api/auth/heartbeat');
+            const wasLoggedIn = !!this.user;
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (!wasLoggedIn && data.authenticated) {
+                // Unexpectedly logged in (maybe in another tab)
+                this.checkAuth();
+              }
+              this.isSessionExpired = false;
+            } else if (response.status === 401) {
+              if (wasLoggedIn) {
+                console.warn('Heartbeat: Session expired');
+                this.user = null;
+                this.isSessionExpired = true;
+                this.showNotification('Session expired. Please log in again.', 'warning');
+                // Don't clear interval, keep pinging to keep server awake
+              }
+            }
+          } catch (error) {
+            console.error('Heartbeat error:', error);
+          }
+        }, 4 * 60 * 1000); 
       },
 
       loginWithGoogle() {
@@ -1024,6 +1117,51 @@ window.addEventListener('DOMContentLoaded', () => {
 
       logout() {
         window.location.href = '/auth/logout';
+      },
+
+      updateTaskIcon(task, icon) {
+        task.icon = icon;
+        this.socket.emit('editTask', task);
+        this.showNotification('Icon updated', 'success');
+      },
+
+      getPriorityColor(value) {
+        if (value >= 8) return 'error';
+        if (value >= 6) return 'warning';
+        if (value >= 4) return 'info';
+        return 'success';
+      },
+
+      indentTask(task) {
+        // Find siblings at the same level
+        const siblings = this.tasks.filter(t => t.parent_id === task.parent_id);
+        const currentIndex = siblings.findIndex(t => t.id === task.id);
+        
+        if (currentIndex > 0) {
+          const previousSibling = siblings[currentIndex - 1];
+          this.socket.emit('setTaskParent', {
+            taskId: task.id,
+            parentId: previousSibling.id
+          });
+          this.expandedTasks.add(previousSibling.id);
+          this.expandedTasks = new Set(this.expandedTasks);
+          this.showNotification(`Moved "${task.name}" inside "${previousSibling.name}"`, 'success');
+        } else {
+          this.showNotification('No task above to indent under', 'warning');
+        }
+      },
+
+      outdentTask(task) {
+        if (!task.parent_id) return;
+
+        const parentTask = this.tasks.find(t => t.id === task.parent_id);
+        const grandParentId = parentTask ? parentTask.parent_id : null;
+
+        this.socket.emit('setTaskParent', {
+          taskId: task.id,
+          parentId: grandParentId
+        });
+        this.showNotification(`Moved "${task.name}" to parent level`, 'info');
       },
     },
     watch: {
@@ -1045,6 +1183,11 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       // Clean up timer interval
       this.stopTimerUpdates();
+      // Clean up heartbeat interval
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
     },
     mounted() {
       // Make app globally available FIRST
@@ -1062,12 +1205,24 @@ window.addEventListener('DOMContentLoaded', () => {
       });
       
       // Initialize socket connection AFTER chart setup
-      this.socket = io(window.location.origin);
+      this.socket = io(window.location.origin, {
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
+      });
       
       // Listen for socket connection and request data
       this.socket.on('connect', () => {
-        console.log('Socket connected, requesting initial data');
+        console.log('Socket connected, checking auth and requesting initial data');
+        // Always try to authenticate the socket when it connects/reconnects
+        this.authenticateSocket();
         this.socket.emit('requestInitialData');
+      });
+      
+      this.socket.on('reconnect', () => {
+        console.log('Socket reconnected');
+        this.authenticateSocket();
       });
       
       // Handle initial data and updates
@@ -1146,7 +1301,7 @@ window.addEventListener('DOMContentLoaded', () => {
           @dragend="$root.handleDragEnd"
         >
           <template v-slot:prepend>
-            <div class="d-flex align-center toggle-junction">
+            <div class="d-flex align-center toggle-junction gap-2 me-3" style="min-width: 64px;">
               <v-btn
                 v-if="hasChildren"
                 icon
@@ -1155,71 +1310,144 @@ window.addEventListener('DOMContentLoaded', () => {
                 @click.stop="$root.toggleExpand(task.id)"
                 class="expand-btn"
               >
-                <v-icon size="18">{{ isExpanded ? 'mdi-menu-down' : 'mdi-menu-right' }}</v-icon>
+                <v-icon size="20">{{ isExpanded ? 'mdi-menu-down' : 'mdi-menu-right' }}</v-icon>
               </v-btn>
-              <div v-else class="empty-junction" style="width: 32px;"></div>
+              <div v-else style="width: 24px;"></div>
+              
+              <v-menu location="bottom start">
+                <template v-slot:activator="{ props }">
+                  <v-btn
+                    icon
+                    size="small"
+                    variant="text"
+                    v-bind="props"
+                    :color="task.done ? 'grey' : getPriorityColor(task.importance)"
+                    @click.stop
+                  >
+                    <v-icon size="24">{{ task.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                  </v-btn>
+                </template>
+                <v-card max-width="300" class="pa-2">
+                  <div class="d-flex flex-wrap gap-1 justify-center">
+                    <v-btn
+                      v-for="icon in $root.availableIcons"
+                      :key="icon"
+                      icon
+                      size="small"
+                      variant="text"
+                      @click.stop="$root.updateTaskIcon(task, icon)"
+                      :color="task.icon === icon ? 'primary' : ''"
+                    >
+                      <v-icon>{{ icon }}</v-icon>
+                    </v-btn>
+                  </div>
+                </v-card>
+              </v-menu>
             </div>
           </template>
 
-          <div class="d-flex flex-column flex-grow-1 py-2">
-            <div class="d-flex align-center mb-1">
-              <v-list-item-title :class="{'text-decoration-line-through': task.done}" class="text-wrap font-weight-bold task-name">
+          <div class="d-flex flex-column flex-grow-1 py-1 ms-1">
+            <div class="d-flex align-center gap-golden mb-1">
+              <v-list-item-title :class="{'text-decoration-line-through': task.done}" class="text-wrap font-weight-bold task-name flex-grow-1" style="min-width: 0;">
                 {{ task.name }}
               </v-list-item-title>
               
-              <v-spacer></v-spacer>
-              
-              <div class="d-flex gap-1 ms-2">
-                <v-chip size="x-small" color="primary" variant="outlined" class="text-caption">I: {{ task.importance }}</v-chip>
-                <v-chip size="x-small" color="secondary" variant="outlined" class="text-caption">U: {{ task.urgency }}</v-chip>
+              <div class="task-metrics-group ms-auto">
+                <div class="d-flex align-center gap-1" title="Importance">
+                  <v-icon size="14" :color="getPriorityColor(task.importance)" class="opacity-70">mdi-star</v-icon>
+                  <v-progress-linear
+                    :model-value="task.importance * 10"
+                    :color="getPriorityColor(task.importance)"
+                    height="4"
+                    width="60"
+                    rounded
+                    class="flex-grow-0"
+                    style="width: 60px;"
+                  ></v-progress-linear>
+                </div>
+                <div class="d-flex align-center gap-1" title="Urgency">
+                  <v-icon size="14" :color="getPriorityColor(task.urgency)" class="opacity-70">mdi-clock-fast</v-icon>
+                  <v-progress-linear
+                    :model-value="task.urgency * 10"
+                    :color="getPriorityColor(task.urgency)"
+                    height="4"
+                    width="60"
+                    rounded
+                    class="flex-grow-0"
+                    style="width: 60px;"
+                  ></v-progress-linear>
+                </div>
               </div>
             </div>
 
             <v-list-item-subtitle>
-              <div class="d-flex align-center flex-wrap gap-1">
-                <span v-if="task.category" class="text-caption text-uppercase text-purple me-2">{{ task.category }}</span>
-                <span v-if="task.due_date" class="text-caption text-orange d-flex align-center me-2">
-                  <v-icon size="12" class="me-1">mdi-calendar</v-icon>
+              <div class="d-flex align-center flex-wrap gap-golden">
+                <v-chip v-if="task.category" size="x-small" color="purple" variant="flat" class="text-uppercase font-weight-bold">
+                  {{ task.category }}
+                </v-chip>
+                
+                <span v-if="task.due_date" class="text-caption text-orange d-flex align-center">
+                  <v-icon size="14" class="me-1">mdi-calendar-clock</v-icon>
                   {{ task.due_date }}
                 </span>
+
                 <v-btn
                   v-if="task.link"
+                  icon="mdi-link-variant"
                   size="x-small"
                   :href="task.link"
                   target="_blank"
                   color="primary"
                   variant="text"
-                  class="px-0 min-width-0 me-2"
+                  title="Open Link"
                   @click.stop
-                >
-                  <v-icon start size="12">mdi-link</v-icon>
-                  Link
-                </v-btn>
-              </div>
-              <div v-if="task.notes" class="mt-1 text-caption text-truncate opacity-70">
-                {{ task.notes }}
+                ></v-btn>
+                
+                <v-icon v-if="task.notes" size="14" color="grey" title="Has Notes">mdi-note-text-outline</v-icon>
               </div>
             </v-list-item-subtitle>
           </div>
 
           <template v-slot:append>
-            <div class="d-flex align-center">
-              <div class="timer-chip d-flex align-center bg-grey-lighten-4 rounded-pill px-2 py-1 me-2">
-                <span class="text-caption font-weight-bold me-1">{{ $root.formatTime(task.active_timer_start ? $root.getElapsedTime(task.active_timer_start) : task.total_time_spent) }}</span>
+            <div class="d-flex align-center gap-golden">
+              <div class="d-flex align-center">
+                <!-- Nudge Outdent (Left) -->
                 <v-btn
-                  :icon="task.active_timer_start ? 'mdi-stop' : 'mdi-play'"
-                  variant="flat"
+                  v-if="task.parent_id"
+                  icon="mdi-format-indent-decrease"
+                  variant="text"
                   size="x-small"
+                  @click.stop="$root.outdentTask(task)"
+                  title="Move to parent level"
+                  class="nudge-btn"
+                ></v-btn>
+
+                <!-- Nudge Indent (Right) -->
+                <v-btn
+                  icon="mdi-format-indent-increase"
+                  variant="text"
+                  size="x-small"
+                  @click.stop="$root.indentTask(task)"
+                  title="Move under task above"
+                  class="nudge-btn"
+                ></v-btn>
+              </div>
+
+              <div class="d-flex align-center timer-group bg-grey-lighten-4 rounded-pill px-2 py-1">
+                <span class="text-caption font-weight-bold px-2 timer-display">{{ $root.formatTime(task.active_timer_start ? $root.getElapsedTime(task.active_timer_start) : task.total_time_spent) }}</span>
+                <v-btn
+                  :icon="task.active_timer_start ? 'mdi-stop-circle' : 'mdi-play-circle'"
+                  variant="text"
+                  size="small"
                   :color="task.active_timer_start ? 'error' : 'success'"
                   @click.stop="$root.toggleTimer(task)"
-                  class="mini-timer-btn"
                 ></v-btn>
               </div>
 
               <v-menu location="bottom end">
                 <template v-slot:activator="{ props }">
                   <v-btn
-                    icon="mdi-dots-vertical"
+                    icon="mdi-dots-horizontal"
                     variant="text"
                     size="small"
                     v-bind="props"
@@ -1252,7 +1480,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 color="primary"
                 hide-details
                 @click.stop
-                class="ms-2 task-checkbox"
+                class="task-checkbox"
               ></v-checkbox>
             </div>
           </template>
@@ -1283,7 +1511,13 @@ window.addEventListener('DOMContentLoaded', () => {
     },
     methods: {
       onMouseEnter() { this.$root.hoveredTaskId = this.task.id; },
-      onMouseLeave() { this.$root.hoveredTaskId = null; }
+      onMouseLeave() { this.$root.hoveredTaskId = null; },
+      getPriorityColor(value) {
+        if (value >= 8) return 'error';
+        if (value >= 6) return 'warning';
+        if (value >= 4) return 'info';
+        return 'success';
+      }
     }
   });
 

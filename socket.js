@@ -22,6 +22,7 @@ const setupSocket = (io) => {
         progress: task.progress ? Number(task.progress) : null,
         category: task.category || null,
         status: task.status || null,
+        icon: task.icon || 'mdi-checkbox-blank-circle-outline',
         // Timer fields
         total_time_spent: task.total_time_spent || 0,
         active_timer_start: task.active_timer_start || null,
@@ -229,7 +230,14 @@ const setupSocket = (io) => {
             due_date: task.due_date,
             link: task.link,
             notes: task.notes,
-            completed_at: task.completed_at
+            completed_at: task.completed_at,
+            category: task.category,
+            status: task.status,
+            icon: task.icon || 'mdi-checkbox-blank-circle-outline',
+            total_time_spent: task.total_time_spent || 0,
+            active_timer_start: task.active_timer_start || null,
+            pomodoro_count: task.pomodoro_count || 0,
+            last_worked_at: task.last_worked_at || null
           };
           
           socket.emit("taskDetails", formattedTask);

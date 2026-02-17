@@ -9,6 +9,7 @@ export function setupAuth(app) {
         secret: process.env.SESSION_SECRET || 'priority-task-manager-secret',
         resave: false,
         saveUninitialized: false,
+        rolling: true, // Reset cookie expiration on every response
         cookie: {
             secure: process.env.NODE_ENV === 'production',
             maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
@@ -30,10 +31,19 @@ export function setupAuth(app) {
 
         console.log('Status: Registering Google Oauth Strategy...');
         
-        // Fix: Restore baseUrl definition
+        // Construct callback URL
+        // If BASE_URL is provided (production), use it. 
+        // Otherwise, Passport will try to determine it from the request if we provide a relative path,
+        // but Google requires an absolute URL in the config.
         const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
         const callbackURL = `${baseUrl}/auth/google/callback`;
-        console.log('Auth Debug: Construction Callback URL:', callbackURL);
+        
+        console.log('--------------------------------------------------');
+        console.log('IMPORTANT: OAuth Callback Configuration');
+        console.log('Callback URL being sent to Google:', callbackURL);
+        console.log('Ensure this EXACT URL is in your Google Cloud Console');
+        console.log('under "Authorized redirect URIs"');
+        console.log('--------------------------------------------------');
         
         const strategy = new GoogleStrategy({
             clientID: GOOGLE_CLIENT_ID,
@@ -63,13 +73,31 @@ export function setupAuth(app) {
 
         // Auth Routes
         app.get('/auth/google', (req, res, next) => {
-            console.log('Auth Debug: /auth/google called');
-            passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+            // Determine callback URL dynamically from request to avoid mismatches
+            const host = req.get('host');
+            const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+            const dynamicCallbackURL = `${protocol}://${host}/auth/google/callback`;
+            
+            console.log('Auth Debug: Initiating Google login');
+            console.log('Auth Debug: Dynamic Callback URL:', dynamicCallbackURL);
+            
+            passport.authenticate('google', { 
+                scope: ['profile', 'email'],
+                callbackURL: dynamicCallbackURL
+            })(req, res, next);
         });
 
         app.get('/auth/google/callback', (req, res, next) => {
-            console.log('Auth Debug: /auth/google/callback called');
-            passport.authenticate('google', { failureRedirect: '/' })(req, res, next);
+            const host = req.get('host');
+            const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+            const dynamicCallbackURL = `${protocol}://${host}/auth/google/callback`;
+            
+            console.log('Auth Debug: Handling Google callback');
+            
+            passport.authenticate('google', { 
+                failureRedirect: '/',
+                callbackURL: dynamicCallbackURL
+            })(req, res, next);
         }, (req, res) => {
             res.redirect('/');
         });
@@ -100,6 +128,15 @@ export function setupAuth(app) {
             res.json(req.user);
         } else {
             res.status(401).json({ message: 'Not authenticated' });
+        }
+    });
+
+    // Heartbeat endpoint to keep session alive
+    app.get('/api/auth/heartbeat', (req, res) => {
+        if (req.isAuthenticated()) {
+            res.json({ authenticated: true, user: req.user.id });
+        } else {
+            res.status(401).json({ authenticated: false });
         }
     });
 
