@@ -79,7 +79,8 @@ window.addEventListener('DOMContentLoaded', () => {
           importance: 5,
           urgency: 5,
           link: '',
-          due_date: null
+          due_date: null,
+          icon: 'mdi-checkbox-blank-circle-outline'
         },
         showSubtaskModal: false,
         parentId: null,
@@ -389,7 +390,8 @@ window.addEventListener('DOMContentLoaded', () => {
           importance: 5,
           urgency: 5,
           link: '',
-          due_date: null
+          due_date: null,
+          icon: 'mdi-checkbox-blank-circle-outline'
         };
       },
       
@@ -450,7 +452,8 @@ window.addEventListener('DOMContentLoaded', () => {
           urgency: 5,
           parent_id: null,
           link: '',
-          due_date: null
+          due_date: null,
+          icon: 'mdi-checkbox-blank-circle-outline'
         };
       },
       
@@ -475,7 +478,8 @@ window.addEventListener('DOMContentLoaded', () => {
           importance: 5,
           urgency: 5,
           link: '',
-          due_date: null
+          due_date: null,
+          icon: 'mdi-checkbox-blank-circle-outline'
         };
       },
       
@@ -661,7 +665,8 @@ window.addEventListener('DOMContentLoaded', () => {
           importance: this.quickAddTask.importance,
           urgency: this.quickAddTask.urgency,
           link: this.quickAddTask.link || null,
-          notes: this.quickAddTask.notes || null
+          notes: this.quickAddTask.notes || null,
+          icon: this.quickAddTask.icon || 'mdi-checkbox-blank-circle-outline'
         };
 
         // Use taskOperations to ensure proper real-time updates
@@ -675,7 +680,8 @@ window.addEventListener('DOMContentLoaded', () => {
           importance: 5,
           urgency: 5,
           link: '',
-          notes: ''
+          notes: '',
+          icon: 'mdi-checkbox-blank-circle-outline'
         };
       },
 

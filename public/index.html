@@ -560,7 +560,32 @@
                                 label="Subtask Name"
                                 required
                                 variant="outlined"
-                            ></v-text-field>
+                            >
+                                <template v-slot:prepend-inner>
+                                    <v-menu location="bottom start">
+                                        <template v-slot:activator="{ props }">
+                                            <v-btn icon size="small" variant="text" v-bind="props" class="me-2">
+                                                <v-icon>{{ newSubtask.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                                            </v-btn>
+                                        </template>
+                                        <v-card max-width="300" class="pa-2">
+                                            <div class="d-flex flex-wrap gap-1 justify-center">
+                                                <v-btn
+                                                    v-for="icon in availableIcons"
+                                                    :key="icon"
+                                                    icon
+                                                    size="small"
+                                                    variant="text"
+                                                    @click="newSubtask.icon = icon"
+                                                    :color="newSubtask.icon === icon ? 'primary' : ''"
+                                                >
+                                                    <v-icon>{{ icon }}</v-icon>
+                                                </v-btn>
+                                            </div>
+                                        </v-card>
+                                    </v-menu>
+                                </template>
+                            </v-text-field>
                             
                             <v-text-field
                                 v-model="newSubtask.link"
