@@ -337,6 +337,23 @@ const setupSocket = (io) => {
       }
     });
 
+    socket.on("updateTaskIcon", async ({ taskId, icon }) => {
+      try {
+        console.log(`Updating icon for task ${taskId} to ${icon}`);
+        await database.updateTaskIcon(taskId, icon);
+        
+        const data = await getTaskData(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
+      } catch (error) {
+        console.error("Failed to update task icon:", error);
+        socket.emit("error", { message: "Failed to update icon" });
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log("Client disconnected");
     });

@@ -1126,8 +1126,11 @@ window.addEventListener('DOMContentLoaded', () => {
       },
 
       updateTaskIcon(task, icon) {
+        // Emit specific event for icon update
+        this.socket.emit('updateTaskIcon', { taskId: task.id, icon: icon });
+        
+        // Immediate local update for UI responsiveness
         task.icon = icon;
-        this.socket.emit('editTask', task);
         this.showNotification('Icon updated', 'success');
       },
 

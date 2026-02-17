@@ -389,6 +389,11 @@ class Database {
     await this.query(q, [status, taskId]);
   }
 
+  async updateTaskIcon(taskId, icon) {
+    const q = this.pool ? "UPDATE tasks SET icon = $1 WHERE id = $2" : "UPDATE tasks SET icon = ? WHERE id = ?";
+    await this.query(q, [icon, taskId]);
+  }
+
   async upsertUser(user) {
     const now = new Date().toISOString();
     if (this.pool) {
@@ -429,6 +434,7 @@ export const getTimeLogs = (id) => database.getTimeLogs(id);
 export const getActiveTimers = () => database.getActiveTimers();
 export const setTaskParent = (id, p) => database.setTaskParent(id, p);
 export const updateTaskStatus = (id, s) => database.updateTaskStatus(id, s);
+export const updateTaskIcon = (id, i) => database.updateTaskIcon(id, i);
 export const upsertUser = (u) => database.upsertUser(u);
 export const initDatabase = () => database.init();
 export default database;
