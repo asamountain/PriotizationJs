@@ -347,7 +347,11 @@ class Database {
     const getQ = this.pool ? "SELECT active_timer_start, total_time_spent FROM tasks WHERE id = $1" : "SELECT active_timer_start, total_time_spent FROM tasks WHERE id = ?";
     const tasks = await this.query(getQ, [taskId]);
     const task = tasks[0];
-    if (!task || !task.active_timer_start) throw new Error('No active timer');
+    if (!task || !task.active_timer_start) {
+      // Timer already stopped or doesn't exist - return gracefully
+      console.log(`Timer for task ${taskId} already stopped or not found`);
+      return { taskId, duration: 0, totalTime: task?.total_time_spent || 0, alreadyStopped: true };
+    }
 
     const duration = Math.floor((new Date() - new Date(task.active_timer_start)) / 1000);
     const newTotalTime = (task.total_time_spent || 0) + duration;

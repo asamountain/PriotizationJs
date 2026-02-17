@@ -63,6 +63,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const app = Vue.createApp({
     data() {
       return {
+        currentView: 'tasks', // 'tasks' or 'analytics'
         tasks: [],
         activeTasks: [],
         completedTasks: [],
@@ -203,7 +204,28 @@ window.addEventListener('DOMContentLoaded', () => {
         },
         hoveredTaskId: null,
         heartbeatInterval: null,
-        isSessionExpired: false
+        isSessionExpired: false,
+        // Analytics data
+        analytics: {
+          productivityScore: 0,
+          currentStreak: 0,
+          thisWeekHours: 0,
+          lastWeekHours: 0,
+          weekChange: 0,
+          totalPomodoros: 0,
+          totalHours: 0,
+          totalSessions: 0,
+          avgSessionMins: 0,
+          tasksCompleted: 0,
+          tasksActive: 0,
+          completionRate: 0,
+          dailyData: [],
+          hourlyData: [],
+          sessionDistribution: [],
+          topTasks: [],
+          pomodoroTrend: []
+        },
+        analyticsCharts: {}
       };
     },
     computed: {
@@ -1172,11 +1194,355 @@ window.addEventListener('DOMContentLoaded', () => {
         });
         this.showNotification(`Moved "${task.name}" to parent level`, 'info');
       },
+
+      // Analytics Methods
+      async loadAnalytics() {
+        try {
+          console.log('Loading analytics data...');
+          const response = await fetch('/api/analytics');
+          console.log('Analytics response status:', response.status);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Analytics API error:', errorText);
+            throw new Error('Failed to fetch analytics');
+          }
+
+          const data = await response.json();
+          console.log('Analytics data received:', {
+            tasks: data.tasks?.length || 0,
+            timeLogs: data.timeLogs?.length || 0
+          });
+          console.log('Sample time logs:', data.timeLogs?.slice(0, 3));
+          console.log('Tasks with time:', data.tasks?.filter(t => t.total_time_spent > 0).slice(0, 3));
+
+          this.processAnalyticsData(data);
+          this.$nextTick(() => this.renderAnalyticsCharts());
+        } catch (error) {
+          console.error('Analytics error:', error);
+          this.showNotification('Failed to load analytics: ' + error.message, 'error');
+        }
+      },
+
+      processAnalyticsData(data) {
+        const { tasks, timeLogs } = data;
+        const now = new Date();
+        const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        const fourteenDaysAgo = new Date(now - 14 * 24 * 60 * 60 * 1000);
+
+        // Total hours
+        const totalSeconds = timeLogs.reduce((sum, log) => sum + (log.duration || 0), 0);
+        this.analytics.totalHours = (totalSeconds / 3600).toFixed(1);
+
+        // Total sessions and avg
+        this.analytics.totalSessions = timeLogs.length;
+        this.analytics.avgSessionMins = timeLogs.length > 0
+          ? Math.round(totalSeconds / timeLogs.length / 60)
+          : 0;
+
+        // Total pomodoros (25+ min sessions)
+        this.analytics.totalPomodoros = timeLogs.filter(log => log.duration >= 1500).length;
+
+        // Tasks stats
+        this.analytics.tasksCompleted = tasks.filter(t => t.done).length;
+        this.analytics.tasksActive = tasks.filter(t => !t.done).length;
+        this.analytics.completionRate = tasks.length > 0
+          ? Math.round(this.analytics.tasksCompleted / tasks.length * 100)
+          : 0;
+
+        // This week vs last week
+        const thisWeekLogs = timeLogs.filter(log => new Date(log.start_time) >= sevenDaysAgo);
+        const lastWeekLogs = timeLogs.filter(log => {
+          const d = new Date(log.start_time);
+          return d >= fourteenDaysAgo && d < sevenDaysAgo;
+        });
+
+        const thisWeekSecs = thisWeekLogs.reduce((sum, log) => sum + (log.duration || 0), 0);
+        const lastWeekSecs = lastWeekLogs.reduce((sum, log) => sum + (log.duration || 0), 0);
+
+        this.analytics.thisWeekHours = (thisWeekSecs / 3600).toFixed(1);
+        this.analytics.lastWeekHours = (lastWeekSecs / 3600).toFixed(1);
+        this.analytics.weekChange = lastWeekSecs > 0
+          ? Math.round((thisWeekSecs - lastWeekSecs) / lastWeekSecs * 100)
+          : (thisWeekSecs > 0 ? 100 : 0);
+
+        // Productivity Score (time on importance >= 7 tasks)
+        const highImpTimeLogs = thisWeekLogs.filter(log => {
+          const task = tasks.find(t => t.id === log.task_id);
+          return task && task.importance >= 7;
+        });
+        const highImpSeconds = highImpTimeLogs.reduce((sum, log) => sum + (log.duration || 0), 0);
+        this.analytics.productivityScore = thisWeekSecs > 0
+          ? Math.round(highImpSeconds / thisWeekSecs * 100)
+          : 0;
+
+        // Focus Streak (consecutive days with sessions)
+        const daysWithSessions = new Set(
+          timeLogs.map(log => new Date(log.start_time).toISOString().split('T')[0])
+        );
+        const sortedDays = Array.from(daysWithSessions).sort().reverse();
+        let streak = 0;
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(now - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        if (sortedDays[0] === today || sortedDays[0] === yesterday) {
+          streak = 1;
+          for (let i = 1; i < sortedDays.length; i++) {
+            const prevDate = new Date(sortedDays[i - 1]);
+            const currDate = new Date(sortedDays[i]);
+            const diffDays = (prevDate - currDate) / (24 * 60 * 60 * 1000);
+            if (diffDays === 1) {
+              streak++;
+            } else {
+              break;
+            }
+          }
+        }
+        this.analytics.currentStreak = streak;
+
+        // Daily data for chart (last 30 days)
+        const dailyMap = {};
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date(now - i * 24 * 60 * 60 * 1000);
+          const key = d.toISOString().split('T')[0];
+          dailyMap[key] = 0;
+        }
+        timeLogs.forEach(log => {
+          const key = new Date(log.start_time).toISOString().split('T')[0];
+          if (dailyMap.hasOwnProperty(key)) {
+            dailyMap[key] += (log.duration || 0) / 3600;
+          }
+        });
+        this.analytics.dailyData = Object.entries(dailyMap).map(([date, hours]) => ({
+          date,
+          hours: parseFloat(hours.toFixed(2))
+        }));
+
+        // Hourly data
+        const hourlyMap = Array(24).fill(0);
+        timeLogs.forEach(log => {
+          const hour = new Date(log.start_time).getHours();
+          hourlyMap[hour] += (log.duration || 0) / 3600;
+        });
+        this.analytics.hourlyData = hourlyMap.map((hours, hour) => ({
+          hour: `${hour}:00`,
+          hours: parseFloat(hours.toFixed(2))
+        }));
+
+        // Session distribution
+        const distMap = { '< 5 min': 0, '5-15 min': 0, '15-25 min': 0, '25+ min': 0 };
+        timeLogs.forEach(log => {
+          const mins = (log.duration || 0) / 60;
+          if (mins < 5) distMap['< 5 min']++;
+          else if (mins < 15) distMap['5-15 min']++;
+          else if (mins < 25) distMap['15-25 min']++;
+          else distMap['25+ min']++;
+        });
+        this.analytics.sessionDistribution = Object.entries(distMap).map(([name, value]) => ({
+          name, value
+        }));
+
+        // Top tasks by time
+        const taskTimeMap = {};
+        timeLogs.forEach(log => {
+          const task = tasks.find(t => t.id === log.task_id);
+          if (task) {
+            taskTimeMap[task.name] = (taskTimeMap[task.name] || 0) + (log.duration || 0);
+          }
+        });
+        this.analytics.topTasks = Object.entries(taskTimeMap)
+          .map(([name, seconds]) => ({ name, hours: parseFloat((seconds / 3600).toFixed(2)) }))
+          .sort((a, b) => b.hours - a.hours)
+          .slice(0, 10);
+
+        // Pomodoro trend (last 30 days)
+        const pomoMap = {};
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date(now - i * 24 * 60 * 60 * 1000);
+          const key = d.toISOString().split('T')[0];
+          pomoMap[key] = 0;
+        }
+        timeLogs.filter(log => log.duration >= 1500).forEach(log => {
+          const key = new Date(log.start_time).toISOString().split('T')[0];
+          if (pomoMap.hasOwnProperty(key)) {
+            pomoMap[key]++;
+          }
+        });
+        this.analytics.pomodoroTrend = Object.entries(pomoMap).map(([date, count]) => ({
+          date, count
+        }));
+      },
+
+      renderAnalyticsCharts() {
+        const isDark = this.isDarkTheme;
+        const textColor = isDark ? '#ccc' : '#333';
+        const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+
+        // Destroy existing charts
+        Object.values(this.analyticsCharts).forEach(chart => chart?.dispose());
+
+        // Daily Focus Chart
+        const dailyEl = document.getElementById('dailyFocusChart');
+        if (dailyEl) {
+          const chart = echarts.init(dailyEl, isDark ? 'dark' : null);
+          chart.setOption({
+            tooltip: { trigger: 'axis' },
+            grid: { left: 50, right: 20, bottom: 40, top: 20 },
+            xAxis: {
+              type: 'category',
+              data: this.analytics.dailyData.map(d => d.date.slice(5)),
+              axisLabel: { color: textColor, rotate: 45 }
+            },
+            yAxis: {
+              type: 'value',
+              name: 'Hours',
+              axisLabel: { color: textColor },
+              splitLine: { lineStyle: { color: gridColor } }
+            },
+            series: [{
+              data: this.analytics.dailyData.map(d => d.hours),
+              type: 'bar',
+              itemStyle: { color: '#4CAF50', borderRadius: [4, 4, 0, 0] },
+              emphasis: { itemStyle: { color: '#66BB6A' } }
+            }]
+          });
+          this.analyticsCharts.daily = chart;
+        }
+
+        // Session Distribution Pie
+        const distEl = document.getElementById('sessionDistChart');
+        if (distEl) {
+          const chart = echarts.init(distEl, isDark ? 'dark' : null);
+          chart.setOption({
+            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+            legend: { bottom: 0, textStyle: { color: textColor } },
+            series: [{
+              type: 'pie',
+              radius: ['40%', '70%'],
+              avoidLabelOverlap: false,
+              itemStyle: { borderRadius: 8, borderColor: isDark ? '#1e1e1e' : '#fff', borderWidth: 2 },
+              label: { show: false },
+              emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+              data: this.analytics.sessionDistribution.map((d, i) => ({
+                ...d,
+                itemStyle: { color: ['#f44336', '#ff9800', '#2196f3', '#4caf50'][i] }
+              }))
+            }]
+          });
+          this.analyticsCharts.dist = chart;
+        }
+
+        // Hourly Chart
+        const hourlyEl = document.getElementById('hourlyChart');
+        if (hourlyEl) {
+          const chart = echarts.init(hourlyEl, isDark ? 'dark' : null);
+          chart.setOption({
+            tooltip: { trigger: 'axis' },
+            grid: { left: 50, right: 20, bottom: 30, top: 20 },
+            xAxis: {
+              type: 'category',
+              data: this.analytics.hourlyData.map(d => d.hour),
+              axisLabel: { color: textColor, interval: 2 }
+            },
+            yAxis: {
+              type: 'value',
+              name: 'Hours',
+              axisLabel: { color: textColor },
+              splitLine: { lineStyle: { color: gridColor } }
+            },
+            series: [{
+              data: this.analytics.hourlyData.map(d => d.hours),
+              type: 'bar',
+              itemStyle: { color: '#2196F3', borderRadius: [4, 4, 0, 0] }
+            }]
+          });
+          this.analyticsCharts.hourly = chart;
+        }
+
+        // Pomodoro Trend
+        const pomoEl = document.getElementById('pomodoroChart');
+        if (pomoEl) {
+          const chart = echarts.init(pomoEl, isDark ? 'dark' : null);
+          chart.setOption({
+            tooltip: { trigger: 'axis' },
+            grid: { left: 50, right: 20, bottom: 40, top: 20 },
+            xAxis: {
+              type: 'category',
+              data: this.analytics.pomodoroTrend.map(d => d.date.slice(5)),
+              axisLabel: { color: textColor, rotate: 45 }
+            },
+            yAxis: {
+              type: 'value',
+              name: 'Pomodoros',
+              minInterval: 1,
+              axisLabel: { color: textColor },
+              splitLine: { lineStyle: { color: gridColor } }
+            },
+            series: [{
+              data: this.analytics.pomodoroTrend.map(d => d.count),
+              type: 'line',
+              smooth: true,
+              areaStyle: { color: 'rgba(255, 152, 0, 0.3)' },
+              lineStyle: { color: '#FF9800', width: 2 },
+              itemStyle: { color: '#FF9800' }
+            }]
+          });
+          this.analyticsCharts.pomo = chart;
+        }
+
+        // Top Tasks Chart
+        const topEl = document.getElementById('topTasksChart');
+        if (topEl) {
+          const chart = echarts.init(topEl, isDark ? 'dark' : null);
+          chart.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: 150, right: 40, bottom: 20, top: 20 },
+            xAxis: {
+              type: 'value',
+              name: 'Hours',
+              axisLabel: { color: textColor },
+              splitLine: { lineStyle: { color: gridColor } }
+            },
+            yAxis: {
+              type: 'category',
+              data: this.analytics.topTasks.map(d => d.name).reverse(),
+              axisLabel: {
+                color: textColor,
+                width: 130,
+                overflow: 'truncate',
+                ellipsis: '...'
+              }
+            },
+            series: [{
+              data: this.analytics.topTasks.map(d => d.hours).reverse(),
+              type: 'bar',
+              itemStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                  { offset: 0, color: '#667eea' },
+                  { offset: 1, color: '#764ba2' }
+                ]),
+                borderRadius: [0, 4, 4, 0]
+              }
+            }]
+          });
+          this.analyticsCharts.top = chart;
+        }
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+          Object.values(this.analyticsCharts).forEach(chart => chart?.resize());
+        });
+      },
     },
     watch: {
       taskSortBy(newValue) {
         // Save sort preference to localStorage
         localStorage.setItem('taskSortBy', newValue);
+      },
+      currentView(newValue) {
+        if (newValue === 'analytics') {
+          this.loadAnalytics();
+        }
       }
     },
     provide() {

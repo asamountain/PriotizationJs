@@ -8,9 +8,10 @@
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
     <!-- Roboto Font -->
     <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
-    <!-- Socket.IO and D3 Libraries -->
+    <!-- Socket.IO, D3, and ECharts Libraries -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <!-- Vue and Vuetify -->
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.js"></script>
@@ -302,6 +303,15 @@
       .subtask-link-chip .v-chip__content .v-icon {
         color: #651fff !important;
       }
+
+      /* Analytics View Styles */
+      .analytics-view {
+        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+      }
+
+      .v-theme--dark .analytics-view {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      }
     </style>
     <link href="style.css" rel="stylesheet">
 </head>
@@ -329,9 +339,9 @@
                     Login
                 </v-btn>
 
-                <!-- Analytics Button -->
-                <v-btn icon href="/analytics" title="View Analytics & Insights" target="_blank" color="primary">
-                    <v-icon>mdi-chart-line</v-icon>
+                <!-- Analytics Button (Toggle View) -->
+                <v-btn icon @click="currentView = currentView === 'tasks' ? 'analytics' : 'tasks'" :title="currentView === 'tasks' ? 'View Analytics' : 'Back to Tasks'" color="primary">
+                    <v-icon>{{ currentView === 'tasks' ? 'mdi-chart-line' : 'mdi-arrow-left' }}</v-icon>
                 </v-btn>
                 
                 <!-- CSV Import Icon Button -->
@@ -350,8 +360,174 @@
             </v-app-bar>
 
             <v-main class="split-view-main">
-                <!-- Split View Container -->
-                <div class="split-view-container" ref="splitContainer">
+                <!-- Analytics View (ECharts) -->
+                <div v-if="currentView === 'analytics'" class="analytics-view" style="height: 100%; overflow-y: auto; padding: 16px;">
+                    <v-container fluid>
+                        <!-- Header -->
+                        <v-row class="mb-4">
+                            <v-col cols="12">
+                                <h1 class="text-h4 text-primary d-flex align-center">
+                                    <v-icon class="me-3" size="32">mdi-chart-areaspline</v-icon>
+                                    Productivity Analytics
+                                </h1>
+                                <p class="text-subtitle-1 text-grey mt-1">Track your focus time, streaks, and productivity insights</p>
+                            </v-col>
+                        </v-row>
+
+                        <!-- Top Stats Row -->
+                        <v-row class="mb-4">
+                            <v-col cols="12" sm="6" md="3">
+                                <v-card elevation="4" class="pa-4 text-center" color="primary" variant="tonal">
+                                    <v-icon size="40" color="primary" class="mb-2">mdi-target</v-icon>
+                                    <div class="text-h3 font-weight-bold text-primary">{{ analytics.productivityScore }}%</div>
+                                    <div class="text-subtitle-2 text-grey">Productivity Score</div>
+                                    <div class="text-caption text-grey-darken-1">Time on high-importance tasks</div>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="12" sm="6" md="3">
+                                <v-card elevation="4" class="pa-4 text-center" color="success" variant="tonal">
+                                    <v-icon size="40" color="success" class="mb-2">mdi-fire</v-icon>
+                                    <div class="text-h3 font-weight-bold text-success">{{ analytics.currentStreak }}</div>
+                                    <div class="text-subtitle-2 text-grey">Day Streak</div>
+                                    <div class="text-caption text-grey-darken-1">Consecutive focus days</div>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="12" sm="6" md="3">
+                                <v-card elevation="4" class="pa-4 text-center" color="info" variant="tonal">
+                                    <v-icon size="40" color="info" class="mb-2">mdi-clock-outline</v-icon>
+                                    <div class="text-h3 font-weight-bold text-info">{{ analytics.thisWeekHours }}h</div>
+                                    <div class="text-subtitle-2 text-grey">This Week</div>
+                                    <v-chip
+                                        :color="analytics.weekChange >= 0 ? 'success' : 'error'"
+                                        size="x-small"
+                                        class="mt-1"
+                                    >
+                                        <v-icon size="12" start>{{ analytics.weekChange >= 0 ? 'mdi-arrow-up' : 'mdi-arrow-down' }}</v-icon>
+                                        {{ Math.abs(analytics.weekChange) }}% vs last week
+                                    </v-chip>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="12" sm="6" md="3">
+                                <v-card elevation="4" class="pa-4 text-center" color="warning" variant="tonal">
+                                    <v-icon size="40" color="warning" class="mb-2">mdi-timer</v-icon>
+                                    <div class="text-h3 font-weight-bold text-warning">{{ analytics.totalPomodoros }}</div>
+                                    <div class="text-subtitle-2 text-grey">Total Pomodoros</div>
+                                    <div class="text-caption text-grey-darken-1">25+ min sessions</div>
+                                </v-card>
+                            </v-col>
+                        </v-row>
+
+                        <!-- Secondary Stats -->
+                        <v-row class="mb-4">
+                            <v-col cols="6" sm="4" md="2">
+                                <v-card elevation="2" class="pa-3 text-center">
+                                    <div class="text-h5 font-weight-bold">{{ analytics.totalHours }}h</div>
+                                    <div class="text-caption text-grey">Total Focus</div>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="6" sm="4" md="2">
+                                <v-card elevation="2" class="pa-3 text-center">
+                                    <div class="text-h5 font-weight-bold">{{ analytics.totalSessions }}</div>
+                                    <div class="text-caption text-grey">Sessions</div>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="6" sm="4" md="2">
+                                <v-card elevation="2" class="pa-3 text-center">
+                                    <div class="text-h5 font-weight-bold">{{ analytics.avgSessionMins }}m</div>
+                                    <div class="text-caption text-grey">Avg Session</div>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="6" sm="4" md="2">
+                                <v-card elevation="2" class="pa-3 text-center">
+                                    <div class="text-h5 font-weight-bold">{{ analytics.tasksCompleted }}</div>
+                                    <div class="text-caption text-grey">Completed</div>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="6" sm="4" md="2">
+                                <v-card elevation="2" class="pa-3 text-center">
+                                    <div class="text-h5 font-weight-bold">{{ analytics.tasksActive }}</div>
+                                    <div class="text-caption text-grey">Active</div>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="6" sm="4" md="2">
+                                <v-card elevation="2" class="pa-3 text-center">
+                                    <div class="text-h5 font-weight-bold">{{ analytics.completionRate }}%</div>
+                                    <div class="text-caption text-grey">Completion</div>
+                                </v-card>
+                            </v-col>
+                        </v-row>
+
+                        <!-- Charts Row 1 -->
+                        <v-row class="mb-4">
+                            <v-col cols="12" md="8">
+                                <v-card elevation="3">
+                                    <v-card-title class="d-flex align-center">
+                                        <v-icon class="me-2" color="primary">mdi-chart-timeline-variant</v-icon>
+                                        Daily Focus Time (Last 30 Days)
+                                    </v-card-title>
+                                    <v-card-text>
+                                        <div id="dailyFocusChart" style="height: 300px;"></div>
+                                    </v-card-text>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="12" md="4">
+                                <v-card elevation="3">
+                                    <v-card-title class="d-flex align-center">
+                                        <v-icon class="me-2" color="success">mdi-chart-donut</v-icon>
+                                        Session Distribution
+                                    </v-card-title>
+                                    <v-card-text>
+                                        <div id="sessionDistChart" style="height: 300px;"></div>
+                                    </v-card-text>
+                                </v-card>
+                            </v-col>
+                        </v-row>
+
+                        <!-- Charts Row 2 -->
+                        <v-row class="mb-4">
+                            <v-col cols="12" md="6">
+                                <v-card elevation="3">
+                                    <v-card-title class="d-flex align-center">
+                                        <v-icon class="me-2" color="info">mdi-clock-time-eight</v-icon>
+                                        Focus by Hour of Day
+                                    </v-card-title>
+                                    <v-card-text>
+                                        <div id="hourlyChart" style="height: 280px;"></div>
+                                    </v-card-text>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="12" md="6">
+                                <v-card elevation="3">
+                                    <v-card-title class="d-flex align-center">
+                                        <v-icon class="me-2" color="warning">mdi-timer-outline</v-icon>
+                                        Pomodoros Over Time
+                                    </v-card-title>
+                                    <v-card-text>
+                                        <div id="pomodoroChart" style="height: 280px;"></div>
+                                    </v-card-text>
+                                </v-card>
+                            </v-col>
+                        </v-row>
+
+                        <!-- Charts Row 3 -->
+                        <v-row>
+                            <v-col cols="12">
+                                <v-card elevation="3">
+                                    <v-card-title class="d-flex align-center">
+                                        <v-icon class="me-2" color="primary">mdi-format-list-numbered</v-icon>
+                                        Top Tasks by Time Spent
+                                    </v-card-title>
+                                    <v-card-text>
+                                        <div id="topTasksChart" style="height: 300px;"></div>
+                                    </v-card-text>
+                                </v-card>
+                            </v-col>
+                        </v-row>
+                    </v-container>
+                </div>
+
+                <!-- Split View Container (Tasks View) -->
+                <div v-show="currentView === 'tasks'" class="split-view-container" ref="splitContainer">
                     <!-- LEFT SIDE: Chart (always full height) -->
                     <div class="split-view-left" ref="leftPanel" :style="{ flex: `0 0 ${leftPanelWidth}%` }">
                         <v-card class="chart-card" elevation="3">

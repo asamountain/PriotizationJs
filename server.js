@@ -221,21 +221,60 @@ app.get("/api/export-csv", requireAuth, async (req, res) => {
     }
 });
 
-// Analytics API endpoint
-app.get("/api/analytics", requireAuth, async (req, res) => {
+// Debug endpoint to check database status
+app.get("/api/debug/db-status", async (req, res) => {
     try {
         const { getTaskData, getTimeLogs } = await import("./db.js");
-        
-        // Get all tasks with time data
-        const tasks = await getTaskData();
-        
+        const db = await import("./db.js");
+
+        const userId = req.user ? req.user.id : null;
+        const tasks = await getTaskData(userId);
+
+        // Count time logs
+        let totalLogs = 0;
+        let tasksWithTime = 0;
+        for (const task of tasks) {
+            const logs = await getTimeLogs(task.id);
+            totalLogs += logs.length;
+            if (task.total_time_spent > 0) tasksWithTime++;
+        }
+
+        res.json({
+            database: process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite',
+            user: userId || 'anonymous',
+            totalTasks: tasks.length,
+            tasksWithTimeSpent: tasksWithTime,
+            totalTimeLogs: totalLogs,
+            sampleTasks: tasks.slice(0, 3).map(t => ({
+                id: t.id,
+                name: t.name,
+                total_time_spent: t.total_time_spent,
+                pomodoro_count: t.pomodoro_count
+            }))
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Analytics API endpoint (works for both authenticated and anonymous users)
+app.get("/api/analytics", async (req, res) => {
+    try {
+        const { getTaskData, getTimeLogs } = await import("./db.js");
+
+        // Get user ID if authenticated, otherwise null for anonymous
+        const userId = req.user ? req.user.id : null;
+
+        // Get all tasks with time data for this user
+        const tasks = await getTaskData(userId);
+
         // Get all time logs for all tasks
         const allLogs = [];
         for (const task of tasks) {
             const logs = await getTimeLogs(task.id);
             allLogs.push(...logs.map(log => ({ ...log, task_name: task.name })));
         }
-        
+
         res.json({
             tasks,
             timeLogs: allLogs
