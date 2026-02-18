@@ -103,20 +103,42 @@
         bottom: 0;
       }
       
-      /* Responsive: Stack on smaller screens */
-      @media (max-width: 1024px) {
+      /* Responsive: Stack on tablet and smaller screens */
+      @media (max-width: 768px) {
         .split-view-container {
           flex-direction: column;
         }
-        
+
         .split-view-left {
-          flex: 0 0 50vh;
+          flex: 0 0 auto;
+          height: 45vh;
+          min-height: 250px;
+          max-height: 400px;
           border-right: none;
           border-bottom: 1px solid rgba(0, 0, 0, 0.12);
         }
-        
+
         .split-view-right {
           flex: 1;
+          padding: 12px;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .resize-handle {
+          display: none;
+        }
+      }
+
+      /* Phone portrait - more compact chart */
+      @media (max-width: 480px) {
+        .split-view-left {
+          height: 40vh;
+          min-height: 220px;
+          max-height: 320px;
+        }
+
+        .split-view-right {
+          padding: 8px;
         }
       }
       
@@ -322,97 +344,141 @@
     <div id="app">
         <v-app :theme="theme">
             <v-app-bar density="comfortable" elevation="2">
-                <v-app-bar-title class="text-primary">Priority Task Manager</v-app-bar-title>
+                <!-- Responsive title -->
+                <v-app-bar-title class="text-primary">
+                    <span class="d-none d-sm-inline">Priority Task Manager</span>
+                    <span class="d-sm-none">Tasks</span>
+                </v-app-bar-title>
                 <v-spacer></v-spacer>
-                
+
                 <!-- User Profile / Login -->
-                <div v-if="user" class="d-flex align-center me-4">
-                    <v-avatar size="32" class="me-2">
+                <div v-if="user" class="d-flex align-center" :class="$vuetify.display.xs ? 'me-1' : 'me-4'">
+                    <v-avatar :size="$vuetify.display.xs ? 28 : 32" class="me-2">
                         <v-img :src="user.avatar" :alt="user.name"></v-img>
                     </v-avatar>
-                    <span class="text-body-2 me-2 d-none d-sm-inline">{{ user.name }}</span>
-                    <v-btn icon size="small" @click="logout" title="Logout" color="primary">
+                    <span class="text-body-2 me-2 d-none d-md-inline">{{ user.name }}</span>
+                    <v-btn icon size="small" @click="logout" title="Logout" color="primary" class="d-none d-sm-flex">
                         <v-icon>mdi-logout</v-icon>
                     </v-btn>
                 </div>
-                <v-btn v-else-if="authConfig.googleEnabled" color="primary" variant="elevated" prepend-icon="mdi-google" @click="loginWithGoogle" class="me-4">
-                    Login
+                <v-btn v-else-if="authConfig.googleEnabled" color="primary" variant="elevated" prepend-icon="mdi-google" @click="loginWithGoogle" :class="$vuetify.display.xs ? 'me-1' : 'me-4'" :size="$vuetify.display.xs ? 'small' : 'default'">
+                    <span class="d-none d-sm-inline">Login</span>
+                    <span class="d-sm-none">Login</span>
                 </v-btn>
 
-                <!-- Analytics Button (Toggle View) -->
-                <v-btn icon @click="currentView = currentView === 'tasks' ? 'analytics' : 'tasks'" :title="currentView === 'tasks' ? 'View Analytics' : 'Back to Tasks'" color="primary">
-                    <v-icon>{{ currentView === 'tasks' ? 'mdi-chart-line' : 'mdi-arrow-left' }}</v-icon>
-                </v-btn>
-                
-                <!-- CSV Import Icon Button -->
-                <v-btn icon @click="showCsvImportDialog = true" title="Import Tasks from CSV" color="primary">
-                    <v-icon>mdi-file-import</v-icon>
-                </v-btn>
+                <!-- Mobile: Overflow menu for action buttons -->
+                <v-menu v-if="$vuetify.display.xs" location="bottom end">
+                    <template v-slot:activator="{ props }">
+                        <v-btn icon v-bind="props" color="primary">
+                            <v-icon>mdi-dots-vertical</v-icon>
+                        </v-btn>
+                    </template>
+                    <v-list density="compact">
+                        <v-list-item @click="currentView = currentView === 'tasks' ? 'analytics' : 'tasks'">
+                            <template v-slot:prepend>
+                                <v-icon>{{ currentView === 'tasks' ? 'mdi-chart-line' : 'mdi-arrow-left' }}</v-icon>
+                            </template>
+                            <v-list-item-title>{{ currentView === 'tasks' ? 'Analytics' : 'Tasks' }}</v-list-item-title>
+                        </v-list-item>
+                        <v-list-item @click="showCsvImportDialog = true">
+                            <template v-slot:prepend>
+                                <v-icon>mdi-file-import</v-icon>
+                            </template>
+                            <v-list-item-title>Import CSV</v-list-item-title>
+                        </v-list-item>
+                        <v-list-item @click="exportTasks">
+                            <template v-slot:prepend>
+                                <v-icon>mdi-download</v-icon>
+                            </template>
+                            <v-list-item-title>Export Tasks</v-list-item-title>
+                        </v-list-item>
+                        <v-list-item @click="toggleTheme">
+                            <template v-slot:prepend>
+                                <v-icon>{{ isDarkTheme ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
+                            </template>
+                            <v-list-item-title>{{ isDarkTheme ? 'Light Mode' : 'Dark Mode' }}</v-list-item-title>
+                        </v-list-item>
+                        <v-list-item v-if="user" @click="logout">
+                            <template v-slot:prepend>
+                                <v-icon>mdi-logout</v-icon>
+                            </template>
+                            <v-list-item-title>Logout</v-list-item-title>
+                        </v-list-item>
+                    </v-list>
+                </v-menu>
 
-                <!-- Export Tasks Button (Real Data) -->
-                <v-btn icon @click="exportTasks" title="Export Current Tasks to CSV" color="primary">
-                    <v-icon>mdi-download</v-icon>
-                </v-btn>
-                
-                <v-btn icon @click="toggleTheme" title="Toggle Theme" color="primary">
-                    <v-icon>{{ isDarkTheme ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
-                </v-btn>
+                <!-- Desktop: Show all action buttons -->
+                <template v-if="!$vuetify.display.xs">
+                    <v-btn icon @click="currentView = currentView === 'tasks' ? 'analytics' : 'tasks'" :title="currentView === 'tasks' ? 'View Analytics' : 'Back to Tasks'" color="primary">
+                        <v-icon>{{ currentView === 'tasks' ? 'mdi-chart-line' : 'mdi-arrow-left' }}</v-icon>
+                    </v-btn>
+                    <v-btn icon @click="showCsvImportDialog = true" title="Import Tasks from CSV" color="primary">
+                        <v-icon>mdi-file-import</v-icon>
+                    </v-btn>
+                    <v-btn icon @click="exportTasks" title="Export Current Tasks to CSV" color="primary">
+                        <v-icon>mdi-download</v-icon>
+                    </v-btn>
+                    <v-btn icon @click="toggleTheme" title="Toggle Theme" color="primary">
+                        <v-icon>{{ isDarkTheme ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
+                    </v-btn>
+                </template>
             </v-app-bar>
 
             <v-main class="split-view-main">
                 <!-- Analytics View (ECharts) -->
-                <div v-if="currentView === 'analytics'" class="analytics-view" style="height: 100%; overflow-y: auto; padding: 16px;">
-                    <v-container fluid>
+                <div v-if="currentView === 'analytics'" class="analytics-view" style="height: 100%; overflow-y: auto;" :style="$vuetify.display.xs ? 'padding: 8px;' : 'padding: 16px;'">
+                    <v-container fluid :class="$vuetify.display.xs ? 'pa-0' : ''">
                         <!-- Header -->
                         <v-row class="mb-4">
                             <v-col cols="12">
-                                <h1 class="text-h4 text-primary d-flex align-center">
-                                    <v-icon class="me-3" size="32">mdi-chart-areaspline</v-icon>
-                                    Productivity Analytics
+                                <h1 :class="$vuetify.display.xs ? 'text-h5' : 'text-h4'" class="text-primary d-flex align-center">
+                                    <v-icon class="me-2" :size="$vuetify.display.xs ? 24 : 32">mdi-chart-areaspline</v-icon>
+                                    <span class="d-none d-sm-inline">Productivity Analytics</span>
+                                    <span class="d-sm-none">Analytics</span>
                                 </h1>
-                                <p class="text-subtitle-1 text-grey mt-1">Track your focus time, streaks, and productivity insights</p>
+                                <p class="text-subtitle-2 text-grey mt-1 d-none d-sm-block">Track your focus time, streaks, and productivity insights</p>
                             </v-col>
                         </v-row>
 
-                        <!-- Top Stats Row -->
+                        <!-- Top Stats Row - 2 columns on mobile -->
                         <v-row class="mb-4">
-                            <v-col cols="12" sm="6" md="3">
-                                <v-card elevation="4" class="pa-4 text-center" color="primary" variant="tonal">
-                                    <v-icon size="40" color="primary" class="mb-2">mdi-target</v-icon>
-                                    <div class="text-h3 font-weight-bold text-primary">{{ analytics.productivityScore }}%</div>
-                                    <div class="text-subtitle-2 text-grey">Productivity Score</div>
-                                    <div class="text-caption text-grey-darken-1">Time on high-importance tasks</div>
+                            <v-col cols="6" sm="6" md="3">
+                                <v-card elevation="4" :class="$vuetify.display.xs ? 'pa-2' : 'pa-4'" class="text-center" color="primary" variant="tonal">
+                                    <v-icon :size="$vuetify.display.xs ? 28 : 40" color="primary" class="mb-1">mdi-target</v-icon>
+                                    <div :class="$vuetify.display.xs ? 'text-h5' : 'text-h3'" class="font-weight-bold text-primary">{{ analytics.productivityScore }}%</div>
+                                    <div class="text-caption text-grey">Productivity</div>
+                                    <div class="text-caption text-grey-darken-1 d-none d-sm-block">Time on high-importance tasks</div>
                                 </v-card>
                             </v-col>
-                            <v-col cols="12" sm="6" md="3">
-                                <v-card elevation="4" class="pa-4 text-center" color="success" variant="tonal">
-                                    <v-icon size="40" color="success" class="mb-2">mdi-fire</v-icon>
-                                    <div class="text-h3 font-weight-bold text-success">{{ analytics.currentStreak }}</div>
-                                    <div class="text-subtitle-2 text-grey">Day Streak</div>
-                                    <div class="text-caption text-grey-darken-1">Consecutive focus days</div>
+                            <v-col cols="6" sm="6" md="3">
+                                <v-card elevation="4" :class="$vuetify.display.xs ? 'pa-2' : 'pa-4'" class="text-center" color="success" variant="tonal">
+                                    <v-icon :size="$vuetify.display.xs ? 28 : 40" color="success" class="mb-1">mdi-fire</v-icon>
+                                    <div :class="$vuetify.display.xs ? 'text-h5' : 'text-h3'" class="font-weight-bold text-success">{{ analytics.currentStreak }}</div>
+                                    <div class="text-caption text-grey">Day Streak</div>
+                                    <div class="text-caption text-grey-darken-1 d-none d-sm-block">Consecutive focus days</div>
                                 </v-card>
                             </v-col>
-                            <v-col cols="12" sm="6" md="3">
-                                <v-card elevation="4" class="pa-4 text-center" color="info" variant="tonal">
-                                    <v-icon size="40" color="info" class="mb-2">mdi-clock-outline</v-icon>
-                                    <div class="text-h3 font-weight-bold text-info">{{ analytics.thisWeekHours }}h</div>
-                                    <div class="text-subtitle-2 text-grey">This Week</div>
+                            <v-col cols="6" sm="6" md="3">
+                                <v-card elevation="4" :class="$vuetify.display.xs ? 'pa-2' : 'pa-4'" class="text-center" color="info" variant="tonal">
+                                    <v-icon :size="$vuetify.display.xs ? 28 : 40" color="info" class="mb-1">mdi-clock-outline</v-icon>
+                                    <div :class="$vuetify.display.xs ? 'text-h5' : 'text-h3'" class="font-weight-bold text-info">{{ analytics.thisWeekHours }}h</div>
+                                    <div class="text-caption text-grey">This Week</div>
                                     <v-chip
                                         :color="analytics.weekChange >= 0 ? 'success' : 'error'"
                                         size="x-small"
-                                        class="mt-1"
+                                        class="mt-1 d-none d-sm-inline-flex"
                                     >
                                         <v-icon size="12" start>{{ analytics.weekChange >= 0 ? 'mdi-arrow-up' : 'mdi-arrow-down' }}</v-icon>
-                                        {{ Math.abs(analytics.weekChange) }}% vs last week
+                                        {{ Math.abs(analytics.weekChange) }}%
                                     </v-chip>
                                 </v-card>
                             </v-col>
-                            <v-col cols="12" sm="6" md="3">
-                                <v-card elevation="4" class="pa-4 text-center" color="warning" variant="tonal">
-                                    <v-icon size="40" color="warning" class="mb-2">mdi-timer</v-icon>
-                                    <div class="text-h3 font-weight-bold text-warning">{{ analytics.totalPomodoros }}</div>
-                                    <div class="text-subtitle-2 text-grey">Total Pomodoros</div>
-                                    <div class="text-caption text-grey-darken-1">25+ min sessions</div>
+                            <v-col cols="6" sm="6" md="3">
+                                <v-card elevation="4" :class="$vuetify.display.xs ? 'pa-2' : 'pa-4'" class="text-center" color="warning" variant="tonal">
+                                    <v-icon :size="$vuetify.display.xs ? 28 : 40" color="warning" class="mb-1">mdi-timer</v-icon>
+                                    <div :class="$vuetify.display.xs ? 'text-h5' : 'text-h3'" class="font-weight-bold text-warning">{{ analytics.totalPomodoros }}</div>
+                                    <div class="text-caption text-grey">Pomodoros</div>
+                                    <div class="text-caption text-grey-darken-1 d-none d-sm-block">25+ min sessions</div>
                                 </v-card>
                             </v-col>
                         </v-row>
@@ -533,9 +599,56 @@
                         <v-card class="chart-card" elevation="3">
                             <v-card-title class="text-h6 d-flex align-center pa-3">
                                 <v-icon class="me-2" color="primary">mdi-chart-scatter-plot</v-icon>
-                                Eisenhower Matrix
+                                {{ isQ1ZoomMode ? 'Q1 Zoom: Priorities' : 'Eisenhower Matrix' }}
                                 <v-spacer></v-spacer>
-                                <v-chip color="primary" size="small">{{ activeTasks.length }}</v-chip>
+                                <v-btn
+                                    icon="mdi-plus"
+                                    variant="text"
+                                    size="small"
+                                    @click="zoomIn"
+                                    color="primary"
+                                    title="Zoom In"
+                                    class="me-1"
+                                ></v-btn>
+                                <v-btn
+                                    icon="mdi-minus"
+                                    variant="text"
+                                    size="small"
+                                    @click="zoomOut"
+                                    color="primary"
+                                    title="Zoom Out"
+                                    class="me-1"
+                                ></v-btn>
+                                <v-btn
+                                    v-if="isChartZoomed"
+                                    icon="mdi-restore"
+                                    variant="text"
+                                    size="small"
+                                    @click="toggleQ1ZoomMode"
+                                    color="error"
+                                    title="Reset Zoom"
+                                    class="me-1"
+                                ></v-btn>
+                                <v-btn
+                                    v-else
+                                    icon="mdi-magnify-plus"
+                                    variant="text"
+                                    size="small"
+                                    @click="toggleQ1ZoomMode"
+                                    color="primary"
+                                    title="Zoom Q1 (Important & Urgent)"
+                                    class="me-1"
+                                ></v-btn>
+                                <v-btn
+                                    icon="mdi-chart-network"
+                                    variant="text"
+                                    size="small"
+                                    @click="toggleRelationships"
+                                    :color="showRelationships ? 'purple' : 'primary'"
+                                    :title="showRelationships ? 'Hide Task Relationships' : 'Show Task Relationships'"
+                                    class="me-2"
+                                ></v-btn>
+                                <v-chip :color="isQ1ZoomMode ? 'error' : 'primary'" size="small">{{ activeTasks.length }}</v-chip>
                             </v-card-title>
                             <v-card-text class="chart-content">
                                 <div id="taskChart" :style="chartStyle"></div>
@@ -564,7 +677,19 @@
                         >
                             Active Tasks
                             <v-spacer></v-spacer>
-                            <v-chip color="primary" size="small">{{ activeTasks.length }}</v-chip>
+                            <v-chip color="primary" size="small" class="me-2">{{ activeTasks.length }}</v-chip>
+                            <v-btn 
+                                variant="text" 
+                                icon 
+                                @click="toggleInfluenceMode"
+                                class="ms-2"
+                                :color="influenceMode ? 'purple' : 'primary'"
+                                :title="influenceMode ? 'Switch to Importance Mode' : 'Switch to Influence Mode'"
+                            >
+                                <v-icon>
+                                    {{ influenceMode ? 'mdi-arrow-up-bold-circle' : 'mdi-star-circle' }}
+                                </v-icon>
+                            </v-btn>
                             <v-btn 
                                 variant="text" 
                                 icon 
@@ -726,9 +851,16 @@
             </v-main>
 
             <!-- Subtask Modal Dialog -->
-            <v-dialog v-model="showSubtaskModal" max-width="500px">
-                <v-card>
-                    <v-card-title class="text-h5">Add Subtask</v-card-title>
+            <v-dialog v-model="showSubtaskModal" :fullscreen="$vuetify.display.xs" :max-width="$vuetify.display.xs ? undefined : '500px'" scrollable>
+                <v-card :rounded="$vuetify.display.xs ? 0 : 'lg'">
+                    <!-- Mobile toolbar -->
+                    <v-toolbar v-if="$vuetify.display.xs" color="primary" density="compact">
+                        <v-btn icon @click="closeSubtaskModal"><v-icon>mdi-close</v-icon></v-btn>
+                        <v-toolbar-title>Add Subtask</v-toolbar-title>
+                        <v-spacer></v-spacer>
+                        <v-btn variant="text" @click="addSubtask">Add</v-btn>
+                    </v-toolbar>
+                    <v-card-title v-else class="text-h5">Add Subtask</v-card-title>
                     <v-card-text>
                         <v-form @submit.prevent="addSubtask">
                             <v-text-field
@@ -770,26 +902,32 @@
                                 placeholder="Add a URL (http://example.com)"
                             ></v-text-field>
                             
-                            <v-subheader>Importance (1-10)</v-subheader>
+                            <div class="d-flex align-center justify-space-between mb-1">
+                                <span class="text-subtitle-2">Importance: {{ Number(newSubtask.importance).toFixed(1) }}</span>
+                            </div>
                             <v-slider
                                 v-model="newSubtask.importance"
                                 min="1"
                                 max="10"
-                                step="1"
-                                show-ticks="always"
+                                step="0.1"
                                 color="primary"
                                 thumb-label
+                                hide-details
+                                class="mb-4"
                             ></v-slider>
                             
-                            <v-subheader>Urgency (1-10)</v-subheader>
+                            <div class="d-flex align-center justify-space-between mb-1">
+                                <span class="text-subtitle-2">Urgency: {{ Number(newSubtask.urgency).toFixed(1) }}</span>
+                            </div>
                             <v-slider
                                 v-model="newSubtask.urgency"
                                 min="1"
                                 max="10"
-                                step="1"
-                                show-ticks="always"
+                                step="0.1"
                                 color="secondary"
                                 thumb-label
+                                hide-details
+                                class="mb-4"
                             ></v-slider>
                             
                             <v-date-picker
@@ -808,9 +946,16 @@
             </v-dialog>
 
             <!-- Edit Subtask Dialog -->
-            <v-dialog v-model="showEditForm" max-width="500px">
-                <v-card>
-                    <v-card-title class="text-h5">Edit Subtask</v-card-title>
+            <v-dialog v-model="showEditForm" :fullscreen="$vuetify.display.xs" :max-width="$vuetify.display.xs ? undefined : '600px'" scrollable>
+                <v-card :rounded="$vuetify.display.xs ? 0 : 'lg'">
+                    <!-- Mobile toolbar -->
+                    <v-toolbar v-if="$vuetify.display.xs" color="primary" density="compact">
+                        <v-btn icon @click="cancelEdit"><v-icon>mdi-close</v-icon></v-btn>
+                        <v-toolbar-title>Edit Subtask</v-toolbar-title>
+                        <v-spacer></v-spacer>
+                        <v-btn variant="text" @click="saveSubtaskEdit">Save</v-btn>
+                    </v-toolbar>
+                    <v-card-title v-else class="text-h5">Edit Subtask</v-card-title>
                     <v-card-text>
                         <v-form @submit.prevent="saveSubtaskEdit">
                             <v-text-field
@@ -844,16 +989,17 @@
                                     </v-menu>
                                 </template>
                             </v-text-field>
-                            
+
                             <v-text-field
                                 v-model="editingSubtask.link"
                                 label="Link (optional)"
                                 variant="outlined"
                                 placeholder="Add a URL (http://example.com)"
+                                class="mb-3"
                             ></v-text-field>
-                            
+
                             <div class="d-flex align-center justify-space-between mb-1 mt-2">
-                                <span class="text-subtitle-2">Importance: {{ editingSubtask.importance }}</span>
+                                <span class="text-subtitle-2">Importance: {{ Number(editingSubtask.importance).toFixed(1) }}</span>
                                 <v-chip :color="getPriorityColor(editingSubtask.importance)" size="x-small" variant="flat">
                                     {{ editingSubtask.importance >= 8 ? 'CRITICAL' : (editingSubtask.importance >= 5 ? 'HIGH' : 'LOW') }}
                                 </v-chip>
@@ -862,7 +1008,7 @@
                                 v-model="editingSubtask.importance"
                                 min="1"
                                 max="10"
-                                step="1"
+                                step="0.1"
                                 :color="getPriorityColor(editingSubtask.importance)"
                                 track-color="grey-lighten-3"
                                 hide-details
@@ -871,10 +1017,13 @@
                                 <template v-slot:prepend>
                                     <v-icon size="small" color="grey">mdi-star-outline</v-icon>
                                 </template>
+                                <template v-slot:append>
+                                    <v-icon size="small" :color="getPriorityColor(editingSubtask.importance)">mdi-star</v-icon>
+                                </template>
                             </v-slider>
-                            
+
                             <div class="d-flex align-center justify-space-between mb-1">
-                                <span class="text-subtitle-2">Urgency: {{ editingSubtask.urgency }}</span>
+                                <span class="text-subtitle-2">Urgency: {{ Number(editingSubtask.urgency).toFixed(1) }}</span>
                                 <v-chip :color="getPriorityColor(editingSubtask.urgency)" size="x-small" variant="flat">
                                     {{ editingSubtask.urgency >= 8 ? 'IMMEDIATE' : (editingSubtask.urgency >= 5 ? 'SOON' : 'LATER') }}
                                 </v-chip>
@@ -883,7 +1032,7 @@
                                 v-model="editingSubtask.urgency"
                                 min="1"
                                 max="10"
-                                step="1"
+                                step="0.1"
                                 :color="getPriorityColor(editingSubtask.urgency)"
                                 track-color="grey-lighten-3"
                                 hide-details
@@ -892,8 +1041,11 @@
                                 <template v-slot:prepend>
                                     <v-icon size="small" color="grey">mdi-clock-outline</v-icon>
                                 </template>
+                                <template v-slot:append>
+                                    <v-icon size="small" :color="getPriorityColor(editingSubtask.urgency)">mdi-clock-fast</v-icon>
+                                </template>
                             </v-slider>
-                            
+
                             <v-select
                                 v-model="editingSubtask.parent_id"
                                 :items="possibleParents"
@@ -901,8 +1053,9 @@
                                 item-value="id"
                                 label="Parent Task"
                                 variant="outlined"
+                                class="mb-3"
                             ></v-select>
-                            
+
                             <v-date-picker
                                 v-model="editingSubtask.due_date"
                                 label="Due Date (Optional)"
@@ -919,9 +1072,16 @@
             </v-dialog>
 
             <!-- Edit Task Dialog -->
-            <v-dialog v-model="showTaskEditForm" max-width="500px">
-                <v-card>
-                    <v-card-title class="text-h5">Edit Task</v-card-title>
+            <v-dialog v-model="showTaskEditForm" :fullscreen="$vuetify.display.xs" :max-width="$vuetify.display.xs ? undefined : '600px'" scrollable>
+                <v-card :rounded="$vuetify.display.xs ? 0 : 'lg'">
+                    <!-- Mobile toolbar -->
+                    <v-toolbar v-if="$vuetify.display.xs" color="primary" density="compact">
+                        <v-btn icon @click="cancelTaskEdit"><v-icon>mdi-close</v-icon></v-btn>
+                        <v-toolbar-title>Edit Task</v-toolbar-title>
+                        <v-spacer></v-spacer>
+                        <v-btn variant="text" @click="saveTaskEdit">Save</v-btn>
+                    </v-toolbar>
+                    <v-card-title v-else class="text-h5">Edit Task</v-card-title>
                     <v-card-text>
                         <v-form @submit.prevent="saveTaskEdit">
                             <v-text-field
@@ -955,16 +1115,17 @@
                                     </v-menu>
                                 </template>
                             </v-text-field>
-                            
+
                             <v-text-field
                                 v-model="editingTask.link"
                                 label="Link (optional)"
                                 variant="outlined"
                                 placeholder="Add a URL (http://example.com)"
+                                class="mb-3"
                             ></v-text-field>
-                            
+
                             <div class="d-flex align-center justify-space-between mb-1 mt-2">
-                                <span class="text-subtitle-2">Importance: {{ editingTask.importance }}</span>
+                                <span class="text-subtitle-2">Importance: {{ Number(editingTask.importance).toFixed(1) }}</span>
                                 <v-chip :color="getPriorityColor(editingTask.importance)" size="x-small" variant="flat">
                                     {{ editingTask.importance >= 8 ? 'CRITICAL' : (editingTask.importance >= 5 ? 'HIGH' : 'LOW') }}
                                 </v-chip>
@@ -973,7 +1134,7 @@
                                 v-model="editingTask.importance"
                                 min="1"
                                 max="10"
-                                step="1"
+                                step="0.1"
                                 :color="getPriorityColor(editingTask.importance)"
                                 track-color="grey-lighten-3"
                                 hide-details
@@ -982,10 +1143,13 @@
                                 <template v-slot:prepend>
                                     <v-icon size="small" color="grey">mdi-star-outline</v-icon>
                                 </template>
+                                <template v-slot:append>
+                                    <v-icon size="small" :color="getPriorityColor(editingTask.importance)">mdi-star</v-icon>
+                                </template>
                             </v-slider>
-                            
+
                             <div class="d-flex align-center justify-space-between mb-1">
-                                <span class="text-subtitle-2">Urgency: {{ editingTask.urgency }}</span>
+                                <span class="text-subtitle-2">Urgency: {{ Number(editingTask.urgency).toFixed(1) }}</span>
                                 <v-chip :color="getPriorityColor(editingTask.urgency)" size="x-small" variant="flat">
                                     {{ editingTask.urgency >= 8 ? 'IMMEDIATE' : (editingTask.urgency >= 5 ? 'SOON' : 'LATER') }}
                                 </v-chip>
@@ -994,7 +1158,7 @@
                                 v-model="editingTask.urgency"
                                 min="1"
                                 max="10"
-                                step="1"
+                                step="0.1"
                                 :color="getPriorityColor(editingTask.urgency)"
                                 track-color="grey-lighten-3"
                                 hide-details
@@ -1003,8 +1167,51 @@
                                 <template v-slot:prepend>
                                     <v-icon size="small" color="grey">mdi-clock-outline</v-icon>
                                 </template>
+                                <template v-slot:append>
+                                    <v-icon size="small" :color="getPriorityColor(editingTask.urgency)">mdi-clock-fast</v-icon>
+                                </template>
                             </v-slider>
-                            
+
+                            <v-autocomplete
+                                v-model="editingTask.enables"
+                                :items="activeTasksForEditing"
+                                item-title="name"
+                                item-value="id"
+                                label="What tasks does this make easier?"
+                                multiple
+                                chips
+                                closable-chips
+                                variant="outlined"
+                                hint="Select tasks that become easier when this is done"
+                                persistent-hint
+                                prepend-inner-icon="mdi-arrow-right-bold"
+                                class="mb-3"
+                            >
+                                <template v-slot:chip="{ props, item }">
+                                    <v-chip
+                                        v-bind="props"
+                                        color="purple"
+                                        variant="flat"
+                                        size="small"
+                                    >
+                                        <v-icon start size="small">mdi-arrow-right-bold</v-icon>
+                                        {{ item.raw.name }}
+                                    </v-chip>
+                                </template>
+                                <template v-slot:item="{ props, item }">
+                                    <v-list-item v-bind="props" :title="item.raw.name">
+                                        <template v-slot:prepend>
+                                            <v-icon color="purple" size="small">mdi-checkbox-blank-circle-outline</v-icon>
+                                        </template>
+                                        <template v-slot:subtitle>
+                                            <span class="text-caption">
+                                                Importance: {{ Number(item.raw.importance).toFixed(1) }} | Urgency: {{ Number(item.raw.urgency).toFixed(1) }}
+                                            </span>
+                                        </template>
+                                    </v-list-item>
+                                </template>
+                            </v-autocomplete>
+
                             <v-date-picker
                                 v-model="editingTask.due_date"
                                 label="Due Date (Optional)"
@@ -1021,9 +1228,16 @@
             </v-dialog>
 
             <!-- Notes Dialog -->
-            <v-dialog v-model="showNotesDialog" max-width="600px" persistent scrollable>
-                <v-card v-if="currentTask" style="min-height: 400px">
-                    <v-card-title class="text-h5 bg-primary text-white">
+            <v-dialog v-model="showNotesDialog" :fullscreen="$vuetify.display.xs" :max-width="$vuetify.display.xs ? undefined : '600px'" persistent scrollable>
+                <v-card v-if="currentTask" :style="$vuetify.display.xs ? '' : 'min-height: 400px'" :rounded="$vuetify.display.xs ? 0 : 'lg'">
+                    <!-- Mobile toolbar -->
+                    <v-toolbar v-if="$vuetify.display.xs" color="primary" density="compact">
+                        <v-btn icon @click="closeNotesDialog"><v-icon>mdi-close</v-icon></v-btn>
+                        <v-toolbar-title>{{ currentTask.notes ? 'Edit Notes' : 'Add Notes' }}</v-toolbar-title>
+                        <v-spacer></v-spacer>
+                        <v-btn variant="text" @click="saveTaskNotes">Save</v-btn>
+                    </v-toolbar>
+                    <v-card-title v-else class="text-h5 bg-primary text-white">
                         {{ currentTask.notes ? 'Edit Notes: ' : 'Add Notes: ' }} {{ currentTask.name }}
                     </v-card-title>
                     <v-card-text class="pa-4">
@@ -1056,9 +1270,16 @@
             </v-dialog>
 
             <!-- CSV Import Dialog -->
-            <v-dialog v-model="showCsvImportDialog" max-width="600px">
-                <v-card>
-                    <v-card-title class="text-h5 d-flex align-center">
+            <v-dialog v-model="showCsvImportDialog" :fullscreen="$vuetify.display.xs" :max-width="$vuetify.display.xs ? undefined : '600px'" scrollable>
+                <v-card :rounded="$vuetify.display.xs ? 0 : 'lg'">
+                    <!-- Mobile toolbar -->
+                    <v-toolbar v-if="$vuetify.display.xs" color="primary" density="compact">
+                        <v-btn icon @click="showCsvImportDialog = false"><v-icon>mdi-close</v-icon></v-btn>
+                        <v-toolbar-title>Import CSV</v-toolbar-title>
+                        <v-spacer></v-spacer>
+                        <v-btn variant="text" @click="importCSV" :disabled="!csvFile">Import</v-btn>
+                    </v-toolbar>
+                    <v-card-title v-else class="text-h5 d-flex align-center">
                         <v-icon class="me-2" color="success">mdi-file-import</v-icon>
                         Import Tasks from CSV
                     </v-card-title>
@@ -1124,9 +1345,16 @@
             </v-dialog>
 
             <!-- Quick Add Task Modal -->
-            <v-dialog v-model="showQuickAddModal" max-width="600px">
-                <v-card>
-                    <v-card-title class="text-h5 d-flex align-center">
+            <v-dialog v-model="showQuickAddModal" :fullscreen="$vuetify.display.xs" :max-width="$vuetify.display.xs ? undefined : '600px'" scrollable>
+                <v-card :rounded="$vuetify.display.xs ? 0 : 'lg'">
+                    <!-- Mobile toolbar -->
+                    <v-toolbar v-if="$vuetify.display.xs" color="primary" density="compact">
+                        <v-btn icon @click="closeQuickAddModal"><v-icon>mdi-close</v-icon></v-btn>
+                        <v-toolbar-title>Quick Add Task</v-toolbar-title>
+                        <v-spacer></v-spacer>
+                        <v-btn variant="text" @click="submitQuickTask">Add</v-btn>
+                    </v-toolbar>
+                    <v-card-title v-else class="text-h5 d-flex align-center">
                         <v-icon class="me-2" color="primary">mdi-plus-circle-outline</v-icon>
                         Quick Add Task
                     </v-card-title>
@@ -1170,16 +1398,16 @@
                             <v-row class="mb-3">
                                 <v-col cols="12">
                                     <div class="d-flex align-center justify-space-between mb-1">
-                                        <span class="text-subtitle-2">Importance: {{ quickAddTask.importance }}</span>
+                                        <span class="text-subtitle-2">Importance: {{ isQ1ZoomMode ? quickAddTask.importance.toFixed(1) : quickAddTask.importance }}</span>
                                         <v-chip :color="getPriorityColor(quickAddTask.importance)" size="x-small" variant="flat">
                                             {{ quickAddTask.importance >= 8 ? 'CRITICAL' : (quickAddTask.importance >= 5 ? 'HIGH' : 'LOW') }}
                                         </v-chip>
                                     </div>
                                     <v-slider
                                         v-model="quickAddTask.importance"
-                                        min="1"
-                                        max="10"
-                                        step="1"
+                                        :min="isQ1ZoomMode ? 5 : 1"
+                                        :max="10"
+                                        :step="isQ1ZoomMode ? 0.1 : 1"
                                         :color="getPriorityColor(quickAddTask.importance)"
                                         track-color="grey-lighten-3"
                                         hide-details
@@ -1192,19 +1420,19 @@
                                         </template>
                                     </v-slider>
                                 </v-col>
-                                
+
                                 <v-col cols="12" class="mt-2">
                                     <div class="d-flex align-center justify-space-between mb-1">
-                                        <span class="text-subtitle-2">Urgency: {{ quickAddTask.urgency }}</span>
+                                        <span class="text-subtitle-2">Urgency: {{ isQ1ZoomMode ? quickAddTask.urgency.toFixed(1) : quickAddTask.urgency }}</span>
                                         <v-chip :color="getPriorityColor(quickAddTask.urgency)" size="x-small" variant="flat">
                                             {{ quickAddTask.urgency >= 8 ? 'IMMEDIATE' : (quickAddTask.urgency >= 5 ? 'SOON' : 'LATER') }}
                                         </v-chip>
                                     </div>
                                     <v-slider
                                         v-model="quickAddTask.urgency"
-                                        min="1"
-                                        max="10"
-                                        step="1"
+                                        :min="isQ1ZoomMode ? 5 : 1"
+                                        :max="10"
+                                        :step="isQ1ZoomMode ? 0.1 : 1"
                                         :color="getPriorityColor(quickAddTask.urgency)"
                                         track-color="grey-lighten-3"
                                         hide-details
@@ -1233,7 +1461,47 @@
                                 placeholder="Additional details..."
                                 variant="outlined"
                                 rows="3"
+                                class="mb-3"
                             ></v-textarea>
+
+                            <v-autocomplete
+                                v-model="quickAddTask.enables"
+                                :items="activeTasksForLinking"
+                                item-title="name"
+                                item-value="id"
+                                label="What tasks does this make easier?"
+                                multiple
+                                chips
+                                closable-chips
+                                variant="outlined"
+                                hint="Select tasks that become easier when this is done"
+                                persistent-hint
+                                prepend-inner-icon="mdi-arrow-right-bold"
+                            >
+                                <template v-slot:chip="{ props, item }">
+                                    <v-chip
+                                        v-bind="props"
+                                        color="purple"
+                                        variant="flat"
+                                        size="small"
+                                    >
+                                        <v-icon start size="small">mdi-arrow-right-bold</v-icon>
+                                        {{ item.raw.name }}
+                                    </v-chip>
+                                </template>
+                                <template v-slot:item="{ props, item }">
+                                    <v-list-item v-bind="props" :title="item.raw.name">
+                                        <template v-slot:prepend>
+                                            <v-icon color="purple" size="small">mdi-checkbox-blank-circle-outline</v-icon>
+                                        </template>
+                                        <template v-slot:subtitle>
+                                            <span class="text-caption">
+                                                Importance: {{ item.raw.importance }} | Urgency: {{ item.raw.urgency }}
+                                            </span>
+                                        </template>
+                                    </v-list-item>
+                                </template>
+                            </v-autocomplete>
                         </v-form>
                     </v-card-text>
                     <v-card-actions>
@@ -1258,8 +1526,8 @@
             </v-dialog>
 
             <!-- Pomodoro Break Dialog -->
-            <v-dialog v-model="showBreakDialog" max-width="500px" persistent>
-                <v-card>
+            <v-dialog v-model="showBreakDialog" :max-width="$vuetify.display.xs ? '95%' : '500px'" persistent>
+                <v-card rounded="lg">
                     <v-card-title class="text-h5 bg-success text-white">
                         🍅 Pomodoro Complete!
                     </v-card-title>

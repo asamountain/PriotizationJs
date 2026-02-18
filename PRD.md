@@ -349,7 +349,7 @@ node server.js
 
 ### 7.2 Port Configuration
 - Default: `3000`
-- Auto-fallback: If 3000 is taken, tries 3001, 3002, etc.
+- Fixed Port: Uses port 3000 (or PORT env) to ensure OAuth redirect URLs remain valid.
 - Browser auto-opens on macOS via `open` command
 
 ### 7.3 Data Persistence

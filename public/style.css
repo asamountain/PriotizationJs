@@ -42,6 +42,15 @@
     --q2-color: #4caf50;    /* Important & Not Urgent */
     --q3-color: #ff9800;    /* Not Important & Urgent */
     --q4-color: #2196f3;    /* Not Important & Not Urgent */
+
+    /* Mobile-first responsive variables */
+    --touch-target-min: 44px;
+    --touch-target-comfortable: 48px;
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
 }
 
 .dark-theme {
@@ -1297,4 +1306,161 @@ input[type="range"]::-ms-thumb {
 
 .selected-dot {
   stroke: #4285f4;
+}
+
+/* ===== Mobile Responsive Styles ===== */
+
+/* Touch-friendly targets for touch devices */
+@media (pointer: coarse) {
+  .v-btn--icon.v-btn--size-small,
+  .v-btn--icon.v-btn--size-x-small {
+    min-width: var(--touch-target-min) !important;
+    min-height: var(--touch-target-min) !important;
+  }
+
+  .v-list-item {
+    min-height: 56px !important;
+  }
+
+  .v-list-item--density-compact {
+    min-height: 48px !important;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
+
+  .v-checkbox .v-selection-control__wrapper {
+    width: 40px;
+    height: 40px;
+  }
+
+  .v-chip--size-x-small {
+    height: 28px !important;
+    padding: 0 10px !important;
+  }
+
+  .task-item {
+    touch-action: pan-y;
+  }
+}
+
+/* Mobile notifications - position at bottom */
+@media (max-width: 599px) {
+  #notification-container {
+    top: auto !important;
+    bottom: 16px !important;
+    left: 12px !important;
+    right: 12px !important;
+    max-width: none !important;
+  }
+
+  .notification {
+    width: 100% !important;
+    max-width: none !important;
+    border-radius: 8px;
+  }
+}
+
+/* Mobile task list optimizations */
+@media (max-width: 600px) {
+  .v-list-item {
+    padding: var(--spacing-xs) var(--spacing-sm) !important;
+  }
+
+  /* Hide nudge buttons on mobile - use drag instead */
+  .nudge-btn {
+    display: none !important;
+  }
+
+  /* Compact timer display */
+  .timer-display {
+    font-size: 0.75rem !important;
+    padding: 2px 6px !important;
+  }
+
+  .timer-group {
+    padding: 4px 8px !important;
+  }
+
+  /* Compact action buttons */
+  .task-item .v-list-item__append {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 2px;
+  }
+
+  /* Subtasks indent less on mobile */
+  .subtasks-wrapper {
+    margin-left: 16px !important;
+  }
+}
+
+/* Touch drag-drop visual feedback */
+.touch-dragging {
+  opacity: 0.3 !important;
+  background-color: rgba(var(--primary-color-rgb), 0.1) !important;
+}
+
+.touch-drop-target {
+  background-color: rgba(var(--primary-color-rgb), 0.15) !important;
+  border: 2px dashed var(--primary-color) !important;
+  border-radius: 8px;
+}
+
+.touch-drag-clone {
+  border-radius: 8px;
+  background: var(--background-primary);
+  border: 2px solid var(--primary-color);
+}
+
+/* Mobile horizontal scroll for stats */
+.mobile-stats-scroll {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mobile-stats-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile modal improvements */
+@media (max-width: 599px) {
+  .v-dialog > .v-overlay__content {
+    margin: 0 !important;
+    max-height: 100% !important;
+  }
+
+  .v-dialog .v-slider {
+    padding: 12px 0 !important;
+  }
+
+  /* Stack form fields vertically in modals */
+  .v-dialog .v-row.flex-row {
+    flex-direction: column;
+  }
+}
+
+/* Mobile chart tooltip as bottom sheet */
+.chart-tooltip.mobile-tooltip {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  top: auto !important;
+  transform: none !important;
+  max-width: 100% !important;
+  border-radius: 16px 16px 0 0 !important;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15) !important;
 }

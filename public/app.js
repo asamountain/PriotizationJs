@@ -86,7 +86,7 @@ window.addEventListener('DOMContentLoaded', () => {
         showSubtaskModal: false,
         parentId: null,
         showCompletedSubtasks: false,
-        showNotSureTasks: false,
+        showNotSureTasks: localStorage.getItem('showNotSureTasks') === 'true',
         taskSectionOpen: {
           active: true,
           completed: false
@@ -110,7 +110,8 @@ window.addEventListener('DOMContentLoaded', () => {
           urgency: 5,
           link: '',
           due_date: null,
-          icon: 'mdi-checkbox-blank-circle-outline'
+          icon: 'mdi-checkbox-blank-circle-outline',
+          enables: []
         },
         possibleParents: [],
         snackbar: {
@@ -128,30 +129,24 @@ window.addEventListener('DOMContentLoaded', () => {
         csvImporting: false,
         csvImportResult: null,
         taskSortBy: localStorage.getItem('taskSortBy') || 'priority-high', // Default sort
-        taskSortOptions: [
-          { value: 'priority-high', title: '🔥 Priority (High → Low)' },
-          { value: 'priority-low', title: '❄️ Priority (Low → High)' },
-          { value: 'importance-high', title: '⭐ Importance (High → Low)' },
-          { value: 'importance-low', title: '⭐ Importance (Low → High)' },
-          { value: 'urgency-high', title: '⚡ Urgency (High → Low)' },
-          { value: 'urgency-low', title: '⚡ Urgency (Low → High)' },
-          { value: 'newest', title: '🆕 Newest First' },
-          { value: 'oldest', title: '📅 Oldest First' },
-          { value: 'due-date', title: '⏰ Due Date (Closest)' },
-          { value: 'name-az', title: '🔤 Name (A → Z)' }
-        ],
         leftPanelWidth: parseFloat(localStorage.getItem('leftPanelWidth')) || 55,
         isResizing: false,
         showCsvImportDialog: false,
         showQuickAddModal: false,
+        influenceMode: localStorage.getItem('influenceMode') === 'true',
         quickAddTask: {
           name: '',
           importance: 5,
           urgency: 5,
           link: '',
           notes: '',
-          icon: 'mdi-checkbox-blank-circle-outline'
+          icon: 'mdi-checkbox-blank-circle-outline',
+          enables: []
         },
+        // Q1 Zoom Mode state
+        isQ1ZoomMode: false,
+        isChartZoomed: false,
+        showRelationships: localStorage.getItem('showRelationships') === 'true',
         availableIcons: [
           'mdi-checkbox-blank-circle-outline',
           'mdi-star',
@@ -206,6 +201,7 @@ window.addEventListener('DOMContentLoaded', () => {
         heartbeatInterval: null,
         isSessionExpired: false,
         // Analytics data
+        timeLogs: [], // Cache for time logs
         analytics: {
           productivityScore: 0,
           currentStreak: 0,
@@ -229,6 +225,22 @@ window.addEventListener('DOMContentLoaded', () => {
       };
     },
     computed: {
+      taskSortOptions() {
+        const priorityTitle = this.influenceMode ? '🔥 Priority (Influence × Urgency)' : '🔥 Priority (Importance × Urgency)';
+        return [
+          { value: 'priority-high', title: `${priorityTitle} (High → Low)` },
+          { value: 'priority-low', title: `${priorityTitle} (Low → High)` },
+          { value: 'importance-high', title: '⭐ Importance (High → Low)' },
+          { value: 'importance-low', title: '⭐ Importance (Low → High)' },
+          { value: 'urgency-high', title: '⚡ Urgency (High → Low)' },
+          { value: 'urgency-low', title: '⚡ Urgency (Low → High)' },
+          { value: 'influence-high', title: '↗️ Influence (High → Low)' },
+          { value: 'newest', title: '🆕 Newest First' },
+          { value: 'oldest', title: '📅 Oldest First' },
+          { value: 'due-date', title: '⏰ Due Date (Closest)' },
+          { value: 'name-az', title: '🔤 Name (A → Z)' }
+        ];
+      },
       hoveredTaskAncestors() {
         if (!this.hoveredTaskId) return new Set();
         const ancestors = new Set();
@@ -254,57 +266,91 @@ window.addEventListener('DOMContentLoaded', () => {
           overflow: 'visible'
         };
       },
+      activeTasksForLinking() {
+        // Get all active tasks that can be linked (for "enables" selection in Quick Add)
+        return this.tasks
+          .filter(task => !task.done)
+          .map(task => ({
+            id: task.id,
+            name: task.name,
+            importance: task.importance,
+            urgency: task.urgency
+          }));
+      },
+      activeTasksForEditing() {
+        // Get all active tasks excluding the one being edited (for "enables" selection in Edit)
+        const editingId = this.editingTask?.id;
+        return this.tasks
+          .filter(task => !task.done && task.id !== editingId)
+          .map(task => ({
+            id: task.id,
+            name: task.name,
+            importance: task.importance,
+            urgency: task.urgency
+          }));
+      },
       sortedActiveTasks() {
         if (!this.activeTasks || this.activeTasks.length === 0) {
           return [];
         }
-        
-        let tasks = [...this.activeTasks];
+
+        let filteredTasks = [...this.activeTasks];
 
         // Filter out "Not Sure" tasks if hidden
         if (!this.showNotSureTasks) {
-          tasks = tasks.filter(task => task.status !== 'Not Sure');
+          filteredTasks = filteredTasks.filter(task => task.status !== 'Not Sure');
         }
+        
+        return this.sortTasks(filteredTasks);
+      }
+    },
+    methods: {
+      sortTasks(tasks) {
+        if (!tasks || !Array.isArray(tasks)) return [];
+        const sorted = [...tasks];
         
         switch (this.taskSortBy) {
           case 'priority-high':
-            return tasks.sort((a, b) => {
-              const priorityA = a.importance * a.urgency;
-              const priorityB = b.importance * b.urgency;
+            return sorted.sort((a, b) => {
+              const valA = this.influenceMode ? (Number(a.leverage_score) || 1) : Number(a.importance);
+              const valB = this.influenceMode ? (Number(b.leverage_score) || 1) : Number(b.importance);
+              const priorityA = valA * (Number(a.urgency) || 5);
+              const priorityB = valB * (Number(b.urgency) || 5);
               return priorityB - priorityA;
             });
           
           case 'priority-low':
-            return tasks.sort((a, b) => {
-              const priorityA = a.importance * a.urgency;
-              const priorityB = b.importance * b.urgency;
+            return sorted.sort((a, b) => {
+              const valA = this.influenceMode ? (Number(a.leverage_score) || 1) : Number(a.importance);
+              const valB = this.influenceMode ? (Number(b.leverage_score) || 1) : Number(b.importance);
+              const priorityA = valA * (Number(a.urgency) || 5);
+              const priorityB = valB * (Number(b.urgency) || 5);
               return priorityA - priorityB;
             });
           
           case 'importance-high':
-            return tasks.sort((a, b) => b.importance - a.importance);
+            return sorted.sort((a, b) => (Number(b.importance) || 0) - (Number(a.importance) || 0));
           
           case 'importance-low':
-            return tasks.sort((a, b) => a.importance - b.importance);
+            return sorted.sort((a, b) => (Number(a.importance) || 0) - (Number(b.importance) || 0));
           
           case 'urgency-high':
-            return tasks.sort((a, b) => b.urgency - a.urgency);
+            return sorted.sort((a, b) => (Number(b.urgency) || 0) - (Number(a.urgency) || 0));
           
           case 'urgency-low':
-            return tasks.sort((a, b) => a.urgency - b.urgency);
+            return sorted.sort((a, b) => (Number(a.urgency) || 0) - (Number(b.urgency) || 0));
+
+          case 'influence-high':
+            return sorted.sort((a, b) => (parseFloat(b.leverage_score) || 0) - (parseFloat(a.leverage_score) || 0));
           
           case 'newest':
-            return tasks.sort((a, b) => {
-              return new Date(b.created_at) - new Date(a.created_at);
-            });
+            return sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
           
           case 'oldest':
-            return tasks.sort((a, b) => {
-              return new Date(a.created_at) - new Date(b.created_at);
-            });
+            return sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
           
           case 'due-date':
-            return tasks.sort((a, b) => {
+            return sorted.sort((a, b) => {
               if (!a.due_date && !b.due_date) return 0;
               if (!a.due_date) return 1;
               if (!b.due_date) return -1;
@@ -312,14 +358,12 @@ window.addEventListener('DOMContentLoaded', () => {
             });
           
           case 'name-az':
-            return tasks.sort((a, b) => a.name.localeCompare(b.name));
+            return sorted.sort((a, b) => a.name.localeCompare(b.name));
           
           default:
-            return tasks;
+            return sorted;
         }
-      }
-    },
-    methods: {
+      },
       toggleTheme() {
         this.isDarkTheme = !this.isDarkTheme;
         this.theme = this.isDarkTheme ? 'dark' : 'light';
@@ -385,8 +429,8 @@ window.addEventListener('DOMContentLoaded', () => {
         this.parentId = taskId;
         this.newSubtask = {
           name: '',
-          importance: 5,
-          urgency: 5,
+          importance: 5.0,
+          urgency: 5.0,
           link: '',
           due_date: null
         };
@@ -484,15 +528,31 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       
       editTask(task) {
-        this.editingTask = { ...task };
+        this.editingTask = { ...task, enables: [] };
         this.showTaskEditForm = true;
+
+        // Load current relationships for this task
+        this.socket.emit('getTaskRelationships', task.id);
+        this.socket.once('taskRelationships', (data) => {
+          if (data.taskId === task.id && data.enables) {
+            this.editingTask.enables = data.enables.map(t => t.id);
+          }
+        });
       },
       
       saveTaskEdit() {
         if (!this.editingTask.name) return;
-        
+
         taskOperations.editTask(this.editingTask);
-        
+
+        // Update relationships - emit event to update enables
+        if (this.editingTask.enables && this.editingTask.enables.length >= 0) {
+          this.socket.emit('updateTaskRelationships', {
+            taskId: this.editingTask.id,
+            enables: this.editingTask.enables
+          });
+        }
+
         this.showTaskEditForm = false;
         this.editingTask = {
           id: null,
@@ -501,7 +561,8 @@ window.addEventListener('DOMContentLoaded', () => {
           urgency: 5,
           link: '',
           due_date: null,
-          icon: 'mdi-checkbox-blank-circle-outline'
+          icon: 'mdi-checkbox-blank-circle-outline',
+          enables: []
         };
       },
       
@@ -519,7 +580,22 @@ window.addEventListener('DOMContentLoaded', () => {
       
       toggleNotSureTasks() {
         this.showNotSureTasks = !this.showNotSureTasks;
+        localStorage.setItem('showNotSureTasks', this.showNotSureTasks);
+        
+        // Synchronize with chart
+        if (chartVisualization) {
+          chartVisualization.showNotSureTasks = this.showNotSureTasks;
+          chartVisualization.renderChart(this.tasks);
+        }
+
         const msg = this.showNotSureTasks ? 'Showing "Not Sure" tasks' : 'Hiding "Not Sure" tasks';
+        this.showNotification(msg, 'info');
+      },
+
+      toggleInfluenceMode() {
+        this.influenceMode = !this.influenceMode;
+        localStorage.setItem('influenceMode', this.influenceMode);
+        const msg = this.influenceMode ? 'Influence Mode (Leverage)' : 'Importance Mode (Standard)';
         this.showNotification(msg, 'info');
       },
       
@@ -534,7 +610,11 @@ window.addEventListener('DOMContentLoaded', () => {
         };
 
         // A task is a "root" if it has no parent_id OR if its parent doesn't exist
-        const rawActive = tasks.filter(task => !task.done && (!task.parent_id || !parentExists(task.parent_id)));
+        const rawActive = tasks.filter(task => {
+          const isRoot = !task.parent_id || !parentExists(task.parent_id);
+          const isNotSureHidden = !this.showNotSureTasks && task.status === 'Not Sure';
+          return !task.done && isRoot && !isNotSureHidden;
+        });
         const rawCompleted = tasks.filter(task => task.done && (!task.parent_id || !parentExists(task.parent_id)));
         
         console.log('Filtered Active (root/orphaned):', rawActive.length);
@@ -543,6 +623,25 @@ window.addEventListener('DOMContentLoaded', () => {
         this.activeTasks = rawActive;
         this.completedTasks = rawCompleted;
         
+        // DEBUG: Log top leverage scores
+        const topLeverage = [...rawActive].sort((a, b) => (b.leverage_score || 0) - (a.leverage_score || 0)).slice(0, 3);
+        console.log('Top tasks by leverage:', topLeverage.map(t => `${t.name}: ${t.leverage_score}`));
+
+        // Update basic analytics stats instantly (don't wait for fetch)
+        if (this.timeLogs && this.timeLogs.length > 0) {
+          this.processAnalyticsData({ tasks: this.tasks, timeLogs: this.timeLogs });
+        } else if (this.currentView === 'analytics') {
+          // If we're on the page but have no logs, load them
+          this.loadAnalytics();
+        } else {
+          // Just update task-based counts
+          this.analytics.tasksCompleted = tasks.filter(t => t.done).length;
+          this.analytics.tasksActive = tasks.filter(t => !t.done).length;
+          this.analytics.completionRate = tasks.length > 0
+            ? Math.round(this.analytics.tasksCompleted / tasks.length * 100)
+            : 0;
+        }
+
         // Re-render the chart with updated tasks (only if chart is initialized)
         if (chartVisualization && typeof chartVisualization.renderChart === 'function' && chartVisualization.dotsGroup) {
           chartVisualization.renderChart(tasks);
@@ -612,6 +711,12 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showNotesDialog = false;
       },
 
+      closeNotesDialog() {
+        this.showNotesDialog = false;
+        this.editingNotes = '';
+        this.currentTask = null;
+      },
+
       async importCSV() {
         if (!this.csvFile) {
           this.showNotification('Please select a CSV file', 'error');
@@ -673,6 +778,7 @@ window.addEventListener('DOMContentLoaded', () => {
         this.quickAddTask.name = '';
         this.quickAddTask.link = '';
         this.quickAddTask.notes = '';
+        this.quickAddTask.enables = [];
         this.showQuickAddModal = true;
       },
 
@@ -691,10 +797,17 @@ window.addEventListener('DOMContentLoaded', () => {
           icon: this.quickAddTask.icon || 'mdi-checkbox-blank-circle-outline'
         };
 
-        // Use taskOperations to ensure proper real-time updates
-        taskOperations.addTask(taskData);
+        const enables = this.quickAddTask.enables || [];
+
+        // If there are relationships, use the new socket event
+        if (enables.length > 0) {
+          this.socket.emit('addTaskWithRelationships', { task: taskData, enables });
+        } else {
+          // Use taskOperations for simple task addition
+          taskOperations.addTask(taskData);
+        }
         this.showNotification(`Added: ${taskData.name}`, 'success');
-        
+
         // Close modal and reset
         this.showQuickAddModal = false;
         this.quickAddTask = {
@@ -703,8 +816,54 @@ window.addEventListener('DOMContentLoaded', () => {
           urgency: 5,
           link: '',
           notes: '',
-          icon: 'mdi-checkbox-blank-circle-outline'
+          icon: 'mdi-checkbox-blank-circle-outline',
+          enables: []
         };
+      },
+
+      toggleQ1ZoomMode() {
+        if (this.isChartZoomed || this.isQ1ZoomMode) {
+          // Reset zoom
+          this.isQ1ZoomMode = false;
+          this.isChartZoomed = false;
+          if (chartVisualization) {
+            chartVisualization.resetZoom();
+          }
+          this.showNotification('Zoom reset to normal view', 'info');
+        } else {
+          // Enable Q1 zoom
+          this.isQ1ZoomMode = true;
+          this.isChartZoomed = true;
+          if (chartVisualization) {
+            chartVisualization.toggleQ1ZoomMode();
+          }
+          this.showNotification('Q1 Zoom Mode enabled - showing tasks 5-10', 'info');
+        }
+      },
+
+      zoomIn() {
+        if (chartVisualization) {
+          chartVisualization.zoomIn();
+        }
+      },
+
+      zoomOut() {
+        if (chartVisualization) {
+          chartVisualization.zoomOut();
+        }
+      },
+
+      toggleRelationships() {
+        this.showRelationships = !this.showRelationships;
+        localStorage.setItem('showRelationships', this.showRelationships);
+        
+        if (chartVisualization) {
+          chartVisualization.showRelationships = this.showRelationships;
+          chartVisualization.renderChart(this.tasks);
+        }
+        
+        const msg = this.showRelationships ? 'Task relationships shown' : 'Task relationships hidden';
+        this.showNotification(msg, 'info');
       },
 
       closeQuickAddModal() {
@@ -1198,34 +1357,32 @@ window.addEventListener('DOMContentLoaded', () => {
       // Analytics Methods
       async loadAnalytics() {
         try {
-          console.log('Loading analytics data...');
-          const response = await fetch('/api/analytics');
-          console.log('Analytics response status:', response.status);
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Analytics API error:', errorText);
-            throw new Error('Failed to fetch analytics');
+          // If we already have logs, we can render instantly
+          if (this.timeLogs && this.timeLogs.length > 0) {
+            this.$nextTick(() => this.renderAnalyticsCharts());
+            // We still fetch in background to stay updated, but user doesn't wait
           }
 
-          const data = await response.json();
-          console.log('Analytics data received:', {
-            tasks: data.tasks?.length || 0,
-            timeLogs: data.timeLogs?.length || 0
-          });
-          console.log('Sample time logs:', data.timeLogs?.slice(0, 3));
-          console.log('Tasks with time:', data.tasks?.filter(t => t.total_time_spent > 0).slice(0, 3));
+          console.log('Fetching fresh analytics data...');
+          const response = await fetch('/api/analytics');
+          if (!response.ok) throw new Error('Failed to fetch analytics');
 
+          const data = await response.json();
+          this.timeLogs = data.timeLogs || [];
+          
           this.processAnalyticsData(data);
           this.$nextTick(() => this.renderAnalyticsCharts());
         } catch (error) {
           console.error('Analytics error:', error);
-          this.showNotification('Failed to load analytics: ' + error.message, 'error');
+          if (!this.timeLogs.length) {
+            this.showNotification('Failed to load analytics', 'error');
+          }
         }
       },
 
       processAnalyticsData(data) {
         const { tasks, timeLogs } = data;
+        if (timeLogs) this.timeLogs = timeLogs; // Update cache
         const now = new Date();
         const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
         const fourteenDaysAgo = new Date(now - 14 * 24 * 60 * 60 * 1000);
@@ -1547,7 +1704,8 @@ window.addEventListener('DOMContentLoaded', () => {
     },
     provide() {
       return {
-        openQuickAddModal: this.openQuickAddModal
+        openQuickAddModal: this.openQuickAddModal,
+        isQ1ZoomMode: () => this.isQ1ZoomMode
       };
     },
     beforeUnmount() {
@@ -1589,10 +1747,14 @@ window.addEventListener('DOMContentLoaded', () => {
       
       // Listen for socket connection and request data
       this.socket.on('connect', () => {
-        console.log('Socket connected, checking auth and requesting initial data');
-        // Always try to authenticate the socket when it connects/reconnects
-        this.authenticateSocket();
-        this.socket.emit('requestInitialData');
+        console.log('Socket connected, checking auth');
+        // If we have a user, authenticate. authenticate will trigger initialData fetch.
+        // If no user, request initialData (public tasks).
+        if (this.user && this.user.id) {
+          this.authenticateSocket();
+        } else {
+          this.socket.emit('requestInitialData');
+        }
       });
       
       this.socket.on('reconnect', () => {
@@ -1640,6 +1802,9 @@ window.addEventListener('DOMContentLoaded', () => {
       // Start timer updates for active timers
       this.startTimerUpdates();
       
+      // Pre-load analytics data in background
+      this.loadAnalytics();
+      
       // Restore break timer if it was active (handles page navigation/refresh)
       this.restoreBreakTimer();
       
@@ -1655,9 +1820,18 @@ window.addEventListener('DOMContentLoaded', () => {
   // Define recursive task-node component
   app.component('task-node', {
     props: ['task', 'depth', 'tasks', 'expandedTasks', 'showCompletedSubtasks'],
+    data() {
+      return {
+        longPressTimer: null,
+        longPressMenu: false,
+        menuX: 0,
+        menuY: 0,
+        isPressing: false
+      };
+    },
     template: `
       <div 
-        :class="['task-node-container', isHovered ? 'branch-hover' : '']" 
+        :class="['task-node-container', isHovered ? 'branch-hover' : '', isPressing ? 'task-pressing' : '']" 
         @mouseenter.stop="onMouseEnter"
         @mouseleave.stop="onMouseLeave"
       >
@@ -1667,16 +1841,129 @@ window.addEventListener('DOMContentLoaded', () => {
           @dblclick="$root.showAddSubtaskForm(task.id)"
           :data-task-id="task.id" 
           :class="['task-item', depth > 0 ? 'subtask' : '', task.active_timer_start ? 'timer-active' : '']"
-          style="cursor: grab;"
+          style="cursor: grab; position: relative;"
           draggable="true"
           @dragstart="$root.handleDragStart(task, $event)"
           @dragover="$root.handleDragOver"
           @dragleave="$root.handleDragLeave"
           @drop.stop="$root.handleDropOnTask(task, $event)"
           @dragend="$root.handleDragEnd"
+          @mousedown="startPress"
+          @mouseup="endPress"
+          @mouseleave="endPress"
+          @touchstart="startPress"
+          @touchend="endPress"
         >
+          <!-- Hidden anchor for the menu positioning -->
+          <div 
+            ref="menuAnchor" 
+            :style="{ position: 'fixed', left: menuX + 'px', top: menuY + 'px', width: '1px', height: '1px', pointerEvents: 'none' }"
+          ></div>
+
+          <!-- Mode Selection Menu (Comprehensive Command Menu) -->
+          <v-menu
+            v-model="longPressMenu"
+            :activator="$refs.menuAnchor"
+            offset="10"
+            transition="scale-transition"
+          >
+            <v-list density="compact" elevation="15" rounded="xl" min-width="220" class="py-2">
+              <v-list-subheader class="text-uppercase font-weight-bold text-xxs px-4">Mode / Status</v-list-subheader>
+              
+              <!-- Icon Picker Sub-menu -->
+              <v-menu location="end top" open-on-hover offset="5">
+                <template v-slot:activator="{ props }">
+                  <v-list-item v-bind="props" class="pe-2">
+                    <template v-slot:prepend>
+                      <v-icon :color="getPriorityColor(task.importance)" size="small">
+                        {{ task.icon || 'mdi-circle-outline' }}
+                      </v-icon>
+                    </template>
+                    <v-list-item-title>Change Icon</v-list-item-title>
+                    <template v-slot:append><v-icon size="x-small">mdi-chevron-right</v-icon></template>
+                  </v-list-item>
+                </template>
+                <v-card max-width="240" class="pa-2" elevation="10" rounded="lg">
+                  <div class="d-flex flex-wrap gap-1 justify-center">
+                    <v-btn
+                      v-for="icon in $root.availableIcons"
+                      :key="icon"
+                      icon
+                      size="x-small"
+                      variant="text"
+                      @click.stop="$root.updateTaskIcon(task, icon)"
+                      :color="task.icon === icon ? 'primary' : ''"
+                      :title="icon.replace('mdi-', '')"
+                    >
+                      <v-icon size="18">{{ icon }}</v-icon>
+                    </v-btn>
+                  </div>
+                </v-card>
+              </v-menu>
+
+              <v-list-item @click="$root.toggleNotSure(task)" :active="task.status === 'Not Sure'" :color="task.status === 'Not Sure' ? 'warning' : ''">
+                <template v-slot:prepend><v-icon :color="task.status === 'Not Sure' ? 'warning' : 'grey'" size="small">mdi-help-circle</v-icon></template>
+                <v-list-item-title>Not Sure Mode</v-list-item-title>
+              </v-list-item>
+
+              <v-divider class="my-1"></v-divider>
+              <v-list-subheader class="text-uppercase font-weight-bold text-xxs px-4">Actions</v-list-subheader>
+              
+              <v-list-item @click="$root.toggleTimer(task)">
+                <template v-slot:prepend>
+                  <v-icon :color="task.active_timer_start ? 'error' : 'success'" size="small">
+                    {{ task.active_timer_start ? 'mdi-stop-circle' : 'mdi-play-circle' }}
+                  </v-icon>
+                </template>
+                <v-list-item-title>{{ task.active_timer_start ? 'Stop Timer' : 'Start Timer' }}</v-list-item-title>
+              </v-list-item>
+
+              <v-list-item @click="$root.showAddSubtaskForm(task.id)">
+                <template v-slot:prepend><v-icon size="small">mdi-plus</v-icon></template>
+                <v-list-item-title>Add Subtask</v-list-item-title>
+              </v-list-item>
+
+              <v-list-item @click="depth === 0 ? $root.editTask(task) : $root.editSubtask(task)">
+                <template v-slot:prepend><v-icon size="small">mdi-pencil</v-icon></template>
+                <v-list-item-title>Edit Details</v-list-item-title>
+              </v-list-item>
+
+              <v-list-item @click="$root.editTaskNotes(task)">
+                <template v-slot:prepend><v-icon size="small">mdi-note-edit</v-icon></template>
+                <v-list-item-title>Notes</v-list-item-title>
+              </v-list-item>
+
+              <v-divider class="my-1"></v-divider>
+              <v-list-subheader class="text-uppercase font-weight-bold text-xxs px-4">Hierarchy</v-list-subheader>
+              
+              <v-list-item @click="$root.indentTask(task)">
+                <template v-slot:prepend><v-icon size="small">mdi-format-indent-increase</v-icon></template>
+                <v-list-item-title>Move In (Indent)</v-list-item-title>
+              </v-list-item>
+
+              <v-list-item v-if="task.parent_id" @click="$root.outdentTask(task)">
+                <template v-slot:prepend><v-icon size="small">mdi-format-indent-decrease</v-icon></template>
+                <v-list-item-title>Move Out (Outdent)</v-list-item-title>
+              </v-list-item>
+
+              <v-divider class="my-1"></v-divider>
+              <v-list-subheader class="text-uppercase font-weight-bold text-xxs px-4">Relationships</v-list-subheader>
+              
+              <v-list-item @click="$root.editTask(task)">
+                <template v-slot:prepend><v-icon color="purple" size="small">mdi-chart-network</v-icon></template>
+                <v-list-item-title>Edit Influences</v-list-item-title>
+              </v-list-item>
+
+              <v-divider class="my-1"></v-divider>
+              <v-list-item @click="$root.deleteTask(task.id, task.name)" class="text-error">
+                <template v-slot:prepend><v-icon color="error" size="small">mdi-delete</v-icon></template>
+                <v-list-item-title class="font-weight-bold">Delete Task</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
+
           <template v-slot:prepend>
-            <div class="d-flex align-center toggle-junction gap-2 me-3" style="min-width: 64px;">
+            <div class="d-flex align-center toggle-junction gap-2 me-3">
               <v-btn
                 v-if="hasChildren"
                 icon
@@ -1689,166 +1976,44 @@ window.addEventListener('DOMContentLoaded', () => {
               </v-btn>
               <div v-else style="width: 24px;"></div>
               
-              <v-menu location="bottom start">
-                <template v-slot:activator="{ props }">
-                  <v-btn
-                    icon
-                    size="small"
-                    variant="text"
-                    v-bind="props"
-                    :color="task.done ? 'grey' : getPriorityColor(task.importance)"
-                    @click.stop
-                  >
-                    <v-icon size="24">{{ task.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
-                  </v-btn>
-                </template>
-                <v-card max-width="300" class="pa-2">
-                  <div class="d-flex flex-wrap gap-1 justify-center">
-                    <v-btn
-                      v-for="icon in $root.availableIcons"
-                      :key="icon"
-                      icon
-                      size="small"
-                      variant="text"
-                      @click.stop="$root.updateTaskIcon(task, icon)"
-                      :color="task.icon === icon ? 'primary' : ''"
-                    >
-                      <v-icon>{{ icon }}</v-icon>
-                    </v-btn>
-                  </div>
-                </v-card>
-              </v-menu>
+              <v-icon 
+                size="20" 
+                :color="task.done ? 'grey' : getPriorityColor(task.importance)"
+                class="opacity-70"
+              >
+                {{ task.icon || (task.status === 'Not Sure' ? 'mdi-help-circle' : 'mdi-checkbox-blank-circle-outline') }}
+              </v-icon>
             </div>
           </template>
 
           <div class="d-flex flex-column flex-grow-1 py-1 ms-1">
-            <div class="d-flex align-center gap-golden mb-1">
-              <v-list-item-title :class="{'text-decoration-line-through': task.done}" class="text-wrap font-weight-bold task-name flex-grow-1" style="min-width: 0;">
+            <div class="d-flex align-center gap-golden">
+              <v-list-item-title :class="{'text-decoration-line-through opacity-50': task.done}" class="text-wrap font-weight-bold task-name flex-grow-1">
                 {{ task.name }}
               </v-list-item-title>
               
-              <div class="task-metrics-group ms-auto">
-                <div class="d-flex align-center gap-1" title="Importance">
-                  <v-icon size="14" :color="getPriorityColor(task.importance)" class="opacity-70">mdi-star</v-icon>
-                  <v-progress-linear
-                    :model-value="task.importance * 10"
-                    :color="getPriorityColor(task.importance)"
-                    height="4"
-                    width="60"
-                    rounded
-                    class="flex-grow-0"
-                    style="width: 60px;"
-                  ></v-progress-linear>
-                </div>
-                <div class="d-flex align-center gap-1" title="Urgency">
-                  <v-icon size="14" :color="getPriorityColor(task.urgency)" class="opacity-70">mdi-clock-fast</v-icon>
-                  <v-progress-linear
-                    :model-value="task.urgency * 10"
-                    :color="getPriorityColor(task.urgency)"
-                    height="4"
-                    width="60"
-                    rounded
-                    class="flex-grow-0"
-                    style="width: 60px;"
-                  ></v-progress-linear>
-                </div>
+              <div v-if="task.active_timer_start" class="text-caption font-weight-bold text-error ms-2">
+                {{ $root.formatTime($root.getElapsedTime(task.active_timer_start)) }}
               </div>
             </div>
 
-            <v-list-item-subtitle>
-              <div class="d-flex align-center flex-wrap gap-golden">
-                <v-chip v-if="task.category" size="x-small" color="purple" variant="flat" class="text-uppercase font-weight-bold">
-                  {{ task.category }}
+            <v-list-item-subtitle v-if="task.due_date || task.link || task.notes || task.leverage_score > 0">
+              <div class="d-flex align-center flex-wrap gap-2 mt-1">
+                <v-chip v-if="task.leverage_score > 0" size="x-small" color="purple" variant="flat">
+                  <v-icon start size="10">mdi-arrow-up-bold</v-icon>{{ Number(task.leverage_score).toFixed(1) }}
                 </v-chip>
-                
-                <span v-if="task.due_date" class="text-caption text-orange d-flex align-center">
-                  <v-icon size="14" class="me-1">mdi-calendar-clock</v-icon>
-                  {{ task.due_date }}
+                <v-chip v-if="task.category" size="x-small" color="grey" variant="outlined">{{ task.category }}</v-chip>
+                <span v-if="task.due_date" class="text-xxs text-orange">
+                  <v-icon size="10">mdi-calendar</v-icon> {{ task.due_date }}
                 </span>
-
-                <v-btn
-                  v-if="task.link"
-                  icon="mdi-link-variant"
-                  size="x-small"
-                  :href="task.link"
-                  target="_blank"
-                  color="primary"
-                  variant="text"
-                  title="Open Link"
-                  @click.stop
-                ></v-btn>
-                
-                <v-icon v-if="task.notes" size="14" color="grey" title="Has Notes">mdi-note-text-outline</v-icon>
+                <v-icon v-if="task.link" size="10" color="primary">mdi-link-variant</v-icon>
+                <v-icon v-if="task.notes" size="10" color="grey">mdi-note-text-outline</v-icon>
               </div>
             </v-list-item-subtitle>
           </div>
 
           <template v-slot:append>
-            <div class="d-flex align-center gap-golden">
-              <div class="d-flex align-center">
-                <!-- Nudge Outdent (Left) -->
-                <v-btn
-                  v-if="task.parent_id"
-                  icon="mdi-format-indent-decrease"
-                  variant="text"
-                  size="x-small"
-                  @click.stop="$root.outdentTask(task)"
-                  title="Move to parent level"
-                  class="nudge-btn"
-                ></v-btn>
-
-                <!-- Nudge Indent (Right) -->
-                <v-btn
-                  icon="mdi-format-indent-increase"
-                  variant="text"
-                  size="x-small"
-                  @click.stop="$root.indentTask(task)"
-                  title="Move under task above"
-                  class="nudge-btn"
-                ></v-btn>
-              </div>
-
-              <div class="d-flex align-center timer-group bg-grey-lighten-4 rounded-pill px-2 py-1">
-                <span class="text-caption font-weight-bold px-2 timer-display">{{ $root.formatTime(task.active_timer_start ? $root.getElapsedTime(task.active_timer_start) : task.total_time_spent) }}</span>
-                <v-btn
-                  :icon="task.active_timer_start ? 'mdi-stop-circle' : 'mdi-play-circle'"
-                  variant="text"
-                  size="small"
-                  :color="task.active_timer_start ? 'error' : 'success'"
-                  @click.stop="$root.toggleTimer(task)"
-                ></v-btn>
-              </div>
-
-              <v-menu location="bottom end">
-                <template v-slot:activator="{ props }">
-                  <v-btn
-                    icon="mdi-dots-horizontal"
-                    variant="text"
-                    size="small"
-                    v-bind="props"
-                    @click.stop
-                  ></v-btn>
-                </template>
-                <v-list density="compact">
-                  <v-list-item @click="$root.toggleNotSure(task)" prepend-icon="mdi-help-circle-outline">
-                    <v-list-item-title>{{ task.status === 'Not Sure' ? 'Clear Not Sure' : 'Mark Not Sure' }}</v-list-item-title>
-                  </v-list-item>
-                  <v-list-item @click="$root.editTaskNotes(task)" prepend-icon="mdi-note-edit">
-                    <v-list-item-title>Notes</v-list-item-title>
-                  </v-list-item>
-                  <v-list-item @click="$root.showAddSubtaskForm(task.id)" prepend-icon="mdi-plus">
-                    <v-list-item-title>Add Subtask</v-list-item-title>
-                  </v-list-item>
-                  <v-list-item @click="depth === 0 ? $root.editTask(task) : $root.editSubtask(task)" prepend-icon="mdi-pencil">
-                    <v-list-item-title>Edit</v-list-item-title>
-                  </v-list-item>
-                  <v-divider></v-divider>
-                  <v-list-item @click="$root.deleteTask(task.id, task.name)" prepend-icon="mdi-delete" color="error">
-                    <v-list-item-title>Delete</v-list-item-title>
-                  </v-list-item>
-                </v-list>
-              </v-menu>
-
+            <div class="d-flex align-center gap-2">
               <v-checkbox 
                 :model-value="task.done" 
                 @change="$root.toggleTaskDone(task)"
@@ -1876,7 +2041,8 @@ window.addEventListener('DOMContentLoaded', () => {
     `,
     computed: {
       children() {
-        return this.tasks.filter(t => Number(t.parent_id) === Number(this.task.id) && (!t.done || this.showCompletedSubtasks));
+        const filtered = this.tasks.filter(t => Number(t.parent_id) === Number(this.task.id) && (!t.done || this.showCompletedSubtasks));
+        return this.$root.sortTasks(filtered);
       },
       hasChildren() { return this.children.length > 0; },
       isExpanded() { return this.expandedTasks.has(this.task.id); },
@@ -1892,6 +2058,37 @@ window.addEventListener('DOMContentLoaded', () => {
         if (value >= 6) return 'warning';
         if (value >= 4) return 'info';
         return 'success';
+      },
+      startPress(e) {
+        // Only trigger on left click
+        if (e.type === 'mousedown' && e.button !== 0) return;
+        
+        this.isPressing = true;
+        this.longPressTimer = setTimeout(() => {
+          this.showModeMenu(e);
+        }, 500); // 0.5 seconds
+      },
+      endPress() {
+        this.isPressing = false;
+        if (this.longPressTimer) {
+          clearTimeout(this.longPressTimer);
+          this.longPressTimer = null;
+        }
+      },
+      showModeMenu(e) {
+        this.isPressing = false;
+        
+        // Handle both mouse and touch events
+        const event = e.touches ? e.touches[0] : e;
+        this.menuX = event.clientX;
+        this.menuY = event.clientY;
+        
+        this.longPressMenu = true;
+        
+        // Haptic feedback if available
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
       }
     }
   });

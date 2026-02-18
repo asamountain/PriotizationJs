@@ -1,13 +1,14 @@
-import { getTaskData, addTask, modifyTask, deleteTask, toggleTaskDone, editTask, updateTaskNotes, startTimer, stopTimer, getTimeLogs, setTaskParent } from "./db.js";
+import { getTaskData, addTask, modifyTask, deleteTask, toggleTaskDone, editTask, updateTaskNotes, startTimer, stopTimer, getTimeLogs, setTaskParent, addTaskRelationship, removeTaskRelationship, getTaskRelationships, calculateLeverageScore } from "./db.js";
 import database from "./db.js";
 
 const setupSocket = (io) => {
   // Process tasks to ensure numeric values
   const processTaskData = (tasks) => {
-    console.log("SOCKET: Processing task data - before processing:", tasks.slice(0, 2));  
-    
-    const processed = tasks.map((task) => {
-      const result = {
+    // Only log first 2 tasks and total count to avoid log bloat
+    console.log(`SOCKET: Processing ${tasks.length} tasks`);
+
+    return tasks.map((task) => {
+      return {
         id: task.id,
         name: task.name,
         importance: Number(task.importance) || 0,
@@ -27,51 +28,62 @@ const setupSocket = (io) => {
         total_time_spent: task.total_time_spent || 0,
         active_timer_start: task.active_timer_start || null,
         pomodoro_count: task.pomodoro_count || 0,
-        last_worked_at: task.last_worked_at || null
+        last_worked_at: task.last_worked_at || null,
+        // Leverage score
+        leverage_score: task.leverage_score || 0
       };
-      
-      // Debug logging for link
-      if (task.link) {
-        console.log(`SOCKET: Task ${task.id} link before: ${task.link}, after: ${result.link}`);
-      }
-      
-      return result;
     });
-    
-    console.log("SOCKET: After processing - sample:", processed.slice(0, 2));
-    return processed;
+  };
+
+  // Helper function to get tasks with leverage scores
+  const getTasksWithLeverage = async (userId) => {
+    return database.getTaskDataWithLeverage(userId);
   };
   io.on("connection", (socket) => {
     console.log("New client connected");
     
     // Store userId on the socket
     socket.userId = null;
+    let dataFetched = false;
 
     // Handle authentication from client
     socket.on("authenticate", async (userId) => {
       console.log(`SOCKET: Authenticating socket for user: ${userId}`);
-      socket.userId = userId;
       
-      // Refresh data for this specific user
+      // If already authenticated with same ID, don't re-fetch unless forced
+      if (socket.userId === userId && dataFetched) {
+        console.log(`SOCKET: Already authenticated as ${userId}, skipping redundant fetch`);
+        return;
+      }
+
+      socket.userId = userId;
+
+      // Refresh data for this specific user (with leverage scores)
       try {
-        const data = await getTaskData(socket.userId);
-        socket.emit("initialData", { data: processTaskData(data) });
+        const data = await getTasksWithLeverage(socket.userId);
+        const processed = processTaskData(data);
+        console.log(`SOCKET: Sending ${processed.length} items to authenticated user ${userId}`);
+        socket.emit("initialData", { data: processed });
+        dataFetched = true;
       } catch (error) {
         console.error("Failed to fetch data after auth:", error);
       }
     });
 
-    // Send initial data (public tasks initially, or user tasks if already auth'd)
-    getTaskData(socket.userId)
-      .then((data) => {
-        const processedData = processTaskData(data);
-        console.log("Initial data fetched:", processedData.length, "items");
-        socket.emit("initialData", { data: processedData });
-      })
-      .catch((error) => {
-        console.error("Failed to fetch initial data:", error);
+    // Explicit request for initial data
+    socket.on("requestInitialData", async () => {
+      console.log(`SOCKET: requestInitialData from user: ${socket.userId || 'anonymous'}`);
+      try {
+        const data = await getTasksWithLeverage(socket.userId);
+        const processed = processTaskData(data);
+        console.log(`SOCKET: Sending ${processed.length} items for requestInitialData`);
+        socket.emit("initialData", { data: processed });
+        dataFetched = true;
+      } catch (error) {
+        console.error("Failed to fetch initial data on request:", error);
         socket.emit("initialData", { data: [] });
-      });
+      }
+    });
 
     socket.on("addTask", async (task) => {
       try {
@@ -79,14 +91,9 @@ const setupSocket = (io) => {
         const taskId = await addTask(task, socket.userId);
         console.log("Task added successfully, ID:", taskId);
 
-        const data = await getTaskData(socket.userId);
-        // Use io.to(...) or just io.emit but we should filter by user
-        // For simplicity now, we'll emit to all but the client will only see their own when they request
-        // Better: broadcast only to this user's rooms
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
-          // If we had rooms, we'd use io.to(socket.userId).emit(...)
           socket.emit("updateTasks", { data: processTaskData(data) });
-          // Also emit to other sockets of the same user if we implement rooms
         } else {
           io.emit("updateTasks", { data: processTaskData(data) });
         }
@@ -98,7 +105,7 @@ const setupSocket = (io) => {
     socket.on("modifyTask", async (task) => {
       try {
         await modifyTask(task);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -112,7 +119,7 @@ const setupSocket = (io) => {
     socket.on("deleteTask", async (id) => {
       try {
         await deleteTask(id);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -125,7 +132,7 @@ const setupSocket = (io) => {
 
     socket.on("updateTasks", async () => {
       try {
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         socket.emit("updateTasks", { data: processTaskData(data) });
       } catch (error) {
         console.error("Failed to update tasks:", error);
@@ -135,7 +142,7 @@ const setupSocket = (io) => {
     socket.on("toggleDone", async (id) => {
       try {
         await toggleTaskDone(id);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -149,7 +156,7 @@ const setupSocket = (io) => {
     socket.on("addSubtask", async ({ subtask, parentId }) => {
       try {
         const subtaskId = await database.addSubtask(subtask, parentId, socket.userId);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -163,7 +170,7 @@ const setupSocket = (io) => {
     socket.on("updateSubtask", async ({ subtask }) => {
       try {
         await database.updateSubtask(subtask);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -177,7 +184,7 @@ const setupSocket = (io) => {
     socket.on("editTask", async (task) => {
       try {
         await editTask(task);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -191,7 +198,7 @@ const setupSocket = (io) => {
     socket.on("updateTaskNotes", async ({ taskId, notes }) => {
       try {
         await updateTaskNotes(taskId, notes);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -256,7 +263,7 @@ const setupSocket = (io) => {
       try {
         console.log("Starting timer for task:", taskId);
         const result = await startTimer(taskId);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -273,7 +280,7 @@ const setupSocket = (io) => {
       try {
         console.log("Stopping timer for task:", taskId);
         const result = await stopTimer(taskId);
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -304,7 +311,7 @@ const setupSocket = (io) => {
         await setTaskParent(taskId, parentId);
         
         // Broadcast updated tasks to all clients
-        const tasks = await getTaskData(socket.userId);
+        const tasks = await getTasksWithLeverage(socket.userId);
         console.log(`SOCKET: Fetched ${tasks.length} tasks after parent change`);
         
         if (socket.userId) {
@@ -325,7 +332,7 @@ const setupSocket = (io) => {
         console.log(`Updating status for task ${taskId} to ${status}`);
         await database.updateTaskStatus(taskId, status);
         
-        const data = await getTaskData(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -341,8 +348,8 @@ const setupSocket = (io) => {
       try {
         console.log(`Updating icon for task ${taskId} to ${icon}`);
         await database.updateTaskIcon(taskId, icon);
-        
-        const data = await getTaskData(socket.userId);
+
+        const data = await getTasksWithLeverage(socket.userId);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -351,6 +358,121 @@ const setupSocket = (io) => {
       } catch (error) {
         console.error("Failed to update task icon:", error);
         socket.emit("error", { message: "Failed to update icon" });
+      }
+    });
+
+    // Task Relationship handlers for Leverage Score
+    socket.on("addTaskRelationship", async ({ enablerId, enabledId }) => {
+      try {
+        console.log(`Adding relationship: task ${enablerId} enables task ${enabledId}`);
+        await addTaskRelationship(enablerId, enabledId, socket.userId);
+
+        const data = await getTasksWithLeverage(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
+        socket.emit("relationshipAdded", { enablerId, enabledId });
+      } catch (error) {
+        console.error("Failed to add task relationship:", error);
+        socket.emit("error", { message: "Failed to add relationship" });
+      }
+    });
+
+    socket.on("removeTaskRelationship", async ({ enablerId, enabledId }) => {
+      try {
+        console.log(`Removing relationship: task ${enablerId} enables task ${enabledId}`);
+        await removeTaskRelationship(enablerId, enabledId);
+
+        const data = await getTasksWithLeverage(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
+        socket.emit("relationshipRemoved", { enablerId, enabledId });
+      } catch (error) {
+        console.error("Failed to remove task relationship:", error);
+        socket.emit("error", { message: "Failed to remove relationship" });
+      }
+    });
+
+    socket.on("getTaskRelationships", async (taskId) => {
+      try {
+        if (taskId === null) {
+          console.log(`Getting all relationships for user ${socket.userId || 'anonymous'}`);
+          const relationships = await database.getAllTaskRelationships(socket.userId);
+          socket.emit("taskRelationships", { taskId: null, relationships });
+        } else {
+          console.log(`Getting relationships for task ${taskId}`);
+          const relationships = await getTaskRelationships(taskId);
+          socket.emit("taskRelationships", { taskId, ...relationships });
+        }
+      } catch (error) {
+        console.error("Failed to get task relationships:", error);
+        socket.emit("error", { message: "Failed to get relationships" });
+      }
+    });
+
+    socket.on("addTaskWithRelationships", async ({ task, enables }) => {
+      try {
+        console.log(`Adding task with relationships for user ${socket.userId || 'anonymous'}:`, task);
+        const taskId = await addTask(task, socket.userId);
+        console.log("Task added successfully, ID:", taskId);
+
+        // Add relationships if provided
+        if (enables && enables.length > 0) {
+          for (const enabledId of enables) {
+            await addTaskRelationship(taskId, enabledId, socket.userId);
+          }
+          console.log(`Added ${enables.length} relationships for task ${taskId}`);
+        }
+
+        const data = await getTasksWithLeverage(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
+      } catch (error) {
+        console.error("Failed to add task with relationships:", error);
+      }
+    });
+
+    socket.on("updateTaskRelationships", async ({ taskId, enables }) => {
+      try {
+        console.log(`Updating relationships for task ${taskId}:`, enables);
+
+        // Get current relationships
+        const currentRelationships = await getTaskRelationships(taskId);
+        const currentEnables = currentRelationships.enables.map(t => t.id);
+
+        // Find relationships to add and remove
+        const toAdd = enables.filter(id => !currentEnables.includes(id));
+        const toRemove = currentEnables.filter(id => !enables.includes(id));
+
+        // Remove old relationships
+        for (const enabledId of toRemove) {
+          await removeTaskRelationship(taskId, enabledId);
+        }
+
+        // Add new relationships
+        for (const enabledId of toAdd) {
+          await addTaskRelationship(taskId, enabledId, socket.userId);
+        }
+
+        console.log(`Updated relationships: added ${toAdd.length}, removed ${toRemove.length}`);
+
+        const data = await getTasksWithLeverage(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
+      } catch (error) {
+        console.error("Failed to update task relationships:", error);
+        socket.emit("error", { message: "Failed to update relationships" });
       }
     });
 

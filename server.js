@@ -329,27 +329,9 @@ const startServer = async (port = 3000) => {
     }
 };
 
-// Handle port conflicts
-const findAvailablePort = (startPort) => {
-    return new Promise((resolve) => {
-        const server = createServer();
-        server.listen(startPort, () => {
-            const port = server.address().port;
-            server.close(() => resolve(port));
-        });
-        server.on("error", () => {
-            resolve(findAvailablePort(startPort + 1));
-        });
-    });
-};
-
-// Start server with dynamic port
-findAvailablePort(3000)
-    .then(port => startServer(port))
-    .catch(error => {
-        console.error("Port finding failed:", error);
-        process.exit(1);
-    });
+// Start server
+const PORT = process.env.PORT || 3000;
+startServer(PORT);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

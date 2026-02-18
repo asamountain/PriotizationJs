@@ -45,8 +45,8 @@ class Database {
       CREATE TABLE IF NOT EXISTS tasks (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
-        importance INTEGER DEFAULT 5,
-        urgency INTEGER DEFAULT 5,
+        importance REAL DEFAULT 5.0,
+        urgency REAL DEFAULT 5.0,
         done BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         completed_at TIMESTAMP,
@@ -65,6 +65,15 @@ class Database {
         icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'
       );
 
+      CREATE TABLE IF NOT EXISTS task_relationships (
+        id SERIAL PRIMARY KEY,
+        enabler_task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        enabled_task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        user_id TEXT REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(enabler_task_id, enabled_task_id)
+      );
+
       CREATE TABLE IF NOT EXISTS time_logs (
         id SERIAL PRIMARY KEY,
         task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
@@ -75,6 +84,11 @@ class Database {
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
+      CREATE INDEX IF NOT EXISTS idx_task_relationships_user_id ON task_relationships(user_id);
     `;
     await this.pool.query(query);
     
@@ -108,7 +122,8 @@ class Database {
   async createTablesSqlite() {
     const migrations = [
       `CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT, avatar TEXT, provider TEXT DEFAULT 'google', created_at TEXT DEFAULT CURRENT_TIMESTAMP, last_login TEXT DEFAULT CURRENT_TIMESTAMP)`,
-      `CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, importance INTEGER DEFAULT 5, urgency INTEGER DEFAULT 5, done BOOLEAN DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP, parent_id INTEGER NULL, user_id TEXT NULL, FOREIGN KEY (parent_id) REFERENCES tasks(id), FOREIGN KEY (user_id) REFERENCES users(id))`,
+      `CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, importance REAL DEFAULT 5.0, urgency REAL DEFAULT 5.0, done BOOLEAN DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP, parent_id INTEGER NULL, user_id TEXT NULL, FOREIGN KEY (parent_id) REFERENCES tasks(id), FOREIGN KEY (user_id) REFERENCES users(id))`,
+      `CREATE TABLE IF NOT EXISTS task_relationships (id INTEGER PRIMARY KEY AUTOINCREMENT, enabler_task_id INTEGER NOT NULL, enabled_task_id INTEGER NOT NULL, user_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (enabler_task_id) REFERENCES tasks(id) ON DELETE CASCADE, FOREIGN KEY (enabled_task_id) REFERENCES tasks(id) ON DELETE CASCADE, UNIQUE(enabler_task_id, enabled_task_id))`,
       `ALTER TABLE tasks ADD COLUMN due_date TEXT NULL`,
       `ALTER TABLE tasks ADD COLUMN link TEXT NULL`,
       `ALTER TABLE tasks ADD COLUMN completed_at TEXT NULL`,
@@ -122,7 +137,11 @@ class Database {
       `ALTER TABLE tasks ADD COLUMN pomodoro_count INTEGER DEFAULT 0`,
       `ALTER TABLE tasks ADD COLUMN last_worked_at TEXT NULL`,
       `ALTER TABLE tasks ADD COLUMN icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'`,
-      `CREATE TABLE IF NOT EXISTS time_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, start_time TEXT NOT NULL, end_time TEXT NULL, duration INTEGER DEFAULT 0, session_type TEXT DEFAULT 'focus', notes TEXT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE)`
+      `CREATE TABLE IF NOT EXISTS time_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, start_time TEXT NOT NULL, end_time TEXT NULL, duration INTEGER DEFAULT 0, session_type TEXT DEFAULT 'focus', notes TEXT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE)`,
+      `CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done)`,
+      `CREATE INDEX IF NOT EXISTS idx_task_relationships_user_id ON task_relationships(user_id)`
     ];
     
     return new Promise((resolve) => {
@@ -164,8 +183,8 @@ class Database {
   }
 
   async addTask(task, userId) {
-    const importance = Math.round(Number(task.importance) || 5);
-    const urgency = Math.round(Number(task.urgency) || 5);
+    const importance = Number(task.importance) || 5;
+    const urgency = Number(task.urgency) || 5;
     const totalTime = Math.round(Number(task.total_time_spent) || 0);
     const pomodoros = Math.round(Number(task.pomodoro_count) || 0);
 
@@ -215,8 +234,8 @@ class Database {
   }
 
   async modifyTask(task) {
-    const importance = Math.round(Number(task.importance) || 5);
-    const urgency = Math.round(Number(task.urgency) || 5);
+    const importance = Number(task.importance) || 5;
+    const urgency = Number(task.urgency) || 5;
     const q = this.pool
       ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, icon = $4, progress = $5 WHERE id = $6"
       : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, icon = ?, progress = ? WHERE id = ?";
@@ -249,8 +268,8 @@ class Database {
   }
 
   async updateSubtask(subtask) {
-    const importance = Math.round(Number(subtask.importance) || 5);
-    const urgency = Math.round(Number(subtask.urgency) || 5);
+    const importance = Number(subtask.importance) || 5;
+    const urgency = Number(subtask.urgency) || 5;
     const q = this.pool 
       ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6, icon = $7, notes = $8, status = $9, progress = $10 WHERE id = $11"
       : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, parent_id = ?, link = ?, due_date = ?, icon = ?, notes = ?, status = ?, progress = ? WHERE id = ?";
@@ -263,8 +282,8 @@ class Database {
   }
 
   async editTask(task) {
-    const importance = Math.round(Number(task.importance) || 5);
-    const urgency = Math.round(Number(task.urgency) || 5);
+    const importance = Number(task.importance) || 5;
+    const urgency = Number(task.urgency) || 5;
     const q = this.pool
       ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9 WHERE id = $10"
       : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, link = ?, due_date = ?, notes = ?, status = ?, icon = ?, progress = ? WHERE id = ?";
@@ -419,6 +438,124 @@ class Database {
     }
     return user;
   }
+
+  // Task Relationship Methods for Leverage Score
+
+  async addTaskRelationship(enablerId, enabledId, userId) {
+    const q = this.pool
+      ? "INSERT INTO task_relationships (enabler_task_id, enabled_task_id, user_id) VALUES ($1, $2, $3) ON CONFLICT (enabler_task_id, enabled_task_id) DO NOTHING"
+      : "INSERT OR IGNORE INTO task_relationships (enabler_task_id, enabled_task_id, user_id) VALUES (?, ?, ?)";
+    await this.query(q, [enablerId, enabledId, userId]);
+  }
+
+  async removeTaskRelationship(enablerId, enabledId) {
+    const q = this.pool
+      ? "DELETE FROM task_relationships WHERE enabler_task_id = $1 AND enabled_task_id = $2"
+      : "DELETE FROM task_relationships WHERE enabler_task_id = ? AND enabled_task_id = ?";
+    await this.query(q, [enablerId, enabledId]);
+  }
+
+  async getTasksEnabledBy(taskId) {
+    const q = this.pool
+      ? "SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabled_task_id WHERE tr.enabler_task_id = $1"
+      : "SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabled_task_id WHERE tr.enabler_task_id = ?";
+    return this.query(q, [taskId]);
+  }
+
+  async getTasksThatEnable(taskId) {
+    const q = this.pool
+      ? "SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabler_task_id WHERE tr.enabled_task_id = $1"
+      : "SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabler_task_id WHERE tr.enabled_task_id = ?";
+    return this.query(q, [taskId]);
+  }
+
+  async getTaskRelationships(taskId) {
+    const enables = await this.getTasksEnabledBy(taskId);
+    const enabledBy = await this.getTasksThatEnable(taskId);
+    return { enables, enabledBy };
+  }
+
+  async getAllTaskRelationships(userId) {
+    // Fetch all relationships in a single query
+    const q = this.pool
+      ? "SELECT enabler_task_id, enabled_task_id FROM task_relationships WHERE user_id = $1 OR user_id IS NULL"
+      : "SELECT enabler_task_id, enabled_task_id FROM task_relationships WHERE user_id = ? OR user_id IS NULL";
+    return this.query(q, [userId]);
+  }
+
+  calculateLeverageScoresFromGraph(relationships, tasks) {
+    // Build adjacency list from relationships
+    const graph = new Map();
+    for (const rel of relationships) {
+      if (!graph.has(rel.enabler_task_id)) {
+        graph.set(rel.enabler_task_id, []);
+      }
+      graph.get(rel.enabler_task_id).push(rel.enabled_task_id);
+    }
+
+    // Calculate leverage score using memoization (O(V+E) for DAG)
+    const memo = new Map();
+    const leverageScores = {};
+
+    const getReachability = (taskId) => {
+      if (memo.has(taskId)) return memo.get(taskId);
+
+      const reachable = new Set();
+      const enabled = graph.get(taskId) || [];
+
+      let totalInfluence = 0;
+      for (const enabledId of enabled) {
+        // Find the task to get its importance
+        const enabledTask = tasks.find(t => t.id === enabledId);
+        const weight = enabledTask ? (enabledTask.importance / 5) : 1; // Standardize weight around 1.0
+        
+        if (!reachable.has(enabledId)) {
+          reachable.add(enabledId);
+          totalInfluence += weight;
+          
+          // Recursive impact (diminishing returns for further downstream)
+          const childReachable = getReachability(enabledId);
+          totalInfluence += (childReachable.size * 0.5); // Indirect impact counts for 50%
+        }
+      }
+
+      memo.set(taskId, { size: totalInfluence });
+      return { size: totalInfluence };
+    };
+
+    // Calculate for all tasks that are enablers
+    for (const [taskId] of graph) {
+      leverageScores[taskId] = getReachability(taskId).size;
+    }
+
+    return leverageScores;
+  }
+
+  async calculateLeverageScore(taskId) {
+    // Single task leverage calculation (for backwards compatibility)
+    const [relationships, tasks] = await Promise.all([
+      this.getAllTaskRelationships(null),
+      this.getTaskData(null)
+    ]);
+    const scores = this.calculateLeverageScoresFromGraph(relationships, tasks);
+    return scores[taskId] || 0;
+  }
+
+  async getTaskDataWithLeverage(userId) {
+    // Fetch tasks and relationships in parallel for speed
+    const [tasks, relationships] = await Promise.all([
+      this.getTaskData(userId),
+      this.getAllTaskRelationships(userId)
+    ]);
+
+    // Calculate all leverage scores in-memory (fast!)
+    const leverageScores = this.calculateLeverageScoresFromGraph(relationships, tasks);
+
+    return tasks.map(task => ({
+      ...task,
+      leverage_score: leverageScores[task.id] || 0
+    }));
+  }
 }
 
 const database = new Database();
@@ -440,5 +577,12 @@ export const setTaskParent = (id, p) => database.setTaskParent(id, p);
 export const updateTaskStatus = (id, s) => database.updateTaskStatus(id, s);
 export const updateTaskIcon = (id, i) => database.updateTaskIcon(id, i);
 export const upsertUser = (u) => database.upsertUser(u);
+export const addTaskRelationship = (e, d, u) => database.addTaskRelationship(e, d, u);
+export const removeTaskRelationship = (e, d) => database.removeTaskRelationship(e, d);
+export const getTasksEnabledBy = (id) => database.getTasksEnabledBy(id);
+export const getTasksThatEnable = (id) => database.getTasksThatEnable(id);
+export const getTaskRelationships = (id) => database.getTaskRelationships(id);
+export const calculateLeverageScore = (id) => database.calculateLeverageScore(id);
+export const getTaskDataWithLeverage = (u) => database.getTaskDataWithLeverage(u);
 export const initDatabase = () => database.init();
 export default database;
