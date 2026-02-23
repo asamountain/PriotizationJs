@@ -38,6 +38,7 @@ export class ChartVisualization {
     };
     this.isPersistentTooltip = false;
     this.showNotSureTasks = localStorage.getItem('showNotSureTasks') === 'true';
+    this.showSubtasks = localStorage.getItem('showSubtasks') !== 'false'; // Default to true
     // Touch state for mobile interactions
     this.touchStartTime = null;
     this.touchedDot = null;
@@ -234,8 +235,10 @@ export class ChartVisualization {
   addZoomEventListeners(svg) {
     const getSVGCoords = (e) => {
       const rect = svg.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 800;
-      const y = ((e.clientY - rect.top) / rect.height) * 600;
+      const width = rect.width || 1;
+      const height = rect.height || 1;
+      const x = ((e.clientX - rect.left) / width) * 800;
+      const y = ((e.clientY - rect.top) / height) * 600;
       return { x, y };
     };
 
@@ -758,37 +761,38 @@ export class ChartVisualization {
 
     const { minImportance, maxImportance, minUrgency, maxUrgency } = this.zoomConfig;
 
-    // Filter for active parent tasks only, and within zoom range
-    let parentTasks = tasks ? tasks.filter(task => {
+    // Filter for active tasks within zoom range
+    let visibleTasks = tasks ? tasks.filter(task => {
       const isWithinZoom = task.importance >= minImportance &&
                           task.importance <= maxImportance &&
                           task.urgency >= minUrgency &&
                           task.urgency <= maxUrgency;
       
       const isNotSureHidden = !this.showNotSureTasks && task.status === 'Not Sure';
+      const isSubtaskMatch = !task.parent_id || this.showSubtasks;
       
       return !task.done && 
-             !task.parent_id &&
+             isSubtaskMatch &&
              isWithinZoom &&
              !isNotSureHidden;
     }) : [];
 
     // If no tasks, show empty state
-    if (!parentTasks || parentTasks.length === 0) {
+    if (!visibleTasks || visibleTasks.length === 0) {
       this.renderEmptyState();
       return;
     }
     
-    console.log(`Found ${parentTasks.length} active tasks to render`);
+    console.log(`Found ${visibleTasks.length} active tasks to render`);
 
     // Calculate quadrant stats (if Vue app exists, update there too)
-    this.calculateQuadrantStats(parentTasks);
+    this.calculateQuadrantStats(visibleTasks);
 
     // Render relationships
-    this.renderRelationships(parentTasks);
+    this.renderRelationships(visibleTasks);
 
     // Group tasks that would overlap on the chart
-    const taskGroups = this.groupOverlappingTasks(parentTasks);
+    const taskGroups = this.groupOverlappingTasks(visibleTasks);
 
     // Render each group of tasks
     taskGroups.forEach(group => {
@@ -1494,8 +1498,8 @@ export class ChartVisualization {
     // Convert from screen coordinates to SVG viewBox coordinates
     const viewBoxWidth = 800;
     const viewBoxHeight = 600;
-    const svgX = (x / rect.width) * viewBoxWidth;
-    const svgY = (y / rect.height) * viewBoxHeight;
+    const svgX = (x / (rect.width || 1)) * viewBoxWidth;
+    const svgY = (y / (rect.height || 1)) * viewBoxHeight;
 
     let importance, urgency;
 

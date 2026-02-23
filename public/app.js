@@ -147,6 +147,7 @@ window.addEventListener('DOMContentLoaded', () => {
         isQ1ZoomMode: false,
         isChartZoomed: false,
         showRelationships: localStorage.getItem('showRelationships') === 'true',
+        showChartSubtasks: localStorage.getItem('showSubtasks') !== 'false', // Default to true if not set
         availableIcons: [
           'mdi-checkbox-blank-circle-outline',
           'mdi-star',
@@ -866,6 +867,19 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showNotification(msg, 'info');
       },
 
+      toggleChartSubtasks() {
+        this.showChartSubtasks = !this.showChartSubtasks;
+        localStorage.setItem('showSubtasks', this.showChartSubtasks);
+        
+        if (chartVisualization) {
+          chartVisualization.showSubtasks = this.showChartSubtasks;
+          chartVisualization.renderChart(this.tasks);
+        }
+        
+        const msg = this.showChartSubtasks ? 'Subtasks shown on chart' : 'Subtasks hidden from chart';
+        this.showNotification(msg, 'info');
+      },
+
       closeQuickAddModal() {
         this.showQuickAddModal = false;
       },
@@ -1068,7 +1082,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const move = (e) => {
           if (!this.isResizing) return;
           const rect = this.$refs.splitContainer.getBoundingClientRect();
-          const width = ((e.clientX - rect.left) / rect.width) * 100;
+          const width = ((e.clientX - rect.left) / (rect.width || 1)) * 100;
           if (width >= 30 && width <= 70) {
             this.leftPanelWidth = width;
             this.$nextTick(() => chartVisualization.initializeChart());

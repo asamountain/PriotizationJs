@@ -646,6 +646,15 @@
                                     @click="toggleRelationships"
                                     :color="showRelationships ? 'purple' : 'primary'"
                                     :title="showRelationships ? 'Hide Task Relationships' : 'Show Task Relationships'"
+                                    class="me-1"
+                                ></v-btn>
+                                <v-btn
+                                    icon="mdi-sitemap"
+                                    variant="text"
+                                    size="small"
+                                    @click="toggleChartSubtasks"
+                                    :color="showChartSubtasks ? 'purple' : 'primary'"
+                                    :title="showChartSubtasks ? 'Hide Subtasks on Chart' : 'Show Subtasks on Chart'"
                                     class="me-2"
                                 ></v-btn>
                                 <v-chip :color="isQ1ZoomMode ? 'error' : 'primary'" size="small">{{ activeTasks.length }}</v-chip>

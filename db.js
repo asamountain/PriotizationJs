@@ -98,14 +98,17 @@ class Database {
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS link TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notes TEXT",
-      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress INTEGER",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress REAL",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS category TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS status TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS total_time_spent INTEGER DEFAULT 0",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS active_timer_start TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pomodoro_count INTEGER DEFAULT 0",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_worked_at TEXT",
-      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'"
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'",
+      "ALTER TABLE tasks ALTER COLUMN importance TYPE REAL",
+      "ALTER TABLE tasks ALTER COLUMN urgency TYPE REAL",
+      "ALTER TABLE tasks ALTER COLUMN progress TYPE REAL"
     ];
 
     for (const migration of migrations) {
@@ -128,7 +131,7 @@ class Database {
       `ALTER TABLE tasks ADD COLUMN link TEXT NULL`,
       `ALTER TABLE tasks ADD COLUMN completed_at TEXT NULL`,
       `ALTER TABLE tasks ADD COLUMN notes TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN progress INTEGER NULL`,
+      `ALTER TABLE tasks ADD COLUMN progress REAL NULL`,
       `ALTER TABLE tasks ADD COLUMN category TEXT NULL`,
       `ALTER TABLE tasks ADD COLUMN status TEXT NULL`,
       `ALTER TABLE tasks ADD COLUMN user_id TEXT NULL`,
@@ -187,6 +190,7 @@ class Database {
     const urgency = Number(task.urgency) || 5;
     const totalTime = Math.round(Number(task.total_time_spent) || 0);
     const pomodoros = Math.round(Number(task.pomodoro_count) || 0);
+    const progress = Number(task.progress) || 0;
 
     if (this.pool) {
       const res = await this.pool.query(
@@ -203,7 +207,7 @@ class Database {
           task.category || null, task.status || null,
           task.created_at || null, task.completed_at || null,
           task.icon || 'mdi-checkbox-blank-circle-outline',
-          task.progress || 0
+          progress
         ]
       );
       return res.rows[0].id;
@@ -222,7 +226,7 @@ class Database {
             task.category || null, task.status || null,
             task.created_at || null, task.completed_at || null,
             task.icon || 'mdi-checkbox-blank-circle-outline',
-            task.progress || 0
+            progress
           ],
           function(err) {
             if (err) reject(err);
@@ -236,10 +240,11 @@ class Database {
   async modifyTask(task) {
     const importance = Number(task.importance) || 5;
     const urgency = Number(task.urgency) || 5;
+    const progress = Number(task.progress) || 0;
     const q = this.pool
       ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, icon = $4, progress = $5 WHERE id = $6"
       : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, icon = ?, progress = ? WHERE id = ?";
-    await this.query(q, [task.name, importance, urgency, task.icon || 'mdi-checkbox-blank-circle-outline', task.progress || 0, task.id]);
+    await this.query(q, [task.name, importance, urgency, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.id]);
   }
 
   async deleteTask(id) {
@@ -270,10 +275,11 @@ class Database {
   async updateSubtask(subtask) {
     const importance = Number(subtask.importance) || 5;
     const urgency = Number(subtask.urgency) || 5;
+    const progress = Number(subtask.progress) || 0;
     const q = this.pool 
       ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6, icon = $7, notes = $8, status = $9, progress = $10 WHERE id = $11"
       : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, parent_id = ?, link = ?, due_date = ?, icon = ?, notes = ?, status = ?, progress = ? WHERE id = ?";
-    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.icon || 'mdi-checkbox-blank-circle-outline', subtask.notes, subtask.status, subtask.progress || 0, subtask.id]);
+    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.icon || 'mdi-checkbox-blank-circle-outline', subtask.notes, subtask.status, progress, subtask.id]);
   }
 
   async updateTaskNotes(taskId, notes) {
@@ -284,10 +290,11 @@ class Database {
   async editTask(task) {
     const importance = Number(task.importance) || 5;
     const urgency = Number(task.urgency) || 5;
+    const progress = Number(task.progress) || 0;
     const q = this.pool
       ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9 WHERE id = $10"
       : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, link = ?, due_date = ?, notes = ?, status = ?, icon = ?, progress = ? WHERE id = ?";
-    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', task.progress || 0, task.id]);
+    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.id]);
   }
 
   async bulkImportTasks(tasks, userId) {
