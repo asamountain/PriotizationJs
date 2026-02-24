@@ -84,6 +84,7 @@ window.addEventListener('DOMContentLoaded', () => {
           icon: 'mdi-checkbox-blank-circle-outline'
         },
         showSubtaskModal: false,
+        showWelcomeOverlay: false,
         parentId: null,
         showCompletedSubtasks: false,
         showNotSureTasks: localStorage.getItem('showNotSureTasks') === 'true',
@@ -1368,6 +1369,37 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showNotification(`Moved "${task.name}" to parent level`, 'info');
       },
 
+      checkFirstVisit() {
+        const hasVisited = localStorage.getItem('hasVisitedPriorityManager');
+        if (!hasVisited) {
+          this.showWelcomeOverlay = true;
+        }
+      },
+
+      dismissWelcome() {
+        this.showWelcomeOverlay = false;
+        localStorage.setItem('hasVisitedPriorityManager', 'true');
+        
+        // If they have no tasks, offer to create demo tasks
+        if (this.tasks.length === 0) {
+          this.createDemoTasks();
+        }
+      },
+
+      createDemoTasks() {
+        const demoTasks = [
+          { name: '🚀 Drag me on the chart to prioritize', importance: 8, urgency: 8, icon: 'mdi-rocket', notes: 'This is an Important & Urgent task (Q1).' },
+          { name: '🍅 Start a Pomodoro on me', importance: 9, urgency: 4, icon: 'mdi-timer', notes: 'Click the play button to start focus time.' },
+          { name: '🔗 Double-click me to add subtasks', importance: 5, urgency: 3, icon: 'mdi-sitemap', notes: 'Break big goals into smaller steps.' }
+        ];
+
+        demoTasks.forEach(task => {
+          taskOperations.addTask(task);
+        });
+
+        this.showNotification('Demo tasks created! Try dragging them.', 'success');
+      },
+
       // Analytics Methods
       async loadAnalytics() {
         try {
@@ -1749,6 +1781,15 @@ window.addEventListener('DOMContentLoaded', () => {
           console.log('Initializing chart before socket connection');
           chartVisualization.initializeChart();
         }
+        
+        // Hide splash screen after initialization
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(() => {
+            splash.remove();
+          }, 400);
+        }
       });
       
       // Initialize socket connection AFTER chart setup
@@ -1815,6 +1856,9 @@ window.addEventListener('DOMContentLoaded', () => {
       
       // Start timer updates for active timers
       this.startTimerUpdates();
+      
+      // Check if first time user
+      this.checkFirstVisit();
       
       // Pre-load analytics data in background
       this.loadAnalytics();
