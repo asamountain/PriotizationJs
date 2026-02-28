@@ -24,6 +24,7 @@ const setupSocket = (io) => {
         category: task.category || null,
         status: task.status || null,
         icon: task.icon || 'mdi-checkbox-blank-circle-outline',
+        color: task.color || null,
         // Timer fields
         total_time_spent: task.total_time_spent || 0,
         active_timer_start: task.active_timer_start || null,
@@ -164,6 +165,7 @@ const setupSocket = (io) => {
         }
       } catch (error) {
         console.error("Failed to add subtask:", error);
+        socket.emit("error", { message: "Failed to add subtask. Please try again." });
       }
     });
 
@@ -241,6 +243,7 @@ const setupSocket = (io) => {
             category: task.category,
             status: task.status,
             icon: task.icon || 'mdi-checkbox-blank-circle-outline',
+            color: task.color || null,
             total_time_spent: task.total_time_spent || 0,
             active_timer_start: task.active_timer_start || null,
             pomodoro_count: task.pomodoro_count || 0,
@@ -358,6 +361,23 @@ const setupSocket = (io) => {
       } catch (error) {
         console.error("Failed to update task icon:", error);
         socket.emit("error", { message: "Failed to update icon" });
+      }
+    });
+
+    socket.on("updateTaskColor", async ({ taskId, color }) => {
+      try {
+        console.log(`Updating color for task ${taskId} to ${color}`);
+        await database.updateTaskColor(taskId, color);
+
+        const data = await getTasksWithLeverage(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
+      } catch (error) {
+        console.error("Failed to update task color:", error);
+        socket.emit("error", { message: "Failed to update color" });
       }
     });
 

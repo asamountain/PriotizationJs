@@ -81,7 +81,8 @@ window.addEventListener('DOMContentLoaded', () => {
           urgency: 5,
           link: '',
           due_date: null,
-          icon: 'mdi-checkbox-blank-circle-outline'
+          icon: 'mdi-checkbox-blank-circle-outline',
+          color: null
         },
         showSubtaskModal: false,
         showWelcomeOverlay: false,
@@ -101,7 +102,8 @@ window.addEventListener('DOMContentLoaded', () => {
           parent_id: null,
           link: '',
           due_date: null,
-          icon: 'mdi-checkbox-blank-circle-outline'
+          icon: 'mdi-checkbox-blank-circle-outline',
+          color: null
         },
         showTaskEditForm: false,
         editingTask: {
@@ -112,6 +114,7 @@ window.addEventListener('DOMContentLoaded', () => {
           link: '',
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
+          color: null,
           enables: []
         },
         possibleParents: [],
@@ -180,6 +183,26 @@ window.addEventListener('DOMContentLoaded', () => {
           'mdi-finance',
           'mdi-chart-line',
           'mdi-lightbulb'
+        ],
+        availableColors: [
+          { name: 'Red', value: '#FF5252' },
+          { name: 'Pink', value: '#E91E63' },
+          { name: 'Purple', value: '#9C27B0' },
+          { name: 'Deep Purple', value: '#673AB7' },
+          { name: 'Indigo', value: '#3F51B5' },
+          { name: 'Blue', value: '#2196F3' },
+          { name: 'Cyan', value: '#00BCD4' },
+          { name: 'Teal', value: '#009688' },
+          { name: 'Green', value: '#4CAF50' },
+          { name: 'Light Green', value: '#8BC34A' },
+          { name: 'Lime', value: '#CDDC39' },
+          { name: 'Yellow', value: '#FFEB3B' },
+          { name: 'Amber', value: '#FFC107' },
+          { name: 'Orange', value: '#FF9800' },
+          { name: 'Deep Orange', value: '#FF5722' },
+          { name: 'Brown', value: '#795548' },
+          { name: 'Grey', value: '#9E9E9E' },
+          { name: 'Blue Grey', value: '#607D8B' }
         ],
         // Timer state
         timerInterval: null,
@@ -278,6 +301,9 @@ window.addEventListener('DOMContentLoaded', () => {
             importance: task.importance,
             urgency: task.urgency
           }));
+      },
+      activeTimerTask() {
+        return this.tasks.find(t => t.active_timer_start);
       },
       activeTasksForEditing() {
         // Get all active tasks excluding the one being edited (for "enables" selection in Edit)
@@ -400,7 +426,32 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       
       toggleTaskDone(task) {
+        // If the task has an active timer, stop it before marking as done
+        if (!task.done && task.active_timer_start) {
+          this.socket.emit('stopTimer', task.id);
+          this.showNotification(`Timer stopped for: ${task.name}`, 'info');
+        }
         taskOperations.toggleDone(task.id);
+      },
+
+      startWorkOnTask(task) {
+        // Start timer if not already running
+        if (!task.active_timer_start) {
+          // Stop other running timers for focus
+          this.tasks.forEach(t => {
+            if (t.active_timer_start && t.id !== task.id) {
+              this.socket.emit('stopTimer', t.id);
+            }
+          });
+          
+          this.socket.emit('startTimer', task.id);
+          this.showNotification(`Now working on: ${task.name}`, 'success');
+        }
+        
+        // Open link if it exists
+        if (task.link) {
+          window.open(task.link, '_blank');
+        }
       },
       
       deleteTask(taskId, taskName) {
@@ -459,7 +510,8 @@ window.addEventListener('DOMContentLoaded', () => {
           urgency: 5,
           link: '',
           due_date: null,
-          icon: 'mdi-checkbox-blank-circle-outline'
+          icon: 'mdi-checkbox-blank-circle-outline',
+          color: null
         };
       },
       
@@ -521,7 +573,8 @@ window.addEventListener('DOMContentLoaded', () => {
           parent_id: null,
           link: '',
           due_date: null,
-          icon: 'mdi-checkbox-blank-circle-outline'
+          icon: 'mdi-checkbox-blank-circle-outline',
+          color: null
         };
       },
       
@@ -564,6 +617,7 @@ window.addEventListener('DOMContentLoaded', () => {
           link: '',
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
+          color: null,
           enables: []
         };
       },
@@ -796,7 +850,8 @@ window.addEventListener('DOMContentLoaded', () => {
           urgency: this.quickAddTask.urgency,
           link: this.quickAddTask.link || null,
           notes: this.quickAddTask.notes || null,
-          icon: this.quickAddTask.icon || 'mdi-checkbox-blank-circle-outline'
+          icon: this.quickAddTask.icon || 'mdi-checkbox-blank-circle-outline',
+          color: this.quickAddTask.color || null
         };
 
         const enables = this.quickAddTask.enables || [];
@@ -819,6 +874,7 @@ window.addEventListener('DOMContentLoaded', () => {
           link: '',
           notes: '',
           icon: 'mdi-checkbox-blank-circle-outline',
+          color: null,
           enables: []
         };
       },
@@ -1330,6 +1386,15 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showNotification('Icon updated', 'success');
       },
 
+      updateTaskColor(task, color) {
+        // Emit specific event for color update
+        this.socket.emit('updateTaskColor', { taskId: task.id, color: color });
+        
+        // Immediate local update for UI responsiveness
+        task.color = color;
+        this.showNotification('Color updated', 'success');
+      },
+
       getPriorityColor(value) {
         if (value >= 8) return 'error';
         if (value >= 6) return 'warning';
@@ -1832,6 +1897,10 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       });
 
+      this.socket.on('error', ({ message }) => {
+        this.showNotification(message || "An error occurred", "error");
+      });
+
       this.socket.on('csvImported', (result) => {
         console.log('CSV import completed:', result);
         // Refresh the task list
@@ -1899,7 +1968,12 @@ window.addEventListener('DOMContentLoaded', () => {
           @dblclick="$root.showAddSubtaskForm(task.id)"
           :data-task-id="task.id" 
           :class="['task-item', depth > 0 ? 'subtask' : '', task.active_timer_start ? 'timer-active' : '']"
-          style="cursor: grab; position: relative;"
+          :style="{ 
+            cursor: 'grab', 
+            position: 'relative',
+            backgroundColor: task.color ? (task.color + '15') : '',
+            borderLeft: task.color ? ('4px solid ' + task.color) : ''
+          }"
           draggable="true"
           @dragstart="$root.handleDragStart(task, $event)"
           @dragover="$root.handleDragOver"
@@ -1954,6 +2028,45 @@ window.addEventListener('DOMContentLoaded', () => {
                       :title="icon.replace('mdi-', '')"
                     >
                       <v-icon size="18">{{ icon }}</v-icon>
+                    </v-btn>
+                  </div>
+                </v-card>
+              </v-menu>
+
+              <!-- Color Picker Sub-menu -->
+              <v-menu location="end top" open-on-hover offset="5">
+                <template v-slot:activator="{ props }">
+                  <v-list-item v-bind="props" class="pe-2">
+                    <template v-slot:prepend>
+                      <v-icon :color="task.color || 'grey'" size="small">
+                        mdi-palette
+                      </v-icon>
+                    </template>
+                    <v-list-item-title>Change Color</v-list-item-title>
+                    <template v-slot:append><v-icon size="x-small">mdi-chevron-right</v-icon></template>
+                  </v-list-item>
+                </template>
+                <v-card max-width="240" class="pa-2" elevation="10" rounded="lg">
+                  <div class="d-flex flex-wrap gap-1 justify-center">
+                    <v-btn
+                      v-for="color in $root.availableColors"
+                      :key="color.value"
+                      icon
+                      size="x-small"
+                      @click.stop="$root.updateTaskColor(task, color.value)"
+                      :color="color.value"
+                      :title="color.name"
+                      variant="flat"
+                    >
+                    </v-btn>
+                    <v-btn
+                      icon
+                      size="x-small"
+                      @click.stop="$root.updateTaskColor(task, null)"
+                      title="Clear Color"
+                      variant="outlined"
+                    >
+                      <v-icon size="14">mdi-close</v-icon>
                     </v-btn>
                   </div>
                 </v-card>
@@ -2036,7 +2149,7 @@ window.addEventListener('DOMContentLoaded', () => {
               
               <v-icon 
                 size="20" 
-                :color="task.done ? 'grey' : getPriorityColor(task.importance)"
+                :color="task.done ? 'grey' : (task.color || getPriorityColor(task.importance))"
                 class="opacity-70"
               >
                 {{ task.icon || (task.status === 'Not Sure' ? 'mdi-help-circle' : 'mdi-checkbox-blank-circle-outline') }}
@@ -2064,7 +2177,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 <span v-if="task.due_date" class="text-xxs text-orange">
                   <v-icon size="10">mdi-calendar</v-icon> {{ task.due_date }}
                 </span>
-                <v-icon v-if="task.link" size="10" color="primary">mdi-link-variant</v-icon>
+                <a v-if="task.link" href="javascript:void(0)" @click.stop="$root.startWorkOnTask(task)" class="text-decoration-none">
+                  <v-icon size="10" color="primary" title="Start work and open link">mdi-link-variant</v-icon>
+                </a>
                 <v-icon v-if="task.notes" size="10" color="grey">mdi-note-text-outline</v-icon>
               </div>
             </v-list-item-subtitle>
