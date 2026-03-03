@@ -1,5 +1,7 @@
 # Priority Task Manager 📋
 
+<img width="1881" height="932" alt="image" src="https://github.com/user-attachments/assets/77c92bfa-b8cb-4fd8-aed1-c3b6256fcce4" />
+
 **Welcome to Priority Task Manager!** This application helps you organize tasks based on the Eisenhower Matrix (Importance vs. Urgency) with real-time synchronization across all your devices.
 
 ## Key Features ✨
