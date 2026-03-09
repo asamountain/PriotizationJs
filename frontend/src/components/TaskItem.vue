@@ -11,12 +11,15 @@ interface Task {
   total_time_spent?: number;
   active_timer_start?: string | null;
   link?: string;
+  leverage_score?: number;
 }
 
 const props = defineProps<{
   task: Task;
   subtasks: Task[];
   isExpanded: boolean;
+  subtasksMap?: Record<number, Task[]>;
+  expandedTasks?: Set<number>;
 }>();
 
 const emit = defineEmits(['toggle-expand', 'toggle-done', 'toggle-timer', 'edit', 'delete']);
@@ -77,6 +80,7 @@ const toggleExpand = () => emit('toggle-expand', props.task.id);
           </a>
           
           <div class="flex items-center gap-1">
+            <span v-if="task.leverage_score" class="px-1.5 py-0.5 border border-amber-200 text-[10px] font-bold text-amber-600 rounded bg-amber-50">L: {{ task.leverage_score.toFixed(1) }}</span>
             <span class="px-1.5 py-0.5 border border-blue-200 text-[10px] font-bold text-blue-600 rounded bg-blue-50">I: {{ task.importance }}</span>
             <span class="px-1.5 py-0.5 border border-purple-200 text-[10px] font-bold text-purple-600 rounded bg-purple-50">U: {{ task.urgency }}</span>
           </div>
@@ -115,8 +119,10 @@ const toggleExpand = () => emit('toggle-expand', props.task.id);
         <div class="pl-4">
           <TaskItem 
             :task="subtask" 
-            :subtasks="[]" 
-            :isExpanded="false"
+            :subtasks="subtasksMap ? (subtasksMap[subtask.id] || []) : []" 
+            :isExpanded="expandedTasks ? expandedTasks.has(subtask.id) : false"
+            :subtasksMap="subtasksMap"
+            :expandedTasks="expandedTasks"
             @toggle-expand="$emit('toggle-expand', $event)"
             @toggle-done="$emit('toggle-done', $event)"
             @toggle-timer="$emit('toggle-timer', $event)"

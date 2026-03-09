@@ -152,6 +152,7 @@ window.addEventListener('DOMContentLoaded', () => {
         isChartZoomed: false,
         showRelationships: localStorage.getItem('showRelationships') === 'true',
         showChartSubtasks: localStorage.getItem('showSubtasks') !== 'false', // Default to true if not set
+        selectedCategories: ['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks'],
         availableIcons: [
           'mdi-checkbox-blank-circle-outline',
           'mdi-star',
@@ -330,9 +331,70 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         
         return this.sortTasks(filteredTasks);
+      },
+      filteredTasksForChart() {
+        if (!this.tasks) return [];
+        
+        return this.tasks.filter(task => {
+          const cat = (task.category || '').toLowerCase();
+          const name = (task.name || '').toLowerCase();
+          let taskCategory = 'Other Tasks';
+          
+          if (cat.includes('project') || cat.includes('work') || name.includes('iocrops') || name.includes('milliman') || name.includes('autocrypt') || name.includes('hyundai')) {
+            taskCategory = 'Active Projects';
+          } else if (cat.includes('goal') || cat.includes('strategic') || cat.includes('hunt') || name.includes('job') || name.includes('apply')) {
+            taskCategory = 'Strategic Goals';
+          } else if (cat.includes('life') || cat.includes('vision') || name.includes('mountain') || name.includes('life') || name.includes('financial')) {
+            taskCategory = 'Life/Vision';
+          }
+          
+          return this.selectedCategories.includes(taskCategory);
+        });
+      },
+      categorizedActiveTasks() {
+        const groups = {
+          'Active Projects': [],
+          'Strategic Goals': [],
+          'Life/Vision': [],
+          'Other Tasks': []
+        };
+        
+        this.sortedActiveTasks.forEach(task => {
+          const cat = (task.category || '').toLowerCase();
+          const name = task.name.toLowerCase();
+          
+          if (cat.includes('project') || cat.includes('work') || name.includes('iocrops') || name.includes('milliman') || name.includes('autocrypt') || name.includes('hyundai')) {
+            groups['Active Projects'].push(task);
+          } else if (cat.includes('goal') || cat.includes('strategic') || cat.includes('hunt') || name.includes('job') || name.includes('apply')) {
+            groups['Strategic Goals'].push(task);
+          } else if (cat.includes('life') || cat.includes('vision') || name.includes('mountain') || name.includes('life') || name.includes('financial')) {
+            groups['Life/Vision'].push(task);
+          } else {
+            groups['Other Tasks'].push(task);
+          }
+        });
+        
+        return groups;
+      },
+      allExpanded() {
+        const rootTasksWithSubtasks = this.activeTasks.filter(t => this.tasks.some(sub => sub.parent_id === t.id));
+        if (rootTasksWithSubtasks.length === 0) return false;
+        return rootTasksWithSubtasks.every(t => this.expandedTasks.has(t.id));
       }
     },
     methods: {
+      toggleAllExpansion() {
+        if (this.allExpanded) {
+          this.expandedTasks.clear();
+        } else {
+          this.activeTasks.forEach(t => {
+            if (this.tasks.some(sub => sub.parent_id === t.id)) {
+              this.expandedTasks.add(t.id);
+            }
+          });
+        }
+        this.expandedTasks = new Set(this.expandedTasks);
+      },
       sortTasks(tasks) {
         if (!tasks || !Array.isArray(tasks)) return [];
         const sorted = [...tasks];
@@ -480,12 +542,14 @@ window.addEventListener('DOMContentLoaded', () => {
       
       showAddSubtaskForm(taskId) {
         this.parentId = taskId;
+        const parentTask = this.tasks.find(t => t.id === taskId);
         this.newSubtask = {
           name: '',
           importance: 5.0,
           urgency: 5.0,
           link: '',
-          due_date: null
+          due_date: null,
+          category: parentTask ? parentTask.category : null
         };
         this.showSubtaskModal = true;
       },
@@ -511,7 +575,8 @@ window.addEventListener('DOMContentLoaded', () => {
           link: '',
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
-          color: null
+          color: null,
+          category: null
         };
       },
       
@@ -574,7 +639,8 @@ window.addEventListener('DOMContentLoaded', () => {
           link: '',
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
-          color: null
+          color: null,
+          category: null
         };
       },
       
@@ -618,7 +684,8 @@ window.addEventListener('DOMContentLoaded', () => {
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
           color: null,
-          enables: []
+          enables: [],
+          category: null
         };
       },
       
@@ -700,7 +767,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
         // Re-render the chart with updated tasks (only if chart is initialized)
         if (chartVisualization && typeof chartVisualization.renderChart === 'function' && chartVisualization.dotsGroup) {
-          chartVisualization.renderChart(tasks);
+          chartVisualization.renderChart(this.filteredTasksForChart);
         }
       },
 
@@ -1811,6 +1878,14 @@ window.addEventListener('DOMContentLoaded', () => {
         if (newValue === 'analytics') {
           this.loadAnalytics();
         }
+      },
+      selectedCategories: {
+        handler() {
+          if (chartVisualization && typeof chartVisualization.renderChart === 'function') {
+            chartVisualization.renderChart(this.filteredTasksForChart);
+          }
+        },
+        deep: true
       }
     },
     provide() {

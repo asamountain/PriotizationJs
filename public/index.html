@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Priority Task Manager</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-LM04J3WC3L"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-LM04J3WC3L');
+    </script>
     <!-- Material Design Icons -->
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
     <!-- Roboto Font -->
@@ -615,6 +625,27 @@
                                 <v-icon class="me-2" color="primary">mdi-chart-scatter-plot</v-icon>
                                 {{ isQ1ZoomMode ? 'Q1 Zoom: Priorities' : 'Eisenhower Matrix' }}
                                 <v-spacer></v-spacer>
+                                
+                                <!-- Category Selection Chips -->
+                                <div class="d-flex gap-1 me-2 overflow-x-auto hide-scrollbar" style="max-width: 45%;">
+                                  <v-chip-group
+                                    v-model="selectedCategories"
+                                    multiple
+                                    selected-class="bg-primary text-white font-weight-bold elevation-2"
+                                  >
+                                    <v-chip
+                                      v-for="cat in ['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks']"
+                                      :key="cat"
+                                      :value="cat"
+                                      size="small"
+                                      variant="tonal"
+                                      rounded="lg"
+                                    >
+                                      {{ cat }}
+                                    </v-chip>
+                                  </v-chip-group>
+                                </div>
+
                                 <v-btn
                                     icon="mdi-plus"
                                     variant="text"
@@ -699,6 +730,15 @@
                             title="Drop tasks here to make them root tasks"
                         >
                             Active Tasks
+                            <v-btn 
+                                size="x-small" 
+                                variant="outlined" 
+                                class="ms-3"
+                                color="grey-darken-1"
+                                @click="toggleAllExpansion"
+                            >
+                                {{ allExpanded ? 'Collapse All' : 'Expand All' }}
+                            </v-btn>
                             <v-spacer></v-spacer>
                             <v-btn
                                 color="primary"
@@ -763,37 +803,32 @@
                                 ></v-select>
                             </div>
                             
-                            <v-list v-if="activeTasks.length > 0">
-                                <task-node
-                                    v-for="task in sortedActiveTasks"
-                                    :key="task.id"
-                                    :task="task"
-                                    :depth="0"
-                                    :tasks="tasks"
-                                    :expanded-tasks="expandedTasks"
-                                    :show-completed-subtasks="showCompletedSubtasks"
-                                ></task-node>
-                            </v-list>
+                            <template v-if="activeTasks.length > 0">
+                                <div v-for="(tasks, category) in categorizedActiveTasks" :key="category">
+                                    <div v-if="tasks.length > 0" class="mb-4">
+                                        <div class="text-caption text-grey text-uppercase font-weight-bold px-4 pt-3 pb-1" style="letter-spacing: 1px;">
+                                            {{ category }} ({{ tasks.length }})
+                                        </div>
+                                        <v-list class="pa-0">
+                                            <task-node
+                                                v-for="task in tasks"
+                                                :key="task.id"
+                                                :task="task"
+                                                :depth="0"
+                                                :tasks="$root.tasks"
+                                                :expanded-tasks="$root.expandedTasks"
+                                                :show-completed-subtasks="$root.showCompletedSubtasks"
+                                            ></task-node>
+                                        </v-list>
+                                    </div>
+                                </div>
+                            </template>
                             
                             <v-sheet v-else class="pa-4 text-center">
                                 <v-icon size="large" color="grey">mdi-playlist-check</v-icon>
                                 <div class="text-body-1 mt-2">No active tasks. Add a task to get started!</div>
                             </v-sheet>
                             
-                            <!-- Empty drop area -->
-                            <v-sheet
-                                id="empty-drop-area"
-                                ref="emptyDropArea"
-                                class="mt-4 pa-6 text-center bg-grey-lighten-4 rounded"
-                                border
-                                @dragover="handleDragOver"
-                                @dragleave="handleDragLeave"
-                                @drop="handleDropOnRoot"
-                                :class="{ 'drag-over': draggedTask }"
-                            >
-                                <v-icon color="grey" class="mb-2">mdi-drag</v-icon>
-                                <div class="text-body-2 text-grey">Drop tasks here to move to root level</div>
-                            </v-sheet>
                         </v-card-text>
                     </v-card>
 
@@ -935,6 +970,14 @@
                                 placeholder="Add a URL (http://example.com)"
                             ></v-text-field>
                             
+                            <v-select
+                                v-model="newSubtask.category"
+                                :items="['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks']"
+                                label="Category"
+                                variant="outlined"
+                                class="mb-3"
+                            ></v-select>
+                            
                             <div class="d-flex align-center justify-space-between mb-1">
                                 <span class="text-subtitle-2">Importance: {{ Number(newSubtask.importance).toFixed(1) }}</span>
                             </div>
@@ -1030,6 +1073,14 @@
                                 placeholder="Add a URL (http://example.com)"
                                 class="mb-3"
                             ></v-text-field>
+
+                            <v-select
+                                v-model="editingSubtask.category"
+                                :items="['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks']"
+                                label="Category"
+                                variant="outlined"
+                                class="mb-3"
+                            ></v-select>
 
                             <div class="d-flex align-center justify-space-between mb-1 mt-2">
                                 <span class="text-subtitle-2">Importance: {{ Number(editingSubtask.importance).toFixed(1) }}</span>
@@ -1156,6 +1207,14 @@
                                 placeholder="Add a URL (http://example.com)"
                                 class="mb-3"
                             ></v-text-field>
+
+                            <v-select
+                                v-model="editingTask.category"
+                                :items="['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks']"
+                                label="Category"
+                                variant="outlined"
+                                class="mb-3"
+                            ></v-select>
 
                             <div class="d-flex align-center justify-space-between mb-1 mt-2">
                                 <span class="text-subtitle-2">Importance: {{ Number(editingTask.importance).toFixed(1) }}</span>

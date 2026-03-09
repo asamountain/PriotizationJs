@@ -14,6 +14,8 @@ interface Task {
   status?: string;
   notes?: string;
   link?: string;
+  category?: string;
+  leverage_score?: number;
 }
 
 const tasks = ref<Task[]>([]);
@@ -21,13 +23,63 @@ const expandedTasks = ref<Set<number>>(new Set());
 const searchQuery = ref('');
 const sortBy = ref('priority');
 
+const allExpanded = computed(() => {
+  const rootTasksWithSubtasks = tasks.value.filter(t => t.parent_id === null && subtasksMap.value[t.id]?.length > 0);
+  return rootTasksWithSubtasks.length > 0 && rootTasksWithSubtasks.every(t => expandedTasks.value.has(t.id));
+});
+
+const toggleAllExpansion = () => {
+  if (allExpanded.value) {
+    expandedTasks.value.clear();
+  } else {
+    tasks.value.forEach(t => {
+      if (subtasksMap.value[t.id]?.length > 0) {
+        expandedTasks.value.add(t.id);
+      }
+    });
+  }
+};
+
 const activeTasks = computed(() => {
   let filtered = tasks.value.filter(t => !t.done && t.parent_id === null);
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase();
     filtered = filtered.filter(t => t.name.toLowerCase().includes(q));
   }
+  
+  if (sortBy.value === 'priority') {
+    return filtered.sort((a, b) => {
+      const scoreA = (a.importance * 2) + a.urgency + (a.leverage_score || 0);
+      const scoreB = (b.importance * 2) + b.urgency + (b.leverage_score || 0);
+      return scoreB - scoreA;
+    });
+  }
+  
   return filtered;
+});
+
+const categorizedTasks = computed(() => {
+  const groups: Record<string, Task[]> = {
+    'Active Projects': [],
+    'Strategic Goals': [],
+    'Life/Vision': [],
+    'Other': []
+  };
+
+  activeTasks.value.forEach(task => {
+    const cat = task.category?.toLowerCase() || '';
+    if (cat.includes('project') || cat.includes('work') || task.name.includes('IoCrops')) {
+      groups['Active Projects'].push(task);
+    } else if (cat.includes('goal') || cat.includes('strategic') || cat.includes('hunt') || task.name.includes('Job')) {
+      groups['Strategic Goals'].push(task);
+    } else if (cat.includes('life') || cat.includes('vision') || cat.includes('mountain')) {
+      groups['Life/Vision'].push(task);
+    } else {
+      groups['Other'].push(task);
+    }
+  });
+
+  return groups;
 });
 
 const subtasksMap = computed(() => {
@@ -133,23 +185,38 @@ onMounted(() => {
           <!-- Task List -->
           <section class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 class="font-bold text-gray-800">Task Hierarchy</h2>
+              <div class="flex items-center gap-3">
+                <h2 class="font-bold text-gray-800">Task Hierarchy</h2>
+                <button 
+                  @click="toggleAllExpansion" 
+                  class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500"
+                >
+                  {{ allExpanded ? 'Collapse All' : 'Expand All' }}
+                </button>
+              </div>
               <select v-model="sortBy" class="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 outline-none font-medium">
-                <option value="priority">Priority (High → Low)</option>
+                <option value="priority">Priority Pulse</option>
                 <option value="newest">Newest First</option>
               </select>
             </div>
 
-            <div class="p-2">
-              <TaskItem 
-                v-for="task in activeTasks" 
-                :key="task.id" 
-                :task="task" 
-                :subtasks="subtasksMap[task.id] || []"
-                :isExpanded="expandedTasks.has(task.id)"
-                @toggle-expand="toggleExpand"
-                @toggle-done="toggleDone"
-              />
+            <div class="p-2 space-y-4">
+              <div v-for="(groupTasks, category) in categorizedTasks" :key="category" v-show="groupTasks.length > 0" class="space-y-2">
+                <h3 class="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mt-2">{{ category }}</h3>
+                <div class="space-y-1">
+                  <TaskItem 
+                    v-for="task in groupTasks" 
+                    :key="task.id" 
+                    :task="task" 
+                    :subtasks="subtasksMap[task.id] || []"
+                    :isExpanded="expandedTasks.has(task.id)"
+                    :subtasksMap="subtasksMap"
+                    :expandedTasks="expandedTasks"
+                    @toggle-expand="toggleExpand"
+                    @toggle-done="toggleDone"
+                  />
+                </div>
+              </div>
             </div>
           </section>
 

@@ -1,33 +1,19 @@
-import sqlite3 from "sqlite3";
 import pg from 'pg';
 
-const isProduction = process.env.DATABASE_URL;
+const isProduction = true; // Forcing PG as per user request
 
 class Database {
   constructor() {
-    this.db = null; // SQLite
     this.pool = null; // PostgreSQL
   }
 
   async init() {
-    if (isProduction) {
-      console.log("Connecting to Cloud PostgreSQL...");
-      this.pool = new pg.Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false }
-      });
-      await this.createTablesPostgres();
-    } else {
-      return new Promise((resolve, reject) => {
-        this.db = new sqlite3.Database("./tasks.db", (err) => {
-          if (err) reject(err);
-          else {
-            console.log("Connected to Local SQLite");
-            this.createTablesSqlite().then(resolve).catch(reject);
-          }
-        });
-      });
-    }
+    console.log("Connecting to Cloud PostgreSQL...");
+    this.pool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    await this.createTablesPostgres();
   }
 
   async createTablesPostgres() {
@@ -55,15 +41,14 @@ class Database {
         due_date TEXT,
         link TEXT,
         notes TEXT,
-        progress INTEGER,
+        progress REAL DEFAULT 0,
         category TEXT,
         status TEXT,
         total_time_spent INTEGER DEFAULT 0,
         active_timer_start TEXT,
         pomodoro_count INTEGER DEFAULT 0,
         last_worked_at TEXT,
-        icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline',
-        color TEXT
+        icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'
       );
 
       CREATE TABLE IF NOT EXISTS task_relationships (
@@ -93,13 +78,13 @@ class Database {
     `;
     await this.pool.query(query);
     
-    // Migrations for existing tables
+    // Migrations
     const migrations = [
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS link TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notes TEXT",
-      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress REAL",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress REAL DEFAULT 0",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS category TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS status TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS total_time_spent INTEGER DEFAULT 0",
@@ -107,7 +92,6 @@ class Database {
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pomodoro_count INTEGER DEFAULT 0",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_worked_at TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'",
-      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS color TEXT",
       "ALTER TABLE tasks ALTER COLUMN importance TYPE REAL",
       "ALTER TABLE tasks ALTER COLUMN urgency TYPE REAL",
       "ALTER TABLE tasks ALTER COLUMN progress TYPE REAL"
@@ -124,68 +108,16 @@ class Database {
     console.log("PostgreSQL Tables verified");
   }
 
-  async createTablesSqlite() {
-    const migrations = [
-      `CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT, avatar TEXT, provider TEXT DEFAULT 'google', created_at TEXT DEFAULT CURRENT_TIMESTAMP, last_login TEXT DEFAULT CURRENT_TIMESTAMP)`,
-      `CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, importance REAL DEFAULT 5.0, urgency REAL DEFAULT 5.0, done BOOLEAN DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP, parent_id INTEGER NULL, user_id TEXT NULL, FOREIGN KEY (parent_id) REFERENCES tasks(id), FOREIGN KEY (user_id) REFERENCES users(id))`,
-      `CREATE TABLE IF NOT EXISTS task_relationships (id INTEGER PRIMARY KEY AUTOINCREMENT, enabler_task_id INTEGER NOT NULL, enabled_task_id INTEGER NOT NULL, user_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (enabler_task_id) REFERENCES tasks(id) ON DELETE CASCADE, FOREIGN KEY (enabled_task_id) REFERENCES tasks(id) ON DELETE CASCADE, UNIQUE(enabler_task_id, enabled_task_id))`,
-      `ALTER TABLE tasks ADD COLUMN due_date TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN link TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN completed_at TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN notes TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN progress REAL NULL`,
-      `ALTER TABLE tasks ADD COLUMN category TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN status TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN user_id TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN total_time_spent INTEGER DEFAULT 0`,
-      `ALTER TABLE tasks ADD COLUMN active_timer_start TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN pomodoro_count INTEGER DEFAULT 0`,
-      `ALTER TABLE tasks ADD COLUMN last_worked_at TEXT NULL`,
-      `ALTER TABLE tasks ADD COLUMN icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'`,
-      `ALTER TABLE tasks ADD COLUMN color TEXT NULL`,
-      `CREATE TABLE IF NOT EXISTS time_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, start_time TEXT NOT NULL, end_time TEXT NULL, duration INTEGER DEFAULT 0, session_type TEXT DEFAULT 'focus', notes TEXT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE)`,
-      `CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_relationships_user_id ON task_relationships(user_id)`
-    ];
-    
-    return new Promise((resolve) => {
-      this.db.serialize(() => {
-        migrations.forEach(sql => {
-          this.db.run(sql, (err) => {
-            if (err && !err.message.includes('duplicate column')) {
-              // Ignore duplicate column errors
-            }
-          });
-        });
-        resolve();
-      });
-    });
-  }
-
   async query(text, params) {
-    if (this.pool) {
-      const res = await this.pool.query(text, params);
-      return res.rows;
-    } else {
-      return new Promise((resolve, reject) => {
-        this.db.all(text, params, (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        });
-      });
-    }
+    const res = await this.pool.query(text, params);
+    return res.rows;
   }
 
   async getTaskData(userId) {
     const query = userId 
       ? "SELECT * FROM tasks WHERE (user_id = $1 OR user_id IS NULL) ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, importance DESC, urgency DESC"
       : "SELECT * FROM tasks WHERE user_id IS NULL ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, importance DESC, urgency DESC";
-    
-    const finalQuery = this.pool ? query : query.replace('$1', '?');
-    const params = userId ? [userId] : [];
-    return this.query(finalQuery, params);
+    return this.query(query, userId ? [userId] : []);
   }
 
   async addTask(task, userId) {
@@ -195,78 +127,48 @@ class Database {
     const pomodoros = Math.round(Number(task.pomodoro_count) || 0);
     const progress = Number(task.progress) || 0;
 
-    if (this.pool) {
-      const res = await this.pool.query(
-        `INSERT INTO tasks (
-          name, importance, urgency, user_id, done, link, due_date,
-          notes, parent_id, total_time_spent, pomodoro_count, category, status,
-          created_at, completed_at, icon, progress, color
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-          COALESCE($14, CURRENT_TIMESTAMP), $15, $16, $17, $18) RETURNING id`,
-        [
-          task.name, importance, urgency, userId || null, !!task.done, 
-          task.link || null, task.due_date || null, task.notes || null, 
-          task.parent_id || null, totalTime, pomodoros, 
-          task.category || null, task.status || null,
-          task.created_at || null, task.completed_at || null,
-          task.icon || 'mdi-checkbox-blank-circle-outline',
-          progress,
-          task.color || null
-        ]
-      );
-      return res.rows[0].id;
-    } else {
-      return new Promise((resolve, reject) => {
-        this.db.run(
-          `INSERT INTO tasks (
-            name, importance, urgency, user_id, done, link, due_date, 
-            notes, parent_id, total_time_spent, pomodoro_count, category, status,
-            created_at, completed_at, icon, progress, color
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            task.name, importance, urgency, userId || null, task.done ? 1 : 0, 
-            task.link || null, task.due_date || null, task.notes || null, 
-            task.parent_id || null, totalTime, pomodoros, 
-            task.category || null, task.status || null,
-            task.created_at || null, task.completed_at || null,
-            task.icon || 'mdi-checkbox-blank-circle-outline',
-            progress,
-            task.color || null
-          ],
-          function(err) {
-            if (err) reject(err);
-            else resolve(this.lastID);
-          }
-        );
-      });
-    }
+    const res = await this.pool.query(
+      `INSERT INTO tasks (
+        name, importance, urgency, user_id, done, link, due_date, 
+        notes, parent_id, total_time_spent, pomodoro_count, category, status,
+        created_at, completed_at, icon, progress
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 
+        COALESCE($14, CURRENT_TIMESTAMP), $15, $16, $17) RETURNING id`,
+      [
+        task.name, importance, urgency, userId || null, !!task.done, 
+        task.link || null, task.due_date || null, task.notes || null, 
+        task.parent_id || null, totalTime, pomodoros, 
+        task.category || null, task.status || null,
+        task.created_at || null, task.completed_at || null,
+        task.icon || 'mdi-checkbox-blank-circle-outline',
+        progress
+      ]
+    );
+    return res.rows[0].id;
   }
 
   async modifyTask(task) {
     const importance = Number(task.importance) || 5;
     const urgency = Number(task.urgency) || 5;
     const progress = Number(task.progress) || 0;
-    const q = this.pool
-      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, icon = $4, progress = $5, color = $6 WHERE id = $7"
-      : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, icon = ?, progress = ?, color = ? WHERE id = ?";
-    await this.query(q, [task.name, importance, urgency, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.color, task.id]);
+    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, icon = $4, progress = $5 WHERE id = $6";
+    await this.query(q, [task.name, importance, urgency, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.id]);
   }
 
   async deleteTask(id) {
-    const q = this.pool ? "DELETE FROM tasks WHERE id = $1" : "DELETE FROM tasks WHERE id = ?";
+    const q = "DELETE FROM tasks WHERE id = $1";
     await this.query(q, [id]);
   }
 
   async toggleTaskDone(id) {
-    const getQ = this.pool ? "SELECT * FROM tasks WHERE id = $1" : "SELECT * FROM tasks WHERE id = ?";
-    const tasks = await this.query(getQ, [id]);
+    const tasks = await this.query("SELECT * FROM tasks WHERE id = $1", [id]);
     const task = tasks[0];
     if (!task) return;
 
     const now = new Date().toISOString();
     const updateQ = task.done 
-      ? (this.pool ? "UPDATE tasks SET done = FALSE, completed_at = NULL WHERE id = $1" : "UPDATE tasks SET done = 0, completed_at = NULL WHERE id = ?")
-      : (this.pool ? "UPDATE tasks SET done = TRUE, completed_at = $1 WHERE id = $2" : "UPDATE tasks SET done = 1, completed_at = ? WHERE id = ?");
+      ? "UPDATE tasks SET done = FALSE, completed_at = NULL WHERE id = $1"
+      : "UPDATE tasks SET done = TRUE, completed_at = $1 WHERE id = $2";
     
     const params = task.done ? [id] : [now, id];
     await this.query(updateQ, params);
@@ -281,14 +183,12 @@ class Database {
     const importance = Number(subtask.importance) || 5;
     const urgency = Number(subtask.urgency) || 5;
     const progress = Number(subtask.progress) || 0;
-    const q = this.pool 
-      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6, icon = $7, notes = $8, status = $9, progress = $10, color = $11 WHERE id = $12"
-      : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, parent_id = ?, link = ?, due_date = ?, icon = ?, notes = ?, status = ?, progress = ?, color = ? WHERE id = ?";
-    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.icon || 'mdi-checkbox-blank-circle-outline', subtask.notes, subtask.status, progress, subtask.color, subtask.id]);
+    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6, icon = $7, notes = $8, status = $9, progress = $10 WHERE id = $11";
+    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.icon || 'mdi-checkbox-blank-circle-outline', subtask.notes, subtask.status, progress, subtask.id]);
   }
 
   async updateTaskNotes(taskId, notes) {
-    const q = this.pool ? "UPDATE tasks SET notes = $1 WHERE id = $2" : "UPDATE tasks SET notes = ? WHERE id = ?";
+    const q = "UPDATE tasks SET notes = $1 WHERE id = $2";
     await this.query(q, [notes, taskId]);
   }
 
@@ -296,194 +196,120 @@ class Database {
     const importance = Number(task.importance) || 5;
     const urgency = Number(task.urgency) || 5;
     const progress = Number(task.progress) || 0;
-    const q = this.pool
-      ? "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9, color = $10 WHERE id = $11"
-      : "UPDATE tasks SET name = ?, importance = ?, urgency = ?, link = ?, due_date = ?, notes = ?, status = ?, icon = ?, progress = ?, color = ? WHERE id = ?";
-    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.color, task.id]);
+    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9, category = $10 WHERE id = $11";
+    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.category || null, task.id]);
   }
 
   async bulkImportTasks(tasks, userId) {
     const results = { imported: 0, updated: 0, errors: [] };
-    const idMap = new Map(); // Map original IDs from CSV to new DB IDs
-    const subtasksToUpdate = []; // Queue of subtasks to link once parents are in
+    const idMap = new Map();
+    const subtasksToUpdate = [];
 
-    console.log(`Starting bulk import of ${tasks.length} tasks...`);
-
-    // Phase 1: Create all tasks (temporarily without parents to avoid FK errors)
     for (let i = 0; i < tasks.length; i++) {
       const task = tasks[i];
       if (!task.name) continue;
 
       try {
-        const existing = await this.query(
-          this.pool ? "SELECT id, user_id FROM tasks WHERE name = $1 AND (user_id = $2 OR user_id IS NULL)" : "SELECT id, user_id FROM tasks WHERE name = ? AND (user_id = ? OR user_id IS NULL)",
-          [task.name, userId]
-        );
+        const existing = await this.query("SELECT id, user_id FROM tasks WHERE name = $1 AND (user_id = $2 OR user_id IS NULL)", [task.name, userId]);
 
         let finalId;
         if (existing.length > 0) {
           finalId = existing[0].id;
           if (userId && existing[0].user_id === null) {
-            await this.query(this.pool ? "UPDATE tasks SET user_id = $1 WHERE id = $2" : "UPDATE tasks SET user_id = ? WHERE id = ?", [userId, finalId]);
+            await this.query("UPDATE tasks SET user_id = $1 WHERE id = $2", [userId, finalId]);
           }
           results.updated++;
         } else {
-          // IMPORTANT: Insert without parent first to avoid FK constraint errors with old CSV IDs
           const taskData = { ...task, parent_id: null, icon: task.icon || 'mdi-checkbox-blank-circle-outline', progress: task.progress || 0 };
           finalId = await this.addTask(taskData, userId);
           results.imported++;
         }
 
-        // Store mapping of CSV ID -> New Database ID
         if (task.id) idMap.set(String(task.id), finalId);
-        
-        // If this task is a subtask, queue it for hierarchy linking using the mapping
-        if (task.parent_id) {
-          subtasksToUpdate.push({ taskId: finalId, originalParentId: String(task.parent_id) });
-        }
+        if (task.parent_id) subtasksToUpdate.push({ taskId: finalId, originalParentId: String(task.parent_id) });
       } catch (err) {
-        console.error(`Failed to import row ${i + 1} (${task.name}):`, err.message);
         results.errors.push({ row: i + 1, task: task.name, error: err.message });
       }
     }
 
-    // Phase 2: Rebuild hierarchy using the ID map
     if (subtasksToUpdate.length > 0) {
-      console.log(`Rebuilding hierarchy for ${subtasksToUpdate.length} subtasks...`);
       for (const link of subtasksToUpdate) {
         const newParentId = idMap.get(link.originalParentId);
-        if (newParentId) {
-          try {
-            await this.setTaskParent(link.taskId, newParentId);
-          } catch (linkErr) {
-            console.error(`Failed to link task ${link.taskId} to parent ${newParentId}:`, linkErr.message);
-          }
-        }
+        if (newParentId) await this.setTaskParent(link.taskId, newParentId);
       }
     }
-
     return results;
   }
 
   async startTimer(taskId) {
     const now = new Date().toISOString();
-    const q = this.pool 
-      ? "UPDATE tasks SET active_timer_start = $1, last_worked_at = $2 WHERE id = $3"
-      : "UPDATE tasks SET active_timer_start = ?, last_worked_at = ? WHERE id = ?";
+    const q = "UPDATE tasks SET active_timer_start = $1, last_worked_at = $2 WHERE id = $3";
     await this.query(q, [now, now, taskId]);
     return { taskId, startTime: now };
   }
 
   async stopTimer(taskId) {
-    const getQ = this.pool ? "SELECT active_timer_start, total_time_spent FROM tasks WHERE id = $1" : "SELECT active_timer_start, total_time_spent FROM tasks WHERE id = ?";
-    const tasks = await this.query(getQ, [taskId]);
+    const tasks = await this.query("SELECT active_timer_start, total_time_spent FROM tasks WHERE id = $1", [taskId]);
     const task = tasks[0];
-    if (!task || !task.active_timer_start) {
-      // Timer already stopped or doesn't exist - return gracefully
-      console.log(`Timer for task ${taskId} already stopped or not found`);
-      return { taskId, duration: 0, totalTime: task?.total_time_spent || 0, alreadyStopped: true };
-    }
+    if (!task || !task.active_timer_start) return { taskId, duration: 0, alreadyStopped: true };
 
     const duration = Math.floor((new Date() - new Date(task.active_timer_start)) / 1000);
     const newTotalTime = (task.total_time_spent || 0) + duration;
     const pomodoroIncr = duration >= 1500 ? 1 : 0;
 
-    const upQ = this.pool
-      ? "UPDATE tasks SET active_timer_start = NULL, total_time_spent = $1, pomodoro_count = pomodoro_count + $2 WHERE id = $3"
-      : "UPDATE tasks SET active_timer_start = NULL, total_time_spent = ?, pomodoro_count = pomodoro_count + ? WHERE id = ?";
-    await this.query(upQ, [newTotalTime, pomodoroIncr, taskId]);
-
-    const logQ = this.pool
-      ? "INSERT INTO time_logs (task_id, start_time, end_time, duration) VALUES ($1, $2, $3, $4)"
-      : "INSERT INTO time_logs (task_id, start_time, end_time, duration) VALUES (?, ?, ?, ?)";
-    await this.query(logQ, [taskId, task.active_timer_start, new Date().toISOString(), duration]);
+    await this.query("UPDATE tasks SET active_timer_start = NULL, total_time_spent = $1, pomodoro_count = pomodoro_count + $2 WHERE id = $3", [newTotalTime, pomodoroIncr, taskId]);
+    await this.query("INSERT INTO time_logs (task_id, start_time, end_time, duration) VALUES ($1, $2, $3, $4)", [taskId, task.active_timer_start, new Date().toISOString(), duration]);
 
     return { taskId, duration, totalTime: newTotalTime };
   }
 
   async getTimeLogs(taskId) {
-    const q = this.pool ? "SELECT * FROM time_logs WHERE task_id = $1 ORDER BY created_at DESC" : "SELECT * FROM time_logs WHERE task_id = ? ORDER BY created_at DESC";
-    return this.query(q, [taskId]);
+    return this.query("SELECT * FROM time_logs WHERE task_id = $1 ORDER BY created_at DESC", [taskId]);
   }
 
   async getActiveTimers() {
-    const q = "SELECT id, name, active_timer_start FROM tasks WHERE active_timer_start IS NOT NULL";
-    return this.query(q, []);
+    return this.query("SELECT id, name, active_timer_start FROM tasks WHERE active_timer_start IS NOT NULL", []);
   }
 
   async setTaskParent(taskId, parentId) {
-    const q = parentId === null 
-      ? (this.pool ? "UPDATE tasks SET parent_id = NULL WHERE id = $1" : "UPDATE tasks SET parent_id = NULL WHERE id = ?")
-      : (this.pool ? "UPDATE tasks SET parent_id = $1 WHERE id = $2" : "UPDATE tasks SET parent_id = ? WHERE id = ?");
-    const params = parentId === null ? [taskId] : [parentId, taskId];
-    await this.query(q, params);
+    const q = parentId === null ? "UPDATE tasks SET parent_id = NULL WHERE id = $1" : "UPDATE tasks SET parent_id = $1 WHERE id = $2";
+    await this.query(q, parentId === null ? [taskId] : [parentId, taskId]);
   }
 
   async updateTaskStatus(taskId, status) {
-    const q = this.pool ? "UPDATE tasks SET status = $1 WHERE id = $2" : "UPDATE tasks SET status = ? WHERE id = ?";
-    await this.query(q, [status, taskId]);
+    await this.query("UPDATE tasks SET status = $1 WHERE id = $2", [status, taskId]);
   }
 
   async updateTaskIcon(taskId, icon) {
-    const q = this.pool ? "UPDATE tasks SET icon = $1 WHERE id = $2" : "UPDATE tasks SET icon = ? WHERE id = ?";
-    await this.query(q, [icon, taskId]);
-  }
-
-  async updateTaskColor(taskId, color) {
-    const q = this.pool ? "UPDATE tasks SET color = $1 WHERE id = $2" : "UPDATE tasks SET color = ? WHERE id = ?";
-    await this.query(q, [color, taskId]);
+    await this.query("UPDATE tasks SET icon = $1 WHERE id = $2", [icon, taskId]);
   }
 
   async upsertUser(user) {
     const now = new Date().toISOString();
-    if (this.pool) {
-      await this.pool.query(
-        `INSERT INTO users (id, email, name, avatar, provider, last_login)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT(id) DO UPDATE SET
-         email = EXCLUDED.email, name = EXCLUDED.name, avatar = EXCLUDED.avatar, last_login = EXCLUDED.last_login`,
-        [user.id, user.email, user.name, user.avatar, user.provider || 'google', now]
-      );
-    } else {
-      await this.query(
-        `INSERT INTO users (id, email, name, avatar, provider, last_login)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-         email = excluded.email, name = excluded.name, avatar = excluded.avatar, last_login = excluded.last_login`,
-        [user.id, user.email, user.name, user.avatar, user.provider || 'google', now]
-      );
-    }
+    await this.pool.query(
+      `INSERT INTO users (id, email, name, avatar, provider, last_login)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT(id) DO UPDATE SET
+       email = EXCLUDED.email, name = EXCLUDED.name, avatar = EXCLUDED.avatar, last_login = EXCLUDED.last_login`,
+      [user.id, user.email, user.name, user.avatar, user.provider || 'google', now]
+    );
     return user;
   }
 
-  // Task Relationship Methods for Leverage Score
-
   async addTaskRelationship(enablerId, enabledId, userId) {
-    const q = this.pool
-      ? "INSERT INTO task_relationships (enabler_task_id, enabled_task_id, user_id) VALUES ($1, $2, $3) ON CONFLICT (enabler_task_id, enabled_task_id) DO NOTHING"
-      : "INSERT OR IGNORE INTO task_relationships (enabler_task_id, enabled_task_id, user_id) VALUES (?, ?, ?)";
-    await this.query(q, [enablerId, enabledId, userId]);
+    await this.query("INSERT INTO task_relationships (enabler_task_id, enabled_task_id, user_id) VALUES ($1, $2, $3) ON CONFLICT (enabler_task_id, enabled_task_id) DO NOTHING", [enablerId, enabledId, userId]);
   }
 
   async removeTaskRelationship(enablerId, enabledId) {
-    const q = this.pool
-      ? "DELETE FROM task_relationships WHERE enabler_task_id = $1 AND enabled_task_id = $2"
-      : "DELETE FROM task_relationships WHERE enabler_task_id = ? AND enabled_task_id = ?";
-    await this.query(q, [enablerId, enabledId]);
+    await this.query("DELETE FROM task_relationships WHERE enabler_task_id = $1 AND enabled_task_id = $2", [enablerId, enabledId]);
   }
 
   async getTasksEnabledBy(taskId) {
-    const q = this.pool
-      ? "SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabled_task_id WHERE tr.enabler_task_id = $1"
-      : "SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabled_task_id WHERE tr.enabler_task_id = ?";
-    return this.query(q, [taskId]);
+    return this.query("SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabled_task_id WHERE tr.enabler_task_id = $1", [taskId]);
   }
 
   async getTasksThatEnable(taskId) {
-    const q = this.pool
-      ? "SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabler_task_id WHERE tr.enabled_task_id = $1"
-      : "SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabler_task_id WHERE tr.enabled_task_id = ?";
-    return this.query(q, [taskId]);
+    return this.query("SELECT t.* FROM tasks t INNER JOIN task_relationships tr ON t.id = tr.enabler_task_id WHERE tr.enabled_task_id = $1", [taskId]);
   }
 
   async getTaskRelationships(taskId) {
@@ -493,85 +319,51 @@ class Database {
   }
 
   async getAllTaskRelationships(userId) {
-    // Fetch all relationships in a single query
-    const q = this.pool
-      ? "SELECT enabler_task_id, enabled_task_id FROM task_relationships WHERE user_id = $1 OR user_id IS NULL"
-      : "SELECT enabler_task_id, enabled_task_id FROM task_relationships WHERE user_id = ? OR user_id IS NULL";
-    return this.query(q, [userId]);
+    return this.query("SELECT enabler_task_id, enabled_task_id FROM task_relationships WHERE user_id = $1 OR user_id IS NULL", [userId]);
   }
 
   calculateLeverageScoresFromGraph(relationships, tasks) {
-    // Build adjacency list from relationships
     const graph = new Map();
     for (const rel of relationships) {
-      if (!graph.has(rel.enabler_task_id)) {
-        graph.set(rel.enabler_task_id, []);
-      }
+      if (!graph.has(rel.enabler_task_id)) graph.set(rel.enabler_task_id, []);
       graph.get(rel.enabler_task_id).push(rel.enabled_task_id);
     }
 
-    // Calculate leverage score using memoization (O(V+E) for DAG)
     const memo = new Map();
-    const leverageScores = {};
-
     const getReachability = (taskId) => {
       if (memo.has(taskId)) return memo.get(taskId);
-
       const reachable = new Set();
       const enabled = graph.get(taskId) || [];
-
       let totalInfluence = 0;
       for (const enabledId of enabled) {
-        // Find the task to get its importance
         const enabledTask = tasks.find(t => t.id === enabledId);
-        const weight = enabledTask ? (enabledTask.importance / 5) : 1; // Standardize weight around 1.0
-        
+        const weight = enabledTask ? (enabledTask.importance / 5) : 1;
         if (!reachable.has(enabledId)) {
           reachable.add(enabledId);
           totalInfluence += weight;
-          
-          // Recursive impact (diminishing returns for further downstream)
           const childReachable = getReachability(enabledId);
-          totalInfluence += (childReachable.size * 0.5); // Indirect impact counts for 50%
+          totalInfluence += (childReachable.size * 0.5);
         }
       }
-
       memo.set(taskId, { size: totalInfluence });
       return { size: totalInfluence };
     };
 
-    // Calculate for all tasks that are enablers
-    for (const [taskId] of graph) {
-      leverageScores[taskId] = getReachability(taskId).size;
-    }
-
+    const leverageScores = {};
+    for (const [taskId] of graph) leverageScores[taskId] = getReachability(taskId).size;
     return leverageScores;
   }
 
   async calculateLeverageScore(taskId) {
-    // Single task leverage calculation (for backwards compatibility)
-    const [relationships, tasks] = await Promise.all([
-      this.getAllTaskRelationships(null),
-      this.getTaskData(null)
-    ]);
+    const [relationships, tasks] = await Promise.all([this.getAllTaskRelationships(null), this.getTaskData(null)]);
     const scores = this.calculateLeverageScoresFromGraph(relationships, tasks);
     return scores[taskId] || 0;
   }
 
   async getTaskDataWithLeverage(userId) {
-    // Fetch tasks and relationships in parallel for speed
-    const [tasks, relationships] = await Promise.all([
-      this.getTaskData(userId),
-      this.getAllTaskRelationships(userId)
-    ]);
-
-    // Calculate all leverage scores in-memory (fast!)
+    const [tasks, relationships] = await Promise.all([this.getTaskData(userId), this.getAllTaskRelationships(userId)]);
     const leverageScores = this.calculateLeverageScoresFromGraph(relationships, tasks);
-
-    return tasks.map(task => ({
-      ...task,
-      leverage_score: leverageScores[task.id] || 0
-    }));
+    return tasks.map(task => ({ ...task, leverage_score: leverageScores[task.id] || 0 }));
   }
 }
 
@@ -593,7 +385,6 @@ export const getActiveTimers = () => database.getActiveTimers();
 export const setTaskParent = (id, p) => database.setTaskParent(id, p);
 export const updateTaskStatus = (id, s) => database.updateTaskStatus(id, s);
 export const updateTaskIcon = (id, i) => database.updateTaskIcon(id, i);
-export const updateTaskColor = (id, c) => database.updateTaskColor(id, c);
 export const upsertUser = (u) => database.upsertUser(u);
 export const addTaskRelationship = (e, d, u) => database.addTaskRelationship(e, d, u);
 export const removeTaskRelationship = (e, d) => database.removeTaskRelationship(e, d);
