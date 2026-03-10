@@ -346,6 +346,13 @@
       }
     </style>
     <link href="style.css" rel="stylesheet">
+    <script>
+        function _reportError(data) {
+            fetch('/api/log-client-error', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) }).catch(() => {});
+        }
+        window.addEventListener('error', e => _reportError({ message: e.message, source: e.filename, line: e.lineno, col: e.colno }));
+        window.addEventListener('unhandledrejection', e => _reportError({ message: String(e.reason) }));
+    </script>
 </head>
 <body>
     <!-- Splash Screen -->
@@ -763,9 +770,21 @@
                                     {{ influenceMode ? 'mdi-arrow-up-bold-circle' : 'mdi-star-circle' }}
                                 </v-icon>
                             </v-btn>
-                            <v-btn 
-                                variant="text" 
-                                icon 
+                            <v-btn
+                                variant="text"
+                                icon
+                                @click="toggleBarStyle"
+                                class="ms-2"
+                                :title="`Priority display: ${barStyle}`"
+                                color="primary"
+                            >
+                                <v-icon>
+                                    {{ barStyle === 'chips' ? 'mdi-label' : barStyle === 'segmented' ? 'mdi-chart-bar' : 'mdi-gauge' }}
+                                </v-icon>
+                            </v-btn>
+                            <v-btn
+                                variant="text"
+                                icon
                                 @click="toggleCompletedSubtasks"
                                 class="ms-2"
                                 title="Toggle completed subtasks"

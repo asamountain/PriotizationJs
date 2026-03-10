@@ -138,6 +138,7 @@ window.addEventListener('DOMContentLoaded', () => {
         showCsvImportDialog: false,
         showQuickAddModal: false,
         influenceMode: localStorage.getItem('influenceMode') === 'true',
+        barStyle: localStorage.getItem('barStyle') || 'chips', // 'chips' | 'segmented' | 'score'
         quickAddTask: {
           name: '',
           importance: 5,
@@ -151,8 +152,8 @@ window.addEventListener('DOMContentLoaded', () => {
         isQ1ZoomMode: false,
         isChartZoomed: false,
         showRelationships: localStorage.getItem('showRelationships') === 'true',
-        showChartSubtasks: localStorage.getItem('showSubtasks') !== 'false', // Default to true if not set
-        selectedCategories: ['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks'],
+        showChartSubtasks: localStorage.getItem('showSubtasks') === 'true',
+        selectedCategories: ['Active Projects'],
         availableIcons: [
           'mdi-checkbox-blank-circle-outline',
           'mdi-star',
@@ -708,7 +709,7 @@ window.addEventListener('DOMContentLoaded', () => {
         // Synchronize with chart
         if (chartVisualization) {
           chartVisualization.showNotSureTasks = this.showNotSureTasks;
-          chartVisualization.renderChart(this.tasks);
+          chartVisualization.renderChart(this.filteredTasksForChart);
         }
 
         const msg = this.showNotSureTasks ? 'Showing "Not Sure" tasks' : 'Hiding "Not Sure" tasks';
@@ -720,6 +721,15 @@ window.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('influenceMode', this.influenceMode);
         const msg = this.influenceMode ? 'Influence Mode (Leverage)' : 'Importance Mode (Standard)';
         this.showNotification(msg, 'info');
+      },
+
+      toggleBarStyle() {
+        const styles = ['chips', 'segmented', 'score'];
+        const next = styles[(styles.indexOf(this.barStyle) + 1) % styles.length];
+        this.barStyle = next;
+        localStorage.setItem('barStyle', next);
+        const labels = { chips: 'Chips', segmented: 'Segmented Bar', score: 'Score Bar' };
+        this.showNotification(`Priority display: ${labels[next]}`, 'info');
       },
       
       updateTasks(tasks) {
@@ -984,7 +994,7 @@ window.addEventListener('DOMContentLoaded', () => {
         
         if (chartVisualization) {
           chartVisualization.showRelationships = this.showRelationships;
-          chartVisualization.renderChart(this.tasks);
+          chartVisualization.renderChart(this.filteredTasksForChart);
         }
         
         const msg = this.showRelationships ? 'Task relationships shown' : 'Task relationships hidden';
@@ -997,7 +1007,7 @@ window.addEventListener('DOMContentLoaded', () => {
         
         if (chartVisualization) {
           chartVisualization.showSubtasks = this.showChartSubtasks;
-          chartVisualization.renderChart(this.tasks);
+          chartVisualization.renderChart(this.filteredTasksForChart);
         }
         
         const msg = this.showChartSubtasks ? 'Subtasks shown on chart' : 'Subtasks hidden from chart';
@@ -2243,11 +2253,43 @@ window.addEventListener('DOMContentLoaded', () => {
               </div>
             </div>
 
-            <v-list-item-subtitle v-if="task.due_date || task.link || task.notes || task.leverage_score > 0">
+            <v-list-item-subtitle v-if="task.due_date || task.link || task.notes || task.importance || task.urgency || task.leverage_score > 0">
               <div class="d-flex align-center flex-wrap gap-2 mt-1">
-                <v-chip v-if="task.leverage_score > 0" size="x-small" color="purple" variant="flat">
-                  <v-icon start size="10">mdi-arrow-up-bold</v-icon>{{ Number(task.leverage_score).toFixed(1) }}
-                </v-chip>
+
+                <!-- STYLE: chips (original) -->
+                <template v-if="$root.barStyle === 'chips'">
+                  <v-chip v-if="task.leverage_score > 0" size="x-small" color="purple" variant="flat">
+                    <v-icon start size="10">mdi-arrow-up-bold</v-icon>{{ Number(task.leverage_score).toFixed(1) }}
+                  </v-chip>
+                </template>
+
+                <!-- STYLE: segmented bar (I | U | L) -->
+                <template v-else-if="$root.barStyle === 'segmented'">
+                  <div style="display:flex; align-items:center; gap:2px; height:14px; border-radius:6px; overflow:hidden; min-width:80px;">
+                    <div :style="{ width: (task.importance/10)*38 + 'px', background: '#3B82F6', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+                      <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">I</span>
+                    </div>
+                    <div :style="{ width: (task.urgency/10)*38 + 'px', background: '#8B5CF6', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+                      <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">U</span>
+                    </div>
+                    <div v-if="task.leverage_score > 0" :style="{ width: Math.min(task.leverage_score/20,1)*38 + 'px', background: '#F59E0B', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+                      <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">L</span>
+                    </div>
+                  </div>
+                  <span style="font-size:9px; color:#888;">{{ task.importance }}·{{ task.urgency }}{{ task.leverage_score > 0 ? '·' + Number(task.leverage_score).toFixed(1) : '' }}</span>
+                </template>
+
+                <!-- STYLE: score bar (single priority %) -->
+                <template v-else-if="$root.barStyle === 'score'">
+                  <div style="display:flex; align-items:center; gap:4px;">
+                    <div style="width:80px; height:6px; background:#e5e7eb; border-radius:99px; overflow:hidden;">
+                      <div :style="{ width: Math.min(($root.influenceMode ? (task.leverage_score||1)*task.urgency : task.importance*task.urgency)/100,1)*100 + '%', height: '100%', borderRadius: '99px', background: 'linear-gradient(90deg, #22c55e, #f59e0b, #ef4444)' }"></div>
+                    </div>
+                    <span style="font-size:9px; color:#888; font-weight:600;">{{ Math.round(($root.influenceMode ? (task.leverage_score||1)*task.urgency : task.importance*task.urgency)) }}</span>
+                  </div>
+                </template>
+
+                <!-- shared metadata (all styles) -->
                 <v-chip v-if="task.category" size="x-small" color="grey" variant="outlined">{{ task.category }}</v-chip>
                 <span v-if="task.due_date" class="text-xxs text-orange">
                   <v-icon size="10">mdi-calendar</v-icon> {{ task.due_date }}

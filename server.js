@@ -34,6 +34,13 @@ setupAuth(app);
 // Setup socket connection
 setupSocket(io);
 
+// Client-side error reporter
+app.post("/api/log-client-error", (req, res) => {
+    const { message, source, line, col } = req.body;
+    console.error(`\x1b[31m[CLIENT ERROR]\x1b[0m ${message}${source ? ` (${source}:${line}:${col})` : ''}`);
+    res.sendStatus(204);
+});
+
 // Routes
 app.get("/", (req, res) => {
     res.sendFile(join(__dirname, "public", "index.html"));

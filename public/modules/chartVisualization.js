@@ -402,10 +402,10 @@ export class ChartVisualization {
   
   getTasks() {
     return new Promise((resolve) => {
-      // Try to get tasks from Vue app
-      if (window.app && Array.isArray(window.app.tasks) && window.app.tasks.length > 0) {
-        console.log('Using tasks from Vue app:', window.app.tasks.length);
-        return resolve(window.app.tasks);
+      // Try to get tasks from Vue app (use filteredTasksForChart to respect category/visibility filters)
+      if (window.app && Array.isArray(window.app.filteredTasksForChart) && window.app.filteredTasksForChart.length > 0) {
+        console.log('Using filtered tasks from Vue app:', window.app.filteredTasksForChart.length);
+        return resolve(window.app.filteredTasksForChart);
       }
       
       // Try taskManager
