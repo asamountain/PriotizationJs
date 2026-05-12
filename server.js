@@ -23,6 +23,9 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server);
 
+// Health check endpoint for keep-alive pings
+app.get("/healthz", (req, res) => res.status(200).send("OK"));
+
 // Middleware
 app.set('trust proxy', 1); // Enable proxy support for secure cookies
 app.use(express.static(join(__dirname, "public")));
