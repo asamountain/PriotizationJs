@@ -1,10 +1,12 @@
 import { TaskManager } from './taskManager.js';
 import { ChartVisualization } from './modules/chartVisualization.js';
+import { Graph3D } from './modules/graph3d.js';
 import { TaskOperations } from './modules/taskOperations.js';
 import { TaskListManager } from './modules/taskListManager.js';
 
 // Define these variables at the top level so they can be exported
 let chartVisualization = null;
+let graph3d = null;
 let taskOperations = null;
 let taskListManager = null;
 
@@ -56,6 +58,7 @@ window.addEventListener('DOMContentLoaded', () => {
   
   // Initialize modules - assign to the global variables we defined earlier
   chartVisualization = new ChartVisualization();
+  graph3d = new Graph3D();
   taskOperations = new TaskOperations();
   taskListManager = new TaskListManager();
   
@@ -63,7 +66,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const app = Vue.createApp({
     data() {
       return {
-        currentView: 'tasks', // 'tasks' or 'analytics'
+        currentView: 'tasks', // legacy: 'tasks' or 'analytics' (kept in sync from navView)
+        navView: 'graph', // left rail: 'graph' | 'hierarchy' | 'analytics' | 'settings'
         tasks: [],
         activeTasks: [],
         completedTasks: [],
@@ -135,6 +139,7 @@ window.addEventListener('DOMContentLoaded', () => {
         taskSortBy: localStorage.getItem('taskSortBy') || 'priority-high', // Default sort
         leftPanelWidth: parseFloat(localStorage.getItem('leftPanelWidth')) || 55,
         isResizing: false,
+        nodeCard: { open: false, x: 0, y: 0, task: null },
         showCsvImportDialog: false,
         showQuickAddModal: false,
         influenceMode: localStorage.getItem('influenceMode') === 'true',
@@ -153,7 +158,8 @@ window.addEventListener('DOMContentLoaded', () => {
         isChartZoomed: false,
         showRelationships: localStorage.getItem('showRelationships') === 'true',
         showChartSubtasks: localStorage.getItem('showSubtasks') === 'true',
-        selectedCategories: ['Active Projects'],
+        allRelationships: [],
+        selectedCategories: ['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks'],
         availableIcons: [
           'mdi-checkbox-blank-circle-outline',
           'mdi-star',
@@ -293,6 +299,14 @@ window.addEventListener('DOMContentLoaded', () => {
           overflow: 'visible'
         };
       },
+      nodeCardStatus() {
+        const t = this.nodeCard.task;
+        if (!t) return 'todo';
+        if (t.done) return 'done';
+        if (t.status === 'Not Sure') return 'unsure';
+        if (t.status === 'in_progress') return 'in_progress';
+        return 'todo';
+      },
       activeTasksForLinking() {
         // Get all active tasks that can be linked (for "enables" selection in Quick Add)
         return this.tasks
@@ -332,6 +346,19 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         
         return this.sortTasks(filteredTasks);
+      },
+      priorityQueue() {
+        const list = (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure');
+        const score = (t) => this.influenceMode
+          ? (Number(t.leverage_score) || 1) * Number(t.urgency || 0)
+          : Number(t.importance || 0) * Number(t.urgency || 0);
+        return [...list].sort((a, b) => score(b) - score(a)).slice(0, 12);
+      },
+      queueCount() {
+        return (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure').length;
+      },
+      todayLabel() {
+        return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
       },
       filteredTasksForChart() {
         if (!this.tasks) return [];
@@ -461,10 +488,8 @@ window.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('isDarkTheme', this.isDarkTheme);
         document.body.classList.toggle('dark-theme', this.isDarkTheme);
         
-        // Update chart colors
-        if (chartVisualization && typeof chartVisualization.updateChartColors === 'function') {
-          chartVisualization.updateChartColors();
-        }
+        // Re-render the graph for the new theme
+        this.renderGraph();
       },
       
       submitTask() {
@@ -582,9 +607,25 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       
       selectTask(task) {
-        if (chartVisualization) {
-          chartVisualization.focusOnTask(task.id);
+        if (graph3d) {
+          graph3d.focusOnTask(task.id);
         }
+      },
+
+      renderGraph() {
+        if (!graph3d) return;
+        try {
+          graph3d.influenceMode = this.influenceMode;
+          graph3d.showRelationships = this.showRelationships;
+          graph3d.showSubtasks = this.showChartSubtasks;
+          graph3d.render(this.filteredTasksForChart, this.allRelationships);
+        } catch (e) {
+          console.error('3D graph render failed:', e);
+        }
+      },
+
+      fetchRelationships() {
+        if (this.socket) this.socket.emit('getTaskRelationships', null);
       },
       
       editSubtask(subtask) {
@@ -706,11 +747,8 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showNotSureTasks = !this.showNotSureTasks;
         localStorage.setItem('showNotSureTasks', this.showNotSureTasks);
         
-        // Synchronize with chart
-        if (chartVisualization) {
-          chartVisualization.showNotSureTasks = this.showNotSureTasks;
-          chartVisualization.renderChart(this.filteredTasksForChart);
-        }
+        // Synchronize with graph
+        this.renderGraph();
 
         const msg = this.showNotSureTasks ? 'Showing "Not Sure" tasks' : 'Hiding "Not Sure" tasks';
         this.showNotification(msg, 'info');
@@ -719,7 +757,8 @@ window.addEventListener('DOMContentLoaded', () => {
       toggleInfluenceMode() {
         this.influenceMode = !this.influenceMode;
         localStorage.setItem('influenceMode', this.influenceMode);
-        const msg = this.influenceMode ? 'Influence Mode (Leverage)' : 'Importance Mode (Standard)';
+        this.renderGraph();
+        const msg = this.influenceMode ? 'Node size: impact (leverage)' : 'Node size: priority (importance x urgency)';
         this.showNotification(msg, 'info');
       },
 
@@ -735,6 +774,13 @@ window.addEventListener('DOMContentLoaded', () => {
       updateTasks(tasks) {
         console.log('updateTasks received:', tasks.length, 'tasks');
         this.tasks = tasks;
+
+        // Keep the open node card pointed at the fresh task object
+        if (this.nodeCard.open && this.nodeCard.task) {
+          const fresh = tasks.find(t => Number(t.id) === Number(this.nodeCard.task.id));
+          if (fresh) this.nodeCard.task = fresh;
+          else this.closeNodeCard();
+        }
         
         // Helper to check if a task's parent exists
         const parentExists = (parentId) => {
@@ -775,10 +821,8 @@ window.addEventListener('DOMContentLoaded', () => {
             : 0;
         }
 
-        // Re-render the chart with updated tasks (only if chart is initialized)
-        if (chartVisualization && typeof chartVisualization.renderChart === 'function' && chartVisualization.dotsGroup) {
-          chartVisualization.renderChart(this.filteredTasksForChart);
-        }
+        // Re-render the 3D impact graph with updated tasks
+        this.renderGraph();
       },
 
       formatDate(dateString) {
@@ -991,26 +1035,16 @@ window.addEventListener('DOMContentLoaded', () => {
       toggleRelationships() {
         this.showRelationships = !this.showRelationships;
         localStorage.setItem('showRelationships', this.showRelationships);
-        
-        if (chartVisualization) {
-          chartVisualization.showRelationships = this.showRelationships;
-          chartVisualization.renderChart(this.filteredTasksForChart);
-        }
-        
-        const msg = this.showRelationships ? 'Task relationships shown' : 'Task relationships hidden';
+        this.renderGraph();
+        const msg = this.showRelationships ? 'Impact edges shown' : 'Impact edges hidden';
         this.showNotification(msg, 'info');
       },
 
       toggleChartSubtasks() {
         this.showChartSubtasks = !this.showChartSubtasks;
         localStorage.setItem('showSubtasks', this.showChartSubtasks);
-        
-        if (chartVisualization) {
-          chartVisualization.showSubtasks = this.showChartSubtasks;
-          chartVisualization.renderChart(this.filteredTasksForChart);
-        }
-        
-        const msg = this.showChartSubtasks ? 'Subtasks shown on chart' : 'Subtasks hidden from chart';
+        this.renderGraph();
+        const msg = this.showChartSubtasks ? 'Hierarchy edges shown' : 'Hierarchy edges hidden';
         this.showNotification(msg, 'info');
       },
 
@@ -1219,7 +1253,7 @@ window.addEventListener('DOMContentLoaded', () => {
           const width = ((e.clientX - rect.left) / (rect.width || 1)) * 100;
           if (width >= 30 && width <= 70) {
             this.leftPanelWidth = width;
-            this.$nextTick(() => chartVisualization.initializeChart());
+            this.$nextTick(() => { if (graph3d) graph3d.resize(); });
           }
         };
         const stop = () => {
@@ -1230,6 +1264,85 @@ window.addEventListener('DOMContentLoaded', () => {
         };
         document.addEventListener('mousemove', move);
         document.addEventListener('mouseup', stop);
+      },
+
+      // --- 3D graph: scroll story + floating node card ---
+      scrollToTable() {
+        const el = this.$refs.rightPanel;
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+
+      openNodeCard(detail) {
+        const task = (this.tasks || []).find(t => Number(t.id) === Number(detail.taskId)) || detail.task;
+        if (!task) return;
+        const w = 300, margin = 12;
+        const x = Math.min(Math.max(detail.screenX + 16, margin), window.innerWidth - w - margin);
+        const y = Math.min(Math.max(detail.screenY - 20, margin), window.innerHeight - 220);
+        this.nodeCard = { open: true, x, y, task };
+      },
+
+      closeNodeCard() {
+        this.nodeCard = { ...this.nodeCard, open: false, task: null };
+        if (graph3d) graph3d.focusOnTask(null);
+      },
+
+      selectQueueTask(task, ev) {
+        if (!task) return;
+        const r = ev && ev.currentTarget && ev.currentTarget.getBoundingClientRect();
+        this.openNodeCard({
+          taskId: task.id,
+          screenX: r ? r.right : window.innerWidth / 2,
+          screenY: r ? r.top : window.innerHeight / 2,
+          task,
+        });
+        if (graph3d) graph3d.focusOnTask(task.id);
+      },
+
+      bumpMetric(field, delta) {
+        const task = this.nodeCard.task;
+        if (!task) return;
+        const next = Math.max(0, Math.min(10, Math.round(Number(task[field] || 0) + delta)));
+        if (next === Number(task[field])) return;
+        task[field] = next;
+        if (graph3d) this.renderGraph();
+        this.commitNodeCard();
+      },
+
+      commitNodeCard() {
+        const task = this.nodeCard.task;
+        if (!task) return;
+        clearTimeout(this._nodeCardTimer);
+        this._nodeCardTimer = setTimeout(() => {
+          taskOperations.editTask({ ...task });
+        }, 350);
+      },
+
+      setNodeStatus(state) {
+        const task = this.nodeCard.task;
+        if (!task) return;
+        const wantDone = state === 'done';
+        const status = state === 'in_progress' ? 'in_progress' : state === 'unsure' ? 'Not Sure' : '';
+        if (wantDone !== !!task.done) taskOperations.toggleDone(task.id);
+        this.socket.emit('updateTaskStatus', { taskId: task.id, status });
+        task.done = wantDone;
+        task.status = status;
+        const label = { todo: 'To Do', in_progress: 'Doing', done: 'Done', unsure: 'Unsure' }[state] || state;
+        this.showNotification(`"${task.name}" → ${label}`, 'info');
+        if (graph3d) this.renderGraph(); // done / Not Sure tasks drop off the chart at once; server echo confirms
+        this.closeNodeCard();
+      },
+
+      deleteNodeCardTask() {
+        const task = this.nodeCard.task;
+        if (!task) return;
+        this.deleteTask(task.id, task.name);
+        this.closeNodeCard();
+      },
+
+      editNodeCardTask() {
+        const task = this.nodeCard.task;
+        this.closeNodeCard();
+        if (task) this.editTask(task);
       },
 
       handleDragStart(task, event) {
@@ -1889,11 +2002,17 @@ window.addEventListener('DOMContentLoaded', () => {
           this.loadAnalytics();
         }
       },
+      navView(v) {
+        this.currentView = v === 'analytics' ? 'analytics' : 'tasks';
+        const onGraph = v === 'graph';
+        if (graph3d) graph3d.setActive(onGraph);
+        if (onGraph) {
+          this.$nextTick(() => { if (graph3d) { graph3d.resize(); this.renderGraph(); } });
+        }
+      },
       selectedCategories: {
         handler() {
-          if (chartVisualization && typeof chartVisualization.renderChart === 'function') {
-            chartVisualization.renderChart(this.filteredTasksForChart);
-          }
+          this.renderGraph();
         },
         deep: true
       }
@@ -1925,13 +2044,18 @@ window.addEventListener('DOMContentLoaded', () => {
       // Check authentication
       this.checkAuth();
       
-      // Initialize chart BEFORE socket connection to avoid race condition
+      // Initialize the 3D impact graph BEFORE socket connection to avoid race condition
       this.$nextTick(() => {
-        if (chartVisualization) {
-          console.log('Initializing chart before socket connection');
-          chartVisualization.initializeChart();
+        if (graph3d) {
+          try {
+            console.log('Initializing 3D impact graph before socket connection');
+            graph3d.init();
+            this.renderGraph();
+          } catch (e) {
+            console.error('3D graph init failed:', e);
+          }
         }
-        
+
         // Hide splash screen after initialization
         const splash = document.getElementById('splash-screen');
         if (splash) {
@@ -1939,6 +2063,24 @@ window.addEventListener('DOMContentLoaded', () => {
           setTimeout(() => {
             splash.remove();
           }, 400);
+        }
+
+        // Floating node card: driven by clicks inside the 3D graph
+        this._onNodeSelect = (e) => this.openNodeCard(e.detail);
+        this._onNodeDeselect = () => { if (this.nodeCard.open) this.closeNodeCard(); };
+        window.addEventListener('node:select', this._onNodeSelect);
+        window.addEventListener('node:deselect', this._onNodeDeselect);
+
+        // Pause the WebGL render loop when the hero scrolls out of view
+        const hero = this.$refs.leftPanel;
+        const scroller = this.$refs.splitContainer;
+        if (hero && 'IntersectionObserver' in window) {
+          this._heroObserver = new IntersectionObserver((entries) => {
+            const visible = entries.some(en => en.isIntersecting);
+            if (graph3d) { graph3d.setActive(visible); if (visible) graph3d.resize(); }
+            if (!visible && this.nodeCard.open) this.closeNodeCard();
+          }, { root: scroller || null, threshold: 0.15 });
+          this._heroObserver.observe(hero);
         }
       });
       
@@ -1960,7 +2102,18 @@ window.addEventListener('DOMContentLoaded', () => {
         } else {
           this.socket.emit('requestInitialData');
         }
+        this.fetchRelationships();
       });
+
+      // All enabler->enabled relationships, for the 3D impact graph
+      this.socket.on('taskRelationships', (data) => {
+        if (data && data.taskId == null && Array.isArray(data.relationships)) {
+          this.allRelationships = data.relationships;
+          this.renderGraph();
+        }
+      });
+      this.socket.on('relationshipAdded', () => this.fetchRelationships());
+      this.socket.on('relationshipRemoved', () => this.fetchRelationships());
       
       this.socket.on('reconnect', () => {
         console.log('Socket reconnected');
@@ -1980,6 +2133,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (data && data.data) {
           this.updateTasks(data.data);
         }
+        this.fetchRelationships();
       });
 
       this.socket.on('error', ({ message }) => {
@@ -2026,6 +2180,11 @@ window.addEventListener('DOMContentLoaded', () => {
     beforeUnmount() {
       // Clean up timer interval
       this.stopTimerUpdates();
+      // Clean up 3D graph wiring
+      if (this._onNodeSelect) window.removeEventListener('node:select', this._onNodeSelect);
+      if (this._onNodeDeselect) window.removeEventListener('node:deselect', this._onNodeDeselect);
+      if (this._heroObserver) this._heroObserver.disconnect();
+      if (graph3d) graph3d.dispose();
     }
   });
   

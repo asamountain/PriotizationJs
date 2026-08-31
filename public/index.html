@@ -18,138 +18,444 @@
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
     <!-- Roboto Font -->
     <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+    <!-- Pretendard (editorial + Hangul) -->
+    <link href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" rel="stylesheet">
     <!-- Socket.IO, D3, and ECharts Libraries -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
     <!-- Vue and Vuetify -->
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.css" rel="stylesheet">
     <style>
-      /* Split View Layout - Account for app bar */
+      :root {
+        --ed-font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+          system-ui, Roboto, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+        /* editorial display: English headings keep the serif feel; Korean falls back to system serif */
+        --ed-display: Georgia, "Times New Roman", Times, "Nanum Myeongjo", serif;
+      }
+      .v-application,
+      .v-application .text-h1, .v-application .text-h2, .v-application .text-h3,
+      .v-application .text-h4, .v-application .text-h5, .v-application .text-h6 {
+        font-family: var(--ed-font) !important;
+      }
+      /* Fixed editorial layout: top bar + [left icon rail | body] */
       .split-view-main {
-        padding-top: 56px !important; /* CRITICAL: Space for fixed app bar */
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-        padding-bottom: 0 !important;
+        padding: 0 !important;
         overflow: hidden;
         height: 100vh;
+        display: block;
+        background: #fff;
       }
-      
+
+      .ed-topbar {
+        position: relative;
+        z-index: 6;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 24px;
+        border-bottom: 1px solid #111;
+        background: #fff;
+      }
+      .ed-topbar__v { font-family: var(--ed-display); font-size: 12px; letter-spacing: .16em; color: #111; }
+      .ed-topbar__title {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        font-family: var(--ed-display); font-style: italic; font-size: 19px; color: #111;
+      }
+      .ed-topbar__date { font-family: var(--ed-display); font-size: 12px; letter-spacing: .12em; color: #6b6b6b; }
+
+      .ed-shell { display: flex; height: calc(100vh - 56px); }
+
+      .ed-rail {
+        width: 116px;
+        flex-shrink: 0;
+        border-right: 1px solid #111;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding-top: 22px;
+      }
+      .ed-rail button {
+        width: 44px; height: 44px;
+        border: 1px solid #111;
+        background: #fff;
+        color: #111;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        padding: 0;
+        transition: background .12s, color .12s;
+      }
+      .ed-rail button i { font-size: 20px; line-height: 1; }
+      .ed-rail button:hover:not(.is-active) { background: #faf7f0; }
+      .ed-rail button.is-active { background: #e5484d; border-color: #e5484d; color: #fff; }
+
+      .ed-body { flex: 1; min-width: 0; height: 100%; position: relative; overflow: hidden; }
+      .ed-body > .analytics-view,
+      .ed-body > .ed-settings { height: 100%; overflow-y: auto; }
+
       .split-view-container {
         display: flex;
         height: 100%;
         width: 100%;
-        padding: 0;
         margin: 0;
+        padding: 0;
+        background: #fff;
+        overflow: hidden;
       }
-      
+
+      /* GRAPH: 3D chart fills the middle */
       .split-view-left {
-        flex: 0 0 55%;
+        position: relative;
+        flex: 1;
+        min-width: 0;
         height: 100%;
         overflow: hidden;
-        min-width: 300px;
+        border-right: 1px solid #111;
       }
-      
-      .split-view-right {
-        flex: 1;
+
+      /* GRAPH: docked Priority Queue rail */
+      .ed-queue-rail {
+        width: 360px;
+        flex-shrink: 0;
         height: 100%;
         overflow-y: auto;
-        padding: 16px;
-        min-width: 300px;
+        padding: 22px;
+        background: #fff;
       }
-      
-      .resize-handle {
-        flex: 0 0 6px;
-        background: rgba(0, 0, 0, 0.08);
-        cursor: col-resize;
-        position: relative;
-        transition: background 0.2s;
+
+      /* HIERARCHY: full task list */
+      .split-view-right {
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+        overflow-y: auto;
+        padding: 28px clamp(16px, 5vw, 72px) 64px;
+        background: #fff;
       }
-      
-      .resize-handle:hover {
-        background: rgba(25, 118, 210, 0.3);
-      }
-      
-      .resize-handle:active {
-        background: rgba(25, 118, 210, 0.5);
-      }
-      
-      .resize-handle::after {
-        content: '';
+
+      /* legend, bottom-left of the graph */
+      .ed-legend {
         position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 2px;
-        height: 40px;
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 2px;
+        left: 20px;
+        bottom: 18px;
+        display: flex;
+        gap: 18px;
+        font-family: var(--ed-display);
+        font-size: 11px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: #111;
+        z-index: 4;
       }
-      
+      .ed-legend .dot { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: middle; }
+
+      /* resize handle retired in the scroll layout */
+      .resize-handle { display: none !important; }
+
       .chart-card {
         height: 100%;
         display: flex;
         flex-direction: column;
         border-radius: 0 !important;
+        box-shadow: none !important;
       }
-      
+
       .chart-content {
         flex: 1;
         overflow: visible;
         padding: 0 !important;
         position: relative;
-        min-height: 0; /* Allow flexbox to shrink */
+        min-height: 0;
       }
-      
+
       #taskChart {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
+      }
+
+      /* scroll cue at the bottom of the hero */
+      .scroll-hint {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 16px;
+        font-family: var(--ed-display);
+        font-size: 11px;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        color: #111;
+        background: rgba(255, 255, 255, .7);
+        border: 0;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 20;
+        transition: color .15s, background .15s;
       }
-      
-      /* Responsive: Stack on tablet and smaller screens */
-      @media (max-width: 768px) {
-        .split-view-container {
-          flex-direction: column;
-        }
+      .scroll-hint:hover { color: #e5484d; background: #fff; }
 
-        .split-view-left {
-          flex: 0 0 auto;
-          height: 45vh;
-          min-height: 250px;
-          max-height: 400px;
-          border-right: none;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-        }
+      /* editorial "new task" affordance on the hero */
+      .hero-add {
+        position: absolute;
+        top: 18px;
+        right: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 16px;
+        font-family: var(--ed-font);
+        font-size: 12px;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: #111;
+        background: #fff;
+        border: 1px solid #111;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 20;
+        transition: color .15s, background .15s;
+      }
+      .hero-add .plus { font-size: 16px; line-height: 1; }
+      .hero-add:hover { color: #fff; background: #111; }
 
-        .split-view-right {
-          flex: 1;
-          padding: 12px;
-          -webkit-overflow-scrolling: touch;
-        }
+      /* ============ Editorial table view ============ */
+      .split-view-right { --ink: #111; --paper: #fff; --muted: #6b6b6b; --rule: #111; --urgent: #e5484d; --impact: #f5a623; font-family: var(--ed-font); }
+      .split-view-right .ed-list .v-list-item-title,
+      .split-view-right .ed-list .v-list-item-subtitle { font-family: var(--ed-font) !important; }
+      .ed-wrap { max-width: 760px; margin: 0 auto 28px; }
+      .ed-masthead { border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 20px; }
+      .ed-kicker {
+        display: block;
+        font-family: var(--ed-display);
+        font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted);
+      }
+      .ed-title {
+        margin: 4px 0 0;
+        font-family: var(--ed-display);
+        font-weight: 400; font-style: italic; font-size: clamp(22px, 3.4vw, 32px); color: var(--ink);
+      }
+      .ed-panel { border: 1px solid var(--rule); }
+      .ed-panel__head {
+        display: flex; align-items: baseline; justify-content: space-between;
+        padding: 12px 16px; border-bottom: 1px solid var(--rule);
+        font-family: var(--ed-display); font-style: italic; font-size: 18px; color: var(--ink);
+      }
+      .ed-count { font-weight: 400; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+      .ed-queue { list-style: none; margin: 0; padding: 0; }
+      .ed-queue__item {
+        display: grid;
+        grid-template-columns: 34px 1fr auto 24px;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 16px;
+        border-bottom: 1px solid #e4e4e4;
+        cursor: pointer;
+        transition: background .12s;
+      }
+      .ed-queue__item:last-child { border-bottom: 0; }
+      .ed-queue__item:hover { background: #faf7f0; }
+      .ed-queue__rank { font-family: var(--ed-font); font-size: 12px; color: var(--muted); }
+      .ed-queue__title { font-family: var(--ed-font); font-size: 15px; color: var(--ink); }
+      .ed-queue__item.is-urgent .ed-queue__title { color: var(--urgent); }
+      .ed-queue__score {
+        font-family: var(--ed-font); font-size: 11px; color: var(--muted);
+        border: 1px solid #d9d9d9; padding: 1px 6px; min-width: 26px; text-align: center;
+      }
+      .ed-queue__arrow { text-align: right; color: var(--ink); }
+      .ed-queue__empty { padding: 16px; font-family: var(--ed-font); color: var(--muted); }
 
-        .resize-handle {
-          display: none;
-        }
+      /* Flatten the Vuetify "Active Tasks" card into the editorial sheet */
+      .split-view-right .ed-list.v-card {
+        max-width: 760px; margin: 0 auto 28px !important;
+        border: 1px solid #111; border-radius: 0 !important;
+        box-shadow: none !important; background: #fff;
+      }
+      .split-view-right .ed-list .v-card-title {
+        font-family: var(--ed-display) !important;
+        font-style: italic; font-size: 18px !important; letter-spacing: 0;
+        border-bottom: 1px solid #111; padding: 12px 16px !important;
+      }
+      .split-view-right .ed-list .v-list,
+      .split-view-right .ed-list .v-card-text { padding: 0 !important; background: transparent !important; }
+      .split-view-right .ed-list .task-item {
+        border-bottom: 1px solid #e4e4e4 !important;
+        border-radius: 0 !important;
+        min-height: 0 !important;
+      }
+      .split-view-right .ed-list .task-name {
+        font-family: var(--ed-font) !important;
+        font-weight: 400 !important;
+        font-size: 14px !important;
+      }
+      .split-view-right .ed-list .v-list-item__overlay,
+      .split-view-right .ed-list .v-ripple__container { display: none !important; }
+      .split-view-right .ed-list .v-chip {
+        border-radius: 0 !important;
+        font-family: var(--ed-font) !important;
+        letter-spacing: .04em;
+      }
+      .split-view-right .ed-list .v-btn { border-radius: 0 !important; box-shadow: none !important; }
+      .split-view-right .ed-list .section-header,
+      .split-view-right .ed-list .text-caption.text-uppercase {
+        font-family: var(--ed-font) !important; letter-spacing: .16em !important;
       }
 
-      /* Phone portrait - more compact chart */
-      @media (max-width: 480px) {
-        .split-view-left {
-          height: 40vh;
-          min-height: 220px;
-          max-height: 320px;
-        }
+      /* ===== Editorial theme for EVERY Vuetify overlay (dialogs, menus, selects, sheets) ===== */
+      .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-card,
+      .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-list,
+      .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-sheet,
+      .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-menu > .v-list {
+        border-radius: 0 !important;
+        border: 1px solid #111 !important;
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .22) !important;
+        font-family: var(--ed-font) !important;
+      }
+      .v-overlay-container .v-card-title,
+      .v-overlay-container .v-card-subtitle,
+      .v-overlay-container .v-toolbar-title {
+        font-family: var(--ed-display) !important;
+        font-style: italic;
+        letter-spacing: 0;
+      }
+      .v-overlay-container .v-card-title { border-bottom: 1px solid #111; }
+      .v-overlay-container .v-btn { border-radius: 0 !important; box-shadow: none !important; font-family: var(--ed-font) !important; }
+      .v-overlay-container .v-field,
+      .v-overlay-container .v-chip,
+      .v-overlay-container .v-list-item { border-radius: 0 !important; }
+      .v-overlay-container .v-tooltip .v-overlay__content { font-family: var(--ed-font) !important; }
 
-        .split-view-right {
-          padding: 8px;
-        }
+      /* Snackbars / toasts -> same editorial sheet, drop the coloured variants */
+      .v-overlay-container .v-snackbar__wrapper {
+        border-radius: 0 !important;
+        border: 1px solid #111 !important;
+        background: #fff !important;
+        color: #111 !important;
+        box-shadow: 0 12px 34px rgba(0, 0, 0, .18) !important;
+        font-family: var(--ed-font) !important;
+      }
+      .v-overlay-container .v-snackbar__content { color: #111 !important; }
+      .v-overlay-container .v-snackbar__wrapper .v-btn { color: #111 !important; border-radius: 0 !important; box-shadow: none !important; }
+      .v-overlay-container .v-snackbar__underlay { display: none !important; }
+
+      .scroll-hint:hover .chev { animation-play-state: paused; transform: translateY(4px); }
+      .scroll-hint .chev { font-size: 16px; animation: scroll-bounce 1.6s ease-in-out infinite; }
+      @keyframes scroll-bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+
+      /* floating edit card, anchored near the clicked dot */
+      .node-card {
+        position: fixed;
+        z-index: 60;
+        width: 300px;
+        background: #fff;
+        border: 1px solid #111;
+        padding: 16px 18px;
+        font-family: var(--ed-font);
+        box-shadow: 0 12px 34px rgba(0, 0, 0, .18);
+      }
+      .node-card__kicker {
+        font-family: var(--ed-display);
+        font-size: 10px;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: #6b6b6b;
+        margin-bottom: 4px;
+      }
+      .node-card__title { font-size: 18px; line-height: 1.25; margin: 0 0 12px; }
+      .node-card__title--edit {
+        width: 100%;
+        box-sizing: border-box;
+        font-family: var(--ed-font);
+        color: #111;
+        border: 0;
+        border-bottom: 1px solid #d9d9d9;
+        padding: 0 0 4px;
+        background: transparent;
+        outline: none;
+      }
+      .node-card__title--edit:focus { border-bottom-color: #111; }
+      .node-card__metrics { display: flex; gap: 8px; margin-bottom: 12px; }
+      .node-card__metric { flex: 1; border: 1px solid #111; padding: 6px 8px; }
+      .node-card__metric span { display: block; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #6b6b6b; }
+      .node-card__metric b { font-size: 20px; font-weight: 400; }
+      .node-card__metric.is-impact { background: #f5a623; border-color: #f5a623; }
+      .node-card__step { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
+      .node-card__step b { flex: 1; text-align: center; }
+      .node-card__step button {
+        width: 22px; height: 22px;
+        border: 1px solid #111;
+        background: #fff;
+        font-family: var(--ed-font);
+        font-size: 14px; line-height: 1;
+        cursor: pointer;
+        padding: 0;
+      }
+      .node-card__step button:hover { background: #111; color: #fff; }
+      .node-card__metric.is-impact .node-card__step button { border-color: #111; }
+      .node-card__seg { display: flex; border: 1px solid #111; margin-bottom: 10px; }
+      .node-card__seg button {
+        flex: 1;
+        border: 0;
+        border-right: 1px solid #111;
+        background: #fff;
+        padding: 7px 4px;
+        font-family: inherit;
+        font-size: 11px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .node-card__seg button:last-child { border-right: 0; }
+      .node-card__seg button.is-on { background: #111; color: #fff; }
+      .node-card__seg--4 button { padding: 7px 2px; font-size: 10px; letter-spacing: 0; }
+      .node-card__row { display: flex; gap: 8px; }
+      .node-card__row button {
+        flex: 1;
+        border: 1px solid #111;
+        background: #fff;
+        padding: 8px 4px;
+        font-family: inherit;
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .node-card__row button.is-danger { color: #e5484d; border-color: #e5484d; }
+      .node-card__row button.is-primary { background: #111; color: #fff; }
+      .node-card__close {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        border: 0;
+        background: transparent;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        color: #6b6b6b;
+      }
+
+      /* Responsive: narrow screens — rail slims, queue rail drops under the graph */
+      @media (max-width: 900px) {
+        .ed-rail { width: 60px; }
+        .ed-rail button { width: 40px; height: 40px; }
+        .split-view-container { flex-wrap: wrap; overflow-y: auto; }
+        .split-view-left { flex: 1 1 100%; height: 60vh; border-right: 0; border-bottom: 1px solid #111; }
+        .ed-queue-rail { width: 100%; height: auto; }
+        .split-view-right { padding: 20px 16px 48px; -webkit-overflow-scrolling: touch; }
+        .node-card { width: min(300px, calc(100vw - 32px)); }
+        .ed-topbar__title { font-size: 15px; }
       }
       
       :root {
@@ -374,90 +680,38 @@
     
     <div id="app" v-cloak>
         <v-app :theme="theme">
-            <v-app-bar density="comfortable" elevation="2">
-                <!-- Responsive title -->
-                <v-app-bar-title class="text-primary">
-                    <span class="d-none d-sm-inline">Priority Task Manager</span>
-                    <span class="d-sm-none">Tasks</span>
-                </v-app-bar-title>
-                <v-spacer></v-spacer>
-
-                <!-- User Profile / Login -->
-                <div v-if="user" class="d-flex align-center" :class="$vuetify.display.xs ? 'me-1' : 'me-4'">
-                    <v-avatar :size="$vuetify.display.xs ? 28 : 32" class="me-2">
-                        <v-img :src="user.avatar" :alt="user.name"></v-img>
-                    </v-avatar>
-                    <span class="text-body-2 me-2 d-none d-md-inline">{{ user.name }}</span>
-                    <v-btn icon size="small" @click="logout" title="Logout" color="primary" class="d-none d-sm-flex">
-                        <v-icon>mdi-logout</v-icon>
-                    </v-btn>
-                </div>
-                <v-btn v-else-if="authConfig.googleEnabled" color="primary" variant="elevated" prepend-icon="mdi-google" @click="loginWithGoogle" :class="$vuetify.display.xs ? 'me-1' : 'me-4'" :size="$vuetify.display.xs ? 'small' : 'default'">
-                    <span class="d-none d-sm-inline">Login</span>
-                    <span class="d-sm-none">Login</span>
-                </v-btn>
-
-                <!-- Mobile: Overflow menu for action buttons -->
-                <v-menu v-if="$vuetify.display.xs" location="bottom end">
-                    <template v-slot:activator="{ props }">
-                        <v-btn icon v-bind="props" color="primary">
-                            <v-icon>mdi-dots-vertical</v-icon>
-                        </v-btn>
-                    </template>
-                    <v-list density="compact">
-                        <v-list-item @click="currentView = currentView === 'tasks' ? 'analytics' : 'tasks'">
-                            <template v-slot:prepend>
-                                <v-icon>{{ currentView === 'tasks' ? 'mdi-chart-line' : 'mdi-arrow-left' }}</v-icon>
-                            </template>
-                            <v-list-item-title>{{ currentView === 'tasks' ? 'Analytics' : 'Tasks' }}</v-list-item-title>
-                        </v-list-item>
-                        <v-list-item @click="showCsvImportDialog = true">
-                            <template v-slot:prepend>
-                                <v-icon>mdi-file-import</v-icon>
-                            </template>
-                            <v-list-item-title>Import CSV</v-list-item-title>
-                        </v-list-item>
-                        <v-list-item @click="exportTasks">
-                            <template v-slot:prepend>
-                                <v-icon>mdi-download</v-icon>
-                            </template>
-                            <v-list-item-title>Export Tasks</v-list-item-title>
-                        </v-list-item>
-                        <v-list-item @click="toggleTheme">
-                            <template v-slot:prepend>
-                                <v-icon>{{ isDarkTheme ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
-                            </template>
-                            <v-list-item-title>{{ isDarkTheme ? 'Light Mode' : 'Dark Mode' }}</v-list-item-title>
-                        </v-list-item>
-                        <v-list-item v-if="user" @click="logout">
-                            <template v-slot:prepend>
-                                <v-icon>mdi-logout</v-icon>
-                            </template>
-                            <v-list-item-title>Logout</v-list-item-title>
-                        </v-list-item>
-                    </v-list>
-                </v-menu>
-
-                <!-- Desktop: Show all action buttons -->
-                <template v-if="!$vuetify.display.xs">
-                    <v-btn icon @click="currentView = currentView === 'tasks' ? 'analytics' : 'tasks'" :title="currentView === 'tasks' ? 'View Analytics' : 'Back to Tasks'" color="primary">
-                        <v-icon>{{ currentView === 'tasks' ? 'mdi-chart-line' : 'mdi-arrow-left' }}</v-icon>
-                    </v-btn>
-                    <v-btn icon @click="showCsvImportDialog = true" title="Import Tasks from CSV" color="primary">
-                        <v-icon>mdi-file-import</v-icon>
-                    </v-btn>
-                    <v-btn icon @click="exportTasks" title="Export Current Tasks to CSV" color="primary">
-                        <v-icon>mdi-download</v-icon>
-                    </v-btn>
-                    <v-btn icon @click="toggleTheme" title="Toggle Theme" color="primary">
-                        <v-icon>{{ isDarkTheme ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
-                    </v-btn>
-                </template>
-            </v-app-bar>
+            <!-- app bar removed: editorial layout. Actions relocated:
+                 Analytics -> currentView toggle (see .ed-tools); CSV import/export, theme, login
+                 available via .ed-tools strip in the table section. -->
 
             <v-main class="split-view-main">
+                <!-- Editorial top bar -->
+                <header class="ed-topbar">
+                    <span class="ed-topbar__v">V.04</span>
+                    <span class="ed-topbar__title">The Hierarchy of Execution</span>
+                    <span class="ed-topbar__date">{{ todayLabel }}</span>
+                </header>
+
+                <div class="ed-shell">
+                    <!-- Left icon nav rail -->
+                    <nav class="ed-rail">
+                        <button type="button" :class="{ 'is-active': navView === 'graph' }" @click="navView = 'graph'" title="Graph">
+                            <i class="mdi mdi-cube-outline"></i>
+                        </button>
+                        <button type="button" :class="{ 'is-active': navView === 'hierarchy' }" @click="navView = 'hierarchy'" title="Hierarchy">
+                            <i class="mdi mdi-format-list-bulleted"></i>
+                        </button>
+                        <button type="button" :class="{ 'is-active': navView === 'analytics' }" @click="navView = 'analytics'" title="Analytics">
+                            <i class="mdi mdi-chart-box-outline"></i>
+                        </button>
+                        <button type="button" :class="{ 'is-active': navView === 'settings' }" @click="navView = 'settings'" title="Settings">
+                            <i class="mdi mdi-cog-outline"></i>
+                        </button>
+                    </nav>
+
+                    <div class="ed-body">
                 <!-- Analytics View (ECharts) -->
-                <div v-if="currentView === 'analytics'" class="analytics-view" style="height: 100%; overflow-y: auto;" :style="$vuetify.display.xs ? 'padding: 8px;' : 'padding: 16px;'">
+                <div v-show="navView === 'analytics'" class="analytics-view" style="height: 100%; overflow-y: auto;" :style="$vuetify.display.xs ? 'padding: 8px;' : 'padding: 16px;'">
                     <v-container fluid :class="$vuetify.display.xs ? 'pa-0' : ''">
                         <!-- Header -->
                         <v-row class="mb-4">
@@ -623,112 +877,128 @@
                     </v-container>
                 </div>
 
-                <!-- Split View Container (Tasks View) -->
-                <div v-show="currentView === 'tasks'" class="split-view-container" ref="splitContainer">
-                    <!-- LEFT SIDE: Chart (always full height) -->
-                    <div class="split-view-left" ref="leftPanel" :style="{ flex: `0 0 ${leftPanelWidth}%` }">
+                <!-- Split View Container (Graph + Hierarchy views) -->
+                <div v-show="navView === 'graph' || navView === 'hierarchy'" class="split-view-container" ref="splitContainer">
+                    <!-- GRAPH: 3D chart -->
+                    <div class="split-view-left" ref="leftPanel" v-show="navView === 'graph'">
                         <v-card class="chart-card" elevation="3">
-                            <v-card-title class="text-h6 d-flex align-center pa-3">
-                                <v-icon class="me-2" color="primary">mdi-chart-scatter-plot</v-icon>
-                                {{ isQ1ZoomMode ? 'Q1 Zoom: Priorities' : 'Eisenhower Matrix' }}
-                                <v-spacer></v-spacer>
-                                
-                                <!-- Category Selection Chips -->
-                                <div class="d-flex gap-1 me-2 overflow-x-auto hide-scrollbar" style="max-width: 45%;">
-                                  <v-chip-group
-                                    v-model="selectedCategories"
-                                    multiple
-                                    selected-class="bg-primary text-white font-weight-bold elevation-2"
-                                  >
-                                    <v-chip
-                                      v-for="cat in ['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks']"
-                                      :key="cat"
-                                      :value="cat"
-                                      size="small"
-                                      variant="tonal"
-                                      rounded="lg"
-                                    >
-                                      {{ cat }}
-                                    </v-chip>
-                                  </v-chip-group>
-                                </div>
-
-                                <v-btn
-                                    icon="mdi-plus"
-                                    variant="text"
-                                    size="small"
-                                    @click="zoomIn"
-                                    color="primary"
-                                    title="Zoom In"
-                                    class="me-1"
-                                ></v-btn>
-                                <v-btn
-                                    icon="mdi-minus"
-                                    variant="text"
-                                    size="small"
-                                    @click="zoomOut"
-                                    color="primary"
-                                    title="Zoom Out"
-                                    class="me-1"
-                                ></v-btn>
-                                <v-btn
-                                    v-if="isChartZoomed"
-                                    icon="mdi-restore"
-                                    variant="text"
-                                    size="small"
-                                    @click="toggleQ1ZoomMode"
-                                    color="error"
-                                    title="Reset Zoom"
-                                    class="me-1"
-                                ></v-btn>
-                                <v-btn
-                                    v-else
-                                    icon="mdi-magnify-plus"
-                                    variant="text"
-                                    size="small"
-                                    @click="toggleQ1ZoomMode"
-                                    color="primary"
-                                    title="Zoom Q1 (Important & Urgent)"
-                                    class="me-1"
-                                ></v-btn>
-                                <v-btn
-                                    icon="mdi-chart-network"
-                                    variant="text"
-                                    size="small"
-                                    @click="toggleRelationships"
-                                    :color="showRelationships ? 'purple' : 'primary'"
-                                    :title="showRelationships ? 'Hide Task Relationships' : 'Show Task Relationships'"
-                                    class="me-1"
-                                ></v-btn>
-                                <v-btn
-                                    icon="mdi-sitemap"
-                                    variant="text"
-                                    size="small"
-                                    @click="toggleChartSubtasks"
-                                    :color="showChartSubtasks ? 'purple' : 'primary'"
-                                    :title="showChartSubtasks ? 'Hide Subtasks on Chart' : 'Show Subtasks on Chart'"
-                                    class="me-2"
-                                ></v-btn>
-                                <v-chip :color="isQ1ZoomMode ? 'error' : 'primary'" size="small">{{ activeTasks.length }}</v-chip>
-                            </v-card-title>
                             <v-card-text class="chart-content">
                                 <div id="taskChart" :style="chartStyle"></div>
                             </v-card-text>
                         </v-card>
+
+                        <button type="button" class="hero-add" @click="openQuickAddModal(5, 5)" title="Add a new task">
+                            <span class="plus">&#43;</span> New Task
+                        </button>
+
+                        <div class="ed-legend">
+                            <span><i class="dot" style="background:#e5484d"></i>Urgent</span>
+                            <span><i class="dot" style="background:#f5a623;transform:rotate(45deg)"></i>Impact</span>
+                            <span><i class="dot" style="background:#111"></i>Standard</span>
+                        </div>
+
+                        <!-- Floating edit card: appears when a dot in the 3D graph is clicked -->
+                        <div
+                            v-if="nodeCard.open"
+                            class="node-card"
+                            :style="{ left: nodeCard.x + 'px', top: nodeCard.y + 'px' }"
+                        >
+                            <button type="button" class="node-card__close" @click="closeNodeCard">&times;</button>
+                            <div class="node-card__kicker">Selected Task</div>
+                            <input
+                                v-if="nodeCard.task"
+                                class="node-card__title node-card__title--edit"
+                                v-model="nodeCard.task.name"
+                                @change="commitNodeCard"
+                                @keydown.enter.prevent="$event.target.blur()"
+                                placeholder="Task name"
+                            />
+                            <div class="node-card__metrics">
+                                <div class="node-card__metric">
+                                    <span>Urgency</span>
+                                    <div class="node-card__step">
+                                        <button type="button" @click="bumpMetric('urgency', -1)">&minus;</button>
+                                        <b>{{ nodeCard.task && Number(nodeCard.task.urgency || 0).toFixed(0) }}</b>
+                                        <button type="button" @click="bumpMetric('urgency', 1)">+</button>
+                                    </div>
+                                </div>
+                                <div class="node-card__metric is-impact">
+                                    <span>Importance</span>
+                                    <div class="node-card__step">
+                                        <button type="button" @click="bumpMetric('importance', -1)">&minus;</button>
+                                        <b>{{ nodeCard.task && Number(nodeCard.task.importance || 0).toFixed(0) }}</b>
+                                        <button type="button" @click="bumpMetric('importance', 1)">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="node-card__seg node-card__seg--4">
+                                <button :class="{ 'is-on': nodeCardStatus === 'todo' }" @click="setNodeStatus('todo')">To Do</button>
+                                <button :class="{ 'is-on': nodeCardStatus === 'in_progress' }" @click="setNodeStatus('in_progress')">Doing</button>
+                                <button :class="{ 'is-on': nodeCardStatus === 'done' }" @click="setNodeStatus('done')">Done</button>
+                                <button :class="{ 'is-on': nodeCardStatus === 'unsure' }" @click="setNodeStatus('unsure')" title="Uncertain if still needed — hide from chart">Unsure</button>
+                            </div>
+                            <div class="node-card__row">
+                                <button class="is-danger" @click="deleteNodeCardTask">Delete</button>
+                                <button class="is-primary" @click="editNodeCardTask">Edit&nbsp;&rarr;</button>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- RESIZE HANDLE -->
-                    <div 
-                        class="resize-handle" 
-                        @mousedown="startResize"
-                        title="Drag to resize"
-                    ></div>
+                    <!-- GRAPH view: docked Priority Queue rail -->
+                    <aside class="ed-queue-rail" v-show="navView === 'graph'">
+                        <section class="ed-panel">
+                            <div class="ed-panel__head">
+                                <span>Priority Queue</span>
+                                <span class="ed-count">Active ({{ queueCount }})</span>
+                            </div>
+                            <ul class="ed-queue">
+                                <li
+                                    v-for="(t, i) in priorityQueue"
+                                    :key="t.id"
+                                    class="ed-queue__item"
+                                    :class="{ 'is-urgent': Number(t.importance) >= 5 && Number(t.urgency) >= 5 }"
+                                    @click="selectQueueTask(t, $event)"
+                                >
+                                    <span class="ed-queue__rank">{{ String(i + 1).padStart(2, '0') }}</span>
+                                    <span class="ed-queue__title">{{ t.name }}</span>
+                                    <span class="ed-queue__score">{{ Math.round(Number(t.importance) * Number(t.urgency)) }}</span>
+                                    <span class="ed-queue__arrow">&rarr;</span>
+                                </li>
+                                <li v-if="priorityQueue.length === 0" class="ed-queue__empty">No active tasks. Add one from the graph.</li>
+                            </ul>
+                        </section>
+                    </aside>
 
-                    <!-- RIGHT SIDE: Task List (scrollable) -->
-                    <div class="split-view-right" ref="rightPanel">
+                    <!-- HIERARCHY view: full task list -->
+                    <div class="split-view-right" ref="rightPanel" v-show="navView === 'hierarchy'">
+
+                        <!-- Editorial: Priority Queue -->
+                        <div class="ed-wrap">
+                            <section class="ed-panel">
+                                <div class="ed-panel__head">
+                                    <span>Priority Queue</span>
+                                    <span class="ed-count">Active ({{ queueCount }})</span>
+                                </div>
+                                <ul class="ed-queue">
+                                    <li
+                                        v-for="(t, i) in priorityQueue"
+                                        :key="t.id"
+                                        class="ed-queue__item"
+                                        :class="{ 'is-urgent': Number(t.importance) >= 5 && Number(t.urgency) >= 5 }"
+                                        @click="selectQueueTask(t, $event)"
+                                    >
+                                        <span class="ed-queue__rank">{{ String(i + 1).padStart(2, '0') }}</span>
+                                        <span class="ed-queue__title">{{ t.name }}</span>
+                                        <span class="ed-queue__score">{{ Math.round(Number(t.importance) * Number(t.urgency)) }}</span>
+                                        <span class="ed-queue__arrow">&rarr;</span>
+                                    </li>
+                                    <li v-if="priorityQueue.length === 0" class="ed-queue__empty">No active tasks yet.</li>
+                                </ul>
+                            </section>
+                        </div>
 
                         <!-- Active Tasks Section -->
-                        <v-card class="mb-4" elevation="3">
+                        <v-card class="mb-4 ed-list" elevation="3">
                         <v-card-title 
                             class="text-h5 d-flex align-center"
                             @dragover.prevent="handleDragOver"
@@ -935,6 +1205,40 @@
                     <!-- End Right Side -->
                 </div>
                 <!-- End Split View Container -->
+
+                <!-- SETTINGS view -->
+                <div v-show="navView === 'settings'" class="ed-settings">
+                    <div class="ed-wrap">
+                        <section class="ed-panel">
+                            <div class="ed-panel__head"><span>Settings</span></div>
+                            <ul class="ed-queue">
+                                <li class="ed-queue__item" @click="toggleTheme">
+                                    <span class="ed-queue__title">{{ isDarkTheme ? 'Switch to Light' : 'Switch to Dark' }}</span>
+                                    <span class="ed-queue__arrow">&rarr;</span>
+                                </li>
+                                <li class="ed-queue__item" @click="showCsvImportDialog = true">
+                                    <span class="ed-queue__title">Import tasks from CSV</span>
+                                    <span class="ed-queue__arrow">&rarr;</span>
+                                </li>
+                                <li class="ed-queue__item" @click="exportTasks">
+                                    <span class="ed-queue__title">Export tasks to CSV</span>
+                                    <span class="ed-queue__arrow">&rarr;</span>
+                                </li>
+                                <li v-if="user" class="ed-queue__item" @click="logout">
+                                    <span class="ed-queue__title">Log out ({{ user.name }})</span>
+                                    <span class="ed-queue__arrow">&rarr;</span>
+                                </li>
+                                <li v-else-if="authConfig.googleEnabled" class="ed-queue__item" @click="loginWithGoogle">
+                                    <span class="ed-queue__title">Log in with Google</span>
+                                    <span class="ed-queue__arrow">&rarr;</span>
+                                </li>
+                            </ul>
+                        </section>
+                    </div>
+                </div>
+
+                    </div><!-- /.ed-body -->
+                </div><!-- /.ed-shell -->
             </v-main>
 
             <!-- Subtask Modal Dialog -->
@@ -1457,7 +1761,7 @@
 
             <!-- Quick Add Task Modal -->
             <v-dialog v-model="showQuickAddModal" :fullscreen="$vuetify.display.xs" :max-width="$vuetify.display.xs ? undefined : '600px'" scrollable>
-                <v-card :rounded="$vuetify.display.xs ? 0 : 'lg'">
+                <v-card class="ed-modal" :rounded="$vuetify.display.xs ? 0 : 'lg'">
                     <!-- Mobile toolbar -->
                     <v-toolbar v-if="$vuetify.display.xs" color="primary" density="compact">
                         <v-btn icon @click="closeQuickAddModal"><v-icon>mdi-close</v-icon></v-btn>
@@ -1754,6 +2058,16 @@
             ></v-fab>
         </v-app>
     </div>
+
+    <!-- Three.js for the 3D impact graph (bare-specifier importmap; must precede module scripts) -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+    </script>
 
     <!-- Updated Scripts -->
     <script src="modules/chartVisualization.js" type="module"></script>
