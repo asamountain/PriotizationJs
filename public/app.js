@@ -28,28 +28,28 @@ window.addEventListener('DOMContentLoaded', () => {
       themes: {
         light: {
           colors: {
-            primary: '#255035', // Deep Forest Green
-            secondary: '#449461', // Mid Green
-            accent: '#63D88E', // Seafoam Green
-            error: '#34724B', // Muted dark green
-            warning: '#54B678',
-            info: '#68E195', // Bright Seafoam
-            success: '#449461',
-            background: '#f4f9f6', // Very light clean tint
+            primary: '#111111',   // editorial ink
+            secondary: '#444444',
+            accent: '#e5484d',    // signal red
+            error: '#e5484d',     // priority ramp: high
+            warning: '#f5a623',   // mid
+            info: '#6b6b6b',      // low-mid
+            success: '#c2c4c4',   // low
+            background: '#ffffff',
             surface: '#ffffff',
           },
         },
         dark: {
           colors: {
-            primary: '#68E195',
-            secondary: '#449461',
-            accent: '#255035',
-            error: '#34724B',
-            warning: '#54B678',
-            info: '#63D88E',
-            success: '#68E195',
-            background: '#0d1410',
-            surface: '#161f1a',
+            primary: '#f2f2f2',
+            secondary: '#bdbdbd',
+            accent: '#e5484d',
+            error: '#e5484d',
+            warning: '#f5a623',
+            info: '#9a9a9a',
+            success: '#6b6b6b',
+            background: '#111111',
+            surface: '#161616',
           },
         },
       },
@@ -139,7 +139,14 @@ window.addEventListener('DOMContentLoaded', () => {
         taskSortBy: localStorage.getItem('taskSortBy') || 'priority-high', // Default sort
         leftPanelWidth: parseFloat(localStorage.getItem('leftPanelWidth')) || 55,
         isResizing: false,
-        nodeCard: { open: false, x: 0, y: 0, task: null },
+        nodeCard: { open: false, x: 0, y: 0, task: null, enables: [] },
+        enableQuery: '',
+        enableOpen: false,
+        enableActive: 0,
+        categoryWeights: (() => {
+          try { return JSON.parse(localStorage.getItem('categoryWeights') || '{}'); }
+          catch (e) { return {}; }
+        })(),
         showCsvImportDialog: false,
         showQuickAddModal: false,
         influenceMode: localStorage.getItem('influenceMode') === 'true',
@@ -299,6 +306,31 @@ window.addEventListener('DOMContentLoaded', () => {
           overflow: 'visible'
         };
       },
+      enabledTasks() {
+        const byId = new Map((this.tasks || []).map(t => [Number(t.id), t]));
+        return this.nodeCard.enables.map(id => byId.get(Number(id))).filter(Boolean);
+      },
+      enableCandidates() {
+        const selfId = this.nodeCard.task ? Number(this.nodeCard.task.id) : null;
+        const taken = new Set(this.nodeCard.enables.map(Number));
+        return (this.tasks || [])
+          .filter(t => !t.done && t.status !== 'Not Sure' && Number(t.id) !== selfId && !taken.has(Number(t.id)))
+          .map(t => ({ id: Number(t.id), name: t.name }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      },
+      filteredCandidates() {
+        const q = (this.enableQuery || '').trim().toLowerCase();
+        if (!q) return this.enableCandidates.slice(0, 60);
+        return this.enableCandidates.filter(c => this.matchTask(c.name, q)).slice(0, 60);
+      },
+      distinctCategories() {
+        const set = new Set();
+        for (const t of (this.tasks || [])) {
+          const c = (t.category || '').trim();
+          if (c) set.add(c);
+        }
+        return [...set].sort((a, b) => a.localeCompare(b));
+      },
       nodeCardStatus() {
         const t = this.nodeCard.task;
         if (!t) return 'todo';
@@ -349,9 +381,9 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       priorityQueue() {
         const list = (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure');
-        const score = (t) => this.influenceMode
-          ? (Number(t.leverage_score) || 1) * Number(t.urgency || 0)
-          : Number(t.importance || 0) * Number(t.urgency || 0);
+        // composite: importance x urgency, lifted by goal weight (category proxy)
+        const score = (t) => Number(t.importance || 0) * Number(t.urgency || 0)
+          + this.weightFor(t) * 12;
         return [...list].sort((a, b) => score(b) - score(a)).slice(0, 12);
       },
       queueCount() {
@@ -612,13 +644,29 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       },
 
+      // goal proxy: a task's impact = the weight assigned to its category (0 if unset)
+      weightFor(task) {
+        const c = (task && task.category || '').trim();
+        const w = Number(this.categoryWeights[c]);
+        return Number.isFinite(w) ? w : 0;
+      },
+      setCategoryWeight(cat, val) {
+        const w = Math.max(0, Math.min(5, Math.round(Number(val) || 0)));
+        this.categoryWeights = { ...this.categoryWeights, [cat]: w };
+        localStorage.setItem('categoryWeights', JSON.stringify(this.categoryWeights));
+        this.renderGraph();
+      },
+
       renderGraph() {
         if (!graph3d) return;
         try {
           graph3d.influenceMode = this.influenceMode;
           graph3d.showRelationships = this.showRelationships;
           graph3d.showSubtasks = this.showChartSubtasks;
-          graph3d.render(this.filteredTasksForChart, this.allRelationships);
+          // stamp goal-proxy impact onto the task objects the chart reads
+          const tasks = this.filteredTasksForChart;
+          for (const t of tasks) t._impact = this.weightFor(t);
+          graph3d.render(tasks, this.allRelationships);
         } catch (e) {
           console.error('3D graph render failed:', e);
         }
@@ -801,28 +849,26 @@ window.addEventListener('DOMContentLoaded', () => {
 
         this.activeTasks = rawActive;
         this.completedTasks = rawCompleted;
-        
-        // DEBUG: Log top leverage scores
-        const topLeverage = [...rawActive].sort((a, b) => (b.leverage_score || 0) - (a.leverage_score || 0)).slice(0, 3);
-        console.log('Top tasks by leverage:', topLeverage.map(t => `${t.name}: ${t.leverage_score}`));
+
+        // Re-render the 3D impact graph FIRST so a downstream error can't skip it
+        this.renderGraph();
 
         // Update basic analytics stats instantly (don't wait for fetch)
-        if (this.timeLogs && this.timeLogs.length > 0) {
-          this.processAnalyticsData({ tasks: this.tasks, timeLogs: this.timeLogs });
-        } else if (this.currentView === 'analytics') {
-          // If we're on the page but have no logs, load them
-          this.loadAnalytics();
-        } else {
-          // Just update task-based counts
-          this.analytics.tasksCompleted = tasks.filter(t => t.done).length;
-          this.analytics.tasksActive = tasks.filter(t => !t.done).length;
-          this.analytics.completionRate = tasks.length > 0
-            ? Math.round(this.analytics.tasksCompleted / tasks.length * 100)
-            : 0;
+        try {
+          if (this.timeLogs && this.timeLogs.length > 0) {
+            this.processAnalyticsData({ tasks: this.tasks, timeLogs: this.timeLogs });
+          } else if (this.currentView === 'analytics') {
+            this.loadAnalytics();
+          } else {
+            this.analytics.tasksCompleted = tasks.filter(t => t.done).length;
+            this.analytics.tasksActive = tasks.filter(t => !t.done).length;
+            this.analytics.completionRate = tasks.length > 0
+              ? Math.round(this.analytics.tasksCompleted / tasks.length * 100)
+              : 0;
+          }
+        } catch (e) {
+          console.error('analytics stats update failed:', e);
         }
-
-        // Re-render the 3D impact graph with updated tasks
-        this.renderGraph();
       },
 
       formatDate(dateString) {
@@ -1275,15 +1321,94 @@ window.addEventListener('DOMContentLoaded', () => {
       openNodeCard(detail) {
         const task = (this.tasks || []).find(t => Number(t.id) === Number(detail.taskId)) || detail.task;
         if (!task) return;
-        const w = 300, margin = 12;
-        const x = Math.min(Math.max(detail.screenX + 16, margin), window.innerWidth - w - margin);
-        const y = Math.min(Math.max(detail.screenY - 20, margin), window.innerHeight - 220);
-        this.nodeCard = { open: true, x, y, task };
+        const m = 12;
+        const x = Math.min(Math.max(detail.screenX + 16, m), window.innerWidth - 300 - m);
+        const y = Math.max(detail.screenY - 20, m);
+        this.nodeCard = { open: true, x, y, task, enables: [] };
+
+        // clamp against the card's real size once it renders, so nothing spills off-screen
+        this.$nextTick(() => {
+          const el = this.$refs.nodeCardEl;
+          if (!el) return;
+          const h = el.offsetHeight, w = el.offsetWidth;
+          this.nodeCard.x = Math.min(Math.max(this.nodeCard.x, m), Math.max(m, window.innerWidth - w - m));
+          this.nodeCard.y = Math.min(Math.max(this.nodeCard.y, m), Math.max(m, window.innerHeight - h - m));
+        });
+
+        // load which tasks this one makes easier ("enables")
+        if (this.socket) {
+          this.socket.emit('getTaskRelationships', task.id);
+          this.socket.once('taskRelationships', (data) => {
+            if (this.nodeCard.open && this.nodeCard.task
+              && Number(data.taskId) === Number(this.nodeCard.task.id) && Array.isArray(data.enables)) {
+              this.nodeCard.enables = data.enables.map(t => Number(t.id));
+            }
+          });
+        }
       },
 
       closeNodeCard() {
-        this.nodeCard = { ...this.nodeCard, open: false, task: null };
+        this.nodeCard = { ...this.nodeCard, open: false, task: null, enables: [] };
+        this.enableQuery = '';
+        this.enableOpen = false;
+        this.enableActive = 0;
         if (graph3d) graph3d.focusOnTask(null);
+      },
+
+      // Hangul chosung (leading consonant) extraction for fast fuzzy search
+      chosung(str) {
+        const CHO = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+        let out = '';
+        for (const ch of String(str)) {
+          const code = ch.charCodeAt(0) - 0xac00;
+          out += (code >= 0 && code < 11172) ? CHO[Math.floor(code / 588)] : ch.toLowerCase();
+        }
+        return out;
+      },
+      matchTask(name, q) {
+        const n = String(name).toLowerCase();
+        if (n.includes(q)) return true;
+        // any Hangul in the query -> compare by chosung, so "ㄴㅈ" or "농ㅈ" finds "농장"
+        if (/[가-힣ㄱ-ㅎ]/.test(q)) {
+          return this.chosung(name).replace(/\s/g, '').includes(this.chosung(q).replace(/\s/g, ''));
+        }
+        return false;
+      },
+      pickEnable(id) {
+        this.addEnable(id);
+        this.enableQuery = '';
+        this.enableActive = 0;
+        this.$nextTick(() => { const el = this.$refs.enableInput; if (el) el.focus(); });
+      },
+      enableKeydown(e) {
+        const list = this.filteredCandidates;
+        if (e.key === 'ArrowDown') { e.preventDefault(); this.enableActive = Math.min(this.enableActive + 1, list.length - 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); this.enableActive = Math.max(this.enableActive - 1, 0); }
+        else if (e.key === 'Enter') { e.preventDefault(); const c = list[this.enableActive]; if (c) this.pickEnable(c.id); }
+        else if (e.key === 'Escape') { this.enableOpen = false; }
+      },
+      enableBlur() {
+        setTimeout(() => { this.enableOpen = false; }, 120);
+      },
+
+      addEnable(id) {
+        id = Number(id);
+        if (!id || this.nodeCard.enables.includes(id)) return;
+        this.nodeCard.enables.push(id);
+        this.commitEnables();
+      },
+      removeEnable(id) {
+        this.nodeCard.enables = this.nodeCard.enables.filter(x => x !== Number(id));
+        this.commitEnables();
+      },
+      commitEnables() {
+        const task = this.nodeCard.task;
+        if (!task || !this.socket) return;
+        clearTimeout(this._enablesTimer);
+        const enables = [...this.nodeCard.enables];
+        this._enablesTimer = setTimeout(() => {
+          this.socket.emit('updateTaskRelationships', { taskId: task.id, enables });
+        }, 300);
       },
 
       selectQueueTask(task, ev) {
@@ -1997,6 +2122,9 @@ window.addEventListener('DOMContentLoaded', () => {
         // Save sort preference to localStorage
         localStorage.setItem('taskSortBy', newValue);
       },
+      enableQuery() {
+        this.enableActive = 0;
+      },
       currentView(newValue) {
         if (newValue === 'analytics') {
           this.loadAnalytics();
@@ -2070,6 +2198,18 @@ window.addEventListener('DOMContentLoaded', () => {
         this._onNodeDeselect = () => { if (this.nodeCard.open) this.closeNodeCard(); };
         window.addEventListener('node:select', this._onNodeSelect);
         window.addEventListener('node:deselect', this._onNodeDeselect);
+
+        // Esc closes the top-most open thing
+        this._onKeyEsc = (e) => {
+          if (e.key !== 'Escape') return;
+          if (this.enableOpen) { this.enableOpen = false; return; }
+          if (this.nodeCard.open) { this.closeNodeCard(); return; }
+          if (this.showQuickAddModal) { this.showQuickAddModal = false; return; }
+          if (this.showTaskEditForm) { this.showTaskEditForm = false; return; }
+          if (this.showSubtaskModal) { this.showSubtaskModal = false; return; }
+          if (this.showCsvImportDialog) { this.showCsvImportDialog = false; return; }
+        };
+        window.addEventListener('keydown', this._onKeyEsc);
 
         // Pause the WebGL render loop when the hero scrolls out of view
         const hero = this.$refs.leftPanel;
@@ -2183,6 +2323,7 @@ window.addEventListener('DOMContentLoaded', () => {
       // Clean up 3D graph wiring
       if (this._onNodeSelect) window.removeEventListener('node:select', this._onNodeSelect);
       if (this._onNodeDeselect) window.removeEventListener('node:deselect', this._onNodeDeselect);
+      if (this._onKeyEsc) window.removeEventListener('keydown', this._onKeyEsc);
       if (this._heroObserver) this._heroObserver.disconnect();
       if (graph3d) graph3d.dispose();
     }

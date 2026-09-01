@@ -154,7 +154,75 @@
         color: #111;
         z-index: 4;
       }
-      .ed-legend .dot { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: middle; }
+      .ed-legend .dot { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: middle; border-radius: 50%; }
+      .ed-legend__ramp i {
+        display: inline-block; width: 46px; height: 8px; margin-right: 6px; vertical-align: middle;
+        background: linear-gradient(90deg, #c2c4c4, #f5a623, #e5484d);
+      }
+      .ed-legend__note { color: #6b6b6b; letter-spacing: .04em; text-transform: none; font-style: italic; }
+
+      /* 3D graph nodes: topic glyphs (MDI) rendered via CSS2D */
+      .g3d-node {
+        line-height: 1;
+        pointer-events: none;
+        transition: transform .18s cubic-bezier(.34, 1.2, .5, 1), opacity .18s ease-in-out;
+        will-change: transform, opacity;
+      }
+      .g3d-node i { display: block; }
+      .g3d-node.is-dim { opacity: .28; }
+      .g3d-node.is-focus { transform: scale(1.55); }
+      .g3d-node.is-doing { animation: g3d-doing 1.6s ease-in-out infinite; }
+      @keyframes g3d-doing {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.22); }
+      }
+      .g3d-node.is-doing.is-focus { animation: none; transform: scale(1.55); }
+
+      /* Hover annotation on the 3D graph: ring + drawn leader line + label */
+      .g3d-anno {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: visible;
+        z-index: 5;
+      }
+      .g3d-anno__svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .g3d-anno__line {
+        stroke: #e0654b;
+        stroke-width: 1.25;
+        fill: none;
+        stroke-dasharray: 360;
+        stroke-dashoffset: 360;
+        opacity: 0;
+        transition: stroke-dashoffset .34s cubic-bezier(.4, 0, .2, 1) .06s, opacity .2s ease-in-out .06s;
+      }
+      .g3d-anno__ring {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border: 1.5px solid #e0654b;
+        border-radius: 50%;
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(.35);
+        transition: transform .28s cubic-bezier(.34, 1.3, .5, 1), opacity .22s ease-in-out;
+      }
+      .g3d-anno__label {
+        position: absolute;
+        max-width: 220px;
+        padding: 8px 12px;
+        background: #fff;
+        border: 1px solid #2f5d63;
+        color: #2f5d63;
+        font-family: var(--ed-font);
+        font-size: 13px;
+        line-height: 1.35;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity .26s ease-in-out .16s, transform .26s cubic-bezier(.4, 0, .2, 1) .16s;
+      }
+      .g3d-anno.is-on .g3d-anno__line { stroke-dashoffset: 0; opacity: 1; }
+      .g3d-anno.is-on .g3d-anno__ring { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      .g3d-anno.is-on .g3d-anno__label { opacity: 1; transform: translateY(0); }
 
       /* resize handle retired in the scroll layout */
       .resize-handle { display: none !important; }
@@ -276,6 +344,25 @@
       }
       .ed-queue__arrow { text-align: right; color: var(--ink); }
       .ed-queue__empty { padding: 16px; font-family: var(--ed-font); color: var(--muted); }
+      .ed-goalnote {
+        margin: 0; padding: 12px 16px; border-bottom: 1px solid #e4e4e4;
+        font-family: var(--ed-font); font-size: 12px; line-height: 1.5; color: var(--muted);
+      }
+      .ed-goals { list-style: none; margin: 0; padding: 0; }
+      .ed-goals li {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 10px 16px; border-bottom: 1px solid #e4e4e4;
+      }
+      .ed-goals li:last-child { border-bottom: 0; }
+      .ed-goals__cat { font-family: var(--ed-font); font-size: 14px; color: var(--ink); }
+      .ed-goals__empty { font-family: var(--ed-font); font-style: italic; color: var(--muted); }
+      .ed-goals__step { display: inline-flex; align-items: center; gap: 8px; }
+      .ed-goals__step b { min-width: 16px; text-align: center; font-weight: 400; font-size: 14px; }
+      .ed-goals__step button {
+        width: 24px; height: 24px; border: 1px solid #111; background: #fff;
+        font-family: var(--ed-font); font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
+      }
+      .ed-goals__step button:hover { background: #111; color: #fff; }
 
       /* Flatten the Vuetify "Active Tasks" card into the editorial sheet */
       .split-view-right .ed-list.v-card {
@@ -359,6 +446,8 @@
         position: fixed;
         z-index: 60;
         width: 300px;
+        max-height: calc(100vh - 24px);
+        overflow-y: auto;
         background: #fff;
         border: 1px solid #111;
         padding: 16px 18px;
@@ -404,6 +493,65 @@
       }
       .node-card__step button:hover { background: #111; color: #fff; }
       .node-card__metric.is-impact .node-card__step button { border-color: #111; }
+      .node-card__notes {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 10px;
+        padding: 6px 8px;
+        font-family: var(--ed-font);
+        font-size: 12px;
+        line-height: 1.4;
+        color: #111;
+        background: transparent;
+        border: 1px solid #d9d9d9;
+        border-radius: 0;
+        resize: vertical;
+        min-height: 40px;
+        outline: none;
+      }
+      .node-card__notes:focus { border-color: #111; }
+      .node-card__notes::placeholder { color: #9a9a9a; }
+      .node-card__enables { margin-bottom: 10px; }
+      .node-card__enables-head {
+        display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+        font-family: var(--ed-display); font-size: 10px; letter-spacing: .16em;
+        text-transform: uppercase; color: #6b6b6b; margin-bottom: 5px;
+      }
+      .node-card__enables-hint { font-size: 9px; letter-spacing: .04em; text-transform: none; font-style: italic; }
+      .node-card__chips { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+      .node-card__chips li {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-family: var(--ed-font); font-size: 11px; color: #111;
+        border: 1px solid #111; padding: 2px 4px 2px 6px; max-width: 100%;
+      }
+      .node-card__chips li button {
+        border: 0; background: transparent; cursor: pointer; font-size: 13px; line-height: 1; color: #6b6b6b; padding: 0 2px;
+      }
+      .node-card__chips li button:hover { color: #e5484d; }
+      .node-card__enables-combo { position: relative; }
+      .node-card__enables-input {
+        width: 100%; box-sizing: border-box;
+        font-family: var(--ed-font); font-size: 11px; color: #111;
+        border: 1px solid #d9d9d9; border-radius: 0; background: #fff;
+        padding: 5px 6px; outline: none;
+      }
+      .node-card__enables-input:focus { border-color: #111; }
+      .node-card__enables-input::placeholder { color: #9a9a9a; }
+      .node-card__enables-list {
+        list-style: none; margin: 2px 0 0; padding: 0;
+        position: absolute; left: 0; right: 0; z-index: 5;
+        max-height: 168px; overflow-y: auto;
+        background: #fff; border: 1px solid #111;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, .16);
+      }
+      .node-card__enables-list li {
+        font-family: var(--ed-font); font-size: 11px; color: #111;
+        padding: 5px 8px; cursor: pointer;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        border-bottom: 1px solid #eee;
+      }
+      .node-card__enables-list li:last-child { border-bottom: 0; }
+      .node-card__enables-list li.is-active { background: #111; color: #fff; }
       .node-card__seg { display: flex; border: 1px solid #111; margin-bottom: 10px; }
       .node-card__seg button {
         flex: 1;
@@ -892,14 +1040,14 @@
                         </button>
 
                         <div class="ed-legend">
-                            <span><i class="dot" style="background:#e5484d"></i>Urgent</span>
-                            <span><i class="dot" style="background:#f5a623;transform:rotate(45deg)"></i>Impact</span>
-                            <span><i class="dot" style="background:#111"></i>Standard</span>
+                            <span class="ed-legend__ramp"><i></i>impact&nbsp;&nbsp;low&nbsp;&rarr;&nbsp;high</span>
+                            <span class="ed-legend__note">&uarr; height = impact&nbsp;&nbsp;·&nbsp;&nbsp;size = priority&nbsp;&nbsp;·&nbsp;&nbsp;<i class="dot" style="background:#e0654b"></i>enables</span>
                         </div>
 
                         <!-- Floating edit card: appears when a dot in the 3D graph is clicked -->
                         <div
                             v-if="nodeCard.open"
+                            ref="nodeCardEl"
                             class="node-card"
                             :style="{ left: nodeCard.x + 'px', top: nodeCard.y + 'px' }"
                         >
@@ -931,6 +1079,48 @@
                                     </div>
                                 </div>
                             </div>
+                            <textarea
+                                v-if="nodeCard.task"
+                                class="node-card__notes"
+                                v-model="nodeCard.task.notes"
+                                @change="commitNodeCard"
+                                placeholder="Notes…"
+                                rows="2"
+                            ></textarea>
+
+                            <div class="node-card__enables">
+                                <div class="node-card__enables-head">
+                                    <span>Enables</span>
+                                    <span class="node-card__enables-hint">makes these easier &rarr; raises impact</span>
+                                </div>
+                                <ul v-if="enabledTasks.length" class="node-card__chips">
+                                    <li v-for="e in enabledTasks" :key="e.id">
+                                        {{ e.name }}
+                                        <button type="button" @click="removeEnable(e.id)" aria-label="remove">&times;</button>
+                                    </li>
+                                </ul>
+                                <div class="node-card__enables-combo">
+                                    <input
+                                        ref="enableInput"
+                                        class="node-card__enables-input"
+                                        v-model="enableQuery"
+                                        @focus="enableOpen = true"
+                                        @blur="enableBlur"
+                                        @keydown="enableKeydown"
+                                        placeholder="+ add a task this unblocks…  (초성 ok)"
+                                    />
+                                    <ul v-show="enableOpen && filteredCandidates.length" class="node-card__enables-list">
+                                        <li
+                                            v-for="(c, i) in filteredCandidates"
+                                            :key="c.id"
+                                            :class="{ 'is-active': i === enableActive }"
+                                            @mousedown.prevent="pickEnable(c.id)"
+                                            @mousemove="enableActive = i"
+                                        >{{ c.name }}</li>
+                                    </ul>
+                                </div>
+                            </div>
+
                             <div class="node-card__seg node-card__seg--4">
                                 <button :class="{ 'is-on': nodeCardStatus === 'todo' }" @click="setNodeStatus('todo')">To Do</button>
                                 <button :class="{ 'is-on': nodeCardStatus === 'in_progress' }" @click="setNodeStatus('in_progress')">Doing</button>
@@ -1232,6 +1422,25 @@
                                     <span class="ed-queue__title">Log in with Google</span>
                                     <span class="ed-queue__arrow">&rarr;</span>
                                 </li>
+                            </ul>
+                        </section>
+
+                        <section class="ed-panel" style="margin-top: 24px;">
+                            <div class="ed-panel__head">
+                                <span>Goal weights</span>
+                                <span class="ed-count">impact = category weight</span>
+                            </div>
+                            <p class="ed-goalnote">How much does each category move your goals? 0 = irrelevant, 5 = core. This drives the 3D chart's height &amp; colour.</p>
+                            <ul class="ed-goals">
+                                <li v-for="cat in distinctCategories" :key="cat">
+                                    <span class="ed-goals__cat">{{ cat }}</span>
+                                    <span class="ed-goals__step">
+                                        <button type="button" @click="setCategoryWeight(cat, weightFor({category: cat}) - 1)">&minus;</button>
+                                        <b>{{ weightFor({ category: cat }) }}</b>
+                                        <button type="button" @click="setCategoryWeight(cat, weightFor({category: cat}) + 1)">+</button>
+                                    </span>
+                                </li>
+                                <li v-if="distinctCategories.length === 0" class="ed-goals__empty">No categories on your tasks yet.</li>
                             </ul>
                         </section>
                     </div>
