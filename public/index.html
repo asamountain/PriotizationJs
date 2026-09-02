@@ -568,6 +568,24 @@
       .node-card__seg button:last-child { border-right: 0; }
       .node-card__seg button.is-on { background: #111; color: #fff; }
       .node-card__seg--4 button { padding: 7px 2px; font-size: 10px; letter-spacing: 0; }
+      .node-card__seg--kind button { font-size: 10px; letter-spacing: .02em; }
+
+      /* 3D graph: outcome nodes (goals on the horizon) + identity nodes (vision behind the field) */
+      .g3d-node.is-outcome i {
+        border: 2px solid currentColor;
+        border-radius: 999px;
+        padding: 4px;
+        background: rgba(255, 250, 235, .55);
+      }
+      .g3d-node.is-identity {
+        font-family: Georgia, "Times New Roman", Times, serif;
+        font-style: italic;
+        font-size: 13px;
+        color: #9a9a9a;
+        letter-spacing: .04em;
+        white-space: nowrap;
+        opacity: .8;
+      }
       .node-card__row { display: flex; gap: 8px; }
       .node-card__row button {
         flex: 1;
@@ -1041,7 +1059,7 @@
 
                         <div class="ed-legend">
                             <span class="ed-legend__ramp"><i></i>impact&nbsp;&nbsp;low&nbsp;&rarr;&nbsp;high</span>
-                            <span class="ed-legend__note">&uarr; height = impact&nbsp;&nbsp;·&nbsp;&nbsp;size = priority&nbsp;&nbsp;·&nbsp;&nbsp;<i class="dot" style="background:#e0654b"></i>enables</span>
+                            <span class="ed-legend__note">&uarr; height = impact&nbsp;&nbsp;·&nbsp;&nbsp;size = priority&nbsp;&nbsp;·&nbsp;&nbsp;<i class="dot" style="background:#e0654b"></i>enables&nbsp;&nbsp;·&nbsp;&nbsp;<i class="dot" style="background:#c9a227"></i>goal (horizon)</span>
                         </div>
 
                         <!-- Floating edit card: appears when a dot in the 3D graph is clicked -->
@@ -1119,6 +1137,12 @@
                                         >{{ c.name }}</li>
                                     </ul>
                                 </div>
+                            </div>
+
+                            <div class="node-card__seg node-card__seg--kind">
+                                <button :class="{ 'is-on': (nodeCard.task && (nodeCard.task.kind || 'action')) === 'action' }" @click="setNodeKind('action')" title="A task you do — lives on the Eisenhower floor">Action</button>
+                                <button :class="{ 'is-on': nodeCard.task && nodeCard.task.kind === 'outcome' }" @click="setNodeKind('outcome')" title="A goal you reach, not a task you finish — parked on the horizon, sized by roll-up progress">Outcome</button>
+                                <button :class="{ 'is-on': nodeCard.task && nodeCard.task.kind === 'identity' }" @click="setNodeKind('identity')" title="A stance / vision — no completion, floats behind the field">Identity</button>
                             </div>
 
                             <div class="node-card__seg node-card__seg--4">

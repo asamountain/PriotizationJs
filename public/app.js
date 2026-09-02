@@ -380,14 +380,14 @@ window.addEventListener('DOMContentLoaded', () => {
         return this.sortTasks(filteredTasks);
       },
       priorityQueue() {
-        const list = (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure');
+        const list = (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure' && (t.kind || 'action') === 'action');
         // composite: importance x urgency, lifted by goal weight (category proxy)
         const score = (t) => Number(t.importance || 0) * Number(t.urgency || 0)
           + this.weightFor(t) * 12;
         return [...list].sort((a, b) => score(b) - score(a)).slice(0, 12);
       },
       queueCount() {
-        return (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure').length;
+        return (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure' && (t.kind || 'action') === 'action').length;
       },
       todayLabel() {
         return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
@@ -665,8 +665,23 @@ window.addEventListener('DOMContentLoaded', () => {
           graph3d.showSubtasks = this.showChartSubtasks;
           // stamp goal-proxy impact onto the task objects the chart reads
           const tasks = this.filteredTasksForChart;
-          for (const t of tasks) t._impact = this.weightFor(t);
-          graph3d.render(tasks, this.allRelationships);
+          const rels = this.allRelationships || [];
+          const allById = new Map((this.tasks || []).map(t => [Number(t.id), t]));
+          for (const t of tasks) {
+            t._impact = this.weightFor(t);
+            // outcome nodes are sized by roll-up progress: share of their
+            // enabling actions (weighted by importance) that are done
+            if ((t.kind || 'action') === 'outcome') {
+              const feeders = rels
+                .filter(r => Number(r.enabled_task_id) === Number(t.id))
+                .map(r => allById.get(Number(r.enabler_task_id)))
+                .filter(Boolean);
+              const total = feeders.reduce((s, f) => s + (Number(f.importance) || 1), 0);
+              const done = feeders.reduce((s, f) => s + (f.done ? (Number(f.importance) || 1) : 0), 0);
+              t._progress = total > 0 ? done / total : 0;
+            }
+          }
+          graph3d.render(tasks, rels);
         } catch (e) {
           console.error('3D graph render failed:', e);
         }
@@ -1429,6 +1444,14 @@ window.addEventListener('DOMContentLoaded', () => {
         const next = Math.max(0, Math.min(10, Math.round(Number(task[field] || 0) + delta)));
         if (next === Number(task[field])) return;
         task[field] = next;
+        if (graph3d) this.renderGraph();
+        this.commitNodeCard();
+      },
+
+      setNodeKind(kind) {
+        const task = this.nodeCard.task;
+        if (!task || (task.kind || 'action') === kind) return;
+        task.kind = kind;
         if (graph3d) this.renderGraph();
         this.commitNodeCard();
       },

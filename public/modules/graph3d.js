@@ -27,6 +27,15 @@ function leverage(t) {
 }
 function priority(t) { return num(t.importance) * num(t.urgency); } // 0..100
 function clamp10(v) { return Math.max(0, Math.min(BOX, v)); }
+function kindOf(t) { return t.kind || 'action'; }
+
+// goals ("outcome") and vision ("identity") are parked BEHIND the Eisenhower
+// floor on their own bands, not scored on it
+const HORIZON_Z = BOX + 3;   // outcome band, just past the grid
+const HORIZON_Y = 6.5;
+const VISION_Z = BOX + 5;     // identity band, further back and higher
+const VISION_Y = 9.4;
+const GOLD = '#c9a227';
 
 // deterministic per-task offset so tasks sharing the same (urgency, importance)
 // don't stack into one unclickable blob
@@ -75,10 +84,20 @@ function iconFor(t) {
   return 'mdi-circle-medium';
 }
 
-// floor placement = Eisenhower plane (X urgency, Z importance); height set later from impact
-function floorCoord(t) {
-  const j = jitter(t.id);
-  return new THREE.Vector3(clamp10(num(t.urgency) + j.x), 0, clamp10(num(t.importance) + j.z));
+// floor placement = Eisenhower plane (X urgency, Z importance); height set later
+// from impact. Spread tie-heavy scores across the floor: map a value to its percentile rank
+// within the current set, then onto 0.5..BOX-0.5. A board where every task is
+// rated 8-10 still fans out instead of stacking in one corner. Ties share a spot.
+function rankMapper(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const n = sorted.length;
+  return (v) => {
+    if (n <= 1) return BOX / 2;
+    let below = 0, equal = 0;
+    for (const s of sorted) { if (s < v) below++; else if (s === v) equal++; }
+    const pct = (below + equal / 2) / n; // 0..1, ties land at their block midpoint
+    return 0.5 + pct * (BOX - 1);
+  };
 }
 
 export class Graph3D {
@@ -95,6 +114,7 @@ export class Graph3D {
     this.influenceMode = false;
     this.showRelationships = true;
     this.showSubtasks = true;
+    this.rankMode = true; // floor position = percentile rank, not raw 0..10
     this._active = true;
     this._raf = null;
     this._clock = new THREE.Clock();
@@ -298,21 +318,51 @@ export class Graph3D {
     // done + "Not Sure" tasks drop off the chart entirely (still live in the table)
     const list = (Array.isArray(tasks) ? tasks : []).filter((t) => !t.done && t.status !== 'Not Sure');
     const rels = Array.isArray(relationships) ? relationships : [];
+    const kindById = new Map(list.map((t) => [Number(t.id), kindOf(t)]));
 
-    // HEIGHT = impact (leverage), normalized to the box so the range is always used.
-    // Tasks that unblock nothing sit on the floor (y = 0).
-    const maxLev = Math.max(0, ...list.map(leverage));
-    const pos = new Map(list.map((t) => {
-      const p = floorCoord(t);
+    const actions = list.filter((t) => kindOf(t) === 'action');
+    const outcomes = list.filter((t) => kindOf(t) === 'outcome');
+    const idents = list.filter((t) => kindOf(t) === 'identity');
+
+    // HEIGHT = impact (leverage) for floor tasks, normalized to the box.
+    // Tasks that unblock nothing sit on the floor (y = 0); goals/vision get
+    // their own bands behind it.
+    const maxLev = Math.max(0, ...actions.map(leverage));
+    const rankU = this.rankMode ? rankMapper(actions.map((t) => num(t.urgency))) : null;
+    const rankI = this.rankMode ? rankMapper(actions.map((t) => num(t.importance))) : null;
+    const pos = new Map(actions.map((t) => {
+      const j = jitter(t.id);
+      const ux = rankU ? rankU(num(t.urgency)) : clamp10(num(t.urgency));
+      const iz = rankI ? rankI(num(t.importance)) : clamp10(num(t.importance));
+      const p = new THREE.Vector3(clamp10(ux + j.x), 0, clamp10(iz + j.z));
       const lev = leverage(t);
       p.y = maxLev > 0 && lev > 0 ? 0.7 + (lev / maxLev) * 7.3 : 0;
       return [Number(t.id), p];
     }));
+    outcomes.forEach((t, i) => {
+      const x = outcomes.length < 2 ? BOX / 2 : 1 + (i / (outcomes.length - 1)) * (BOX - 2);
+      pos.set(Number(t.id), new THREE.Vector3(x, HORIZON_Y, HORIZON_Z));
+    });
+    idents.forEach((t, i) => {
+      const x = idents.length < 2 ? BOX / 2 : 1.5 + (i / (idents.length - 1)) * (BOX - 3);
+      pos.set(Number(t.id), new THREE.Vector3(x, VISION_Y, VISION_Z));
+    });
 
-    // thin vertical stems: floating (impactful) nodes drop a line to their floor spot
+    // horizon rule the outcome nodes rest on
+    if (outcomes.length) {
+      const hz = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, HORIZON_Y, HORIZON_Z), new THREE.Vector3(BOX, HORIZON_Y, HORIZON_Z),
+      ]);
+      this.edgeGroup.add(new THREE.LineSegments(hz, new THREE.LineBasicMaterial({
+        color: 0xd9c494, transparent: true, opacity: 0.7,
+      })));
+    }
+
+    // thin vertical stems: floating (impactful) floor tasks drop a line to their spot
     const stem = [];
-    for (const p of pos.values()) {
-      if (p.y > 0.05) stem.push(p.x, p.y, p.z, p.x, 0, p.z);
+    for (const t of actions) {
+      const p = pos.get(Number(t.id));
+      if (p && p.y > 0.05) stem.push(p.x, p.y, p.z, p.x, 0, p.z);
     }
     if (stem.length) {
       const sg = new THREE.BufferGeometry();
@@ -325,19 +375,36 @@ export class Graph3D {
     // Each node = a topic glyph (MDI) via CSS2D; an invisible mesh is the click target.
     for (const t of list) {
       const id = Number(t.id);
+      const k = kindOf(t);
       const mag = 0.55 + priority(t) / 100 * 0.85; // node size = importance x urgency
       const lev01 = maxLev > 0 ? leverage(t) / maxLev : 0; // impact, 0..1
+      const p = pos.get(id);
+      if (!p) continue;
 
       const mesh = new THREE.Mesh(PICK_GEO, new THREE.MeshBasicMaterial({ visible: false }));
-      mesh.position.copy(pos.get(id));
+      mesh.position.copy(p);
       mesh.scale.setScalar(0.1); // just a carrier for the CSS2D icon; picking is screen-space now
 
       const el = document.createElement('div');
       el.className = 'g3d-node';
-      el.innerHTML = `<i class="mdi ${iconFor(t)}"></i>`;
-      el.style.color = impactColor(lev01);
-      el.style.fontSize = `${Math.round(14 + mag * 12)}px`;
-      if (t.status === 'in_progress') el.classList.add('is-doing');
+      if (k === 'identity') {
+        // vision / stance: a faint serif name floating behind the field, no metrics
+        el.classList.add('is-identity');
+        el.textContent = t.name || `Task ${id}`;
+      } else if (k === 'outcome') {
+        // goal: gold ring on the horizon, sized/lit by roll-up progress
+        el.classList.add('is-outcome');
+        const prog = Math.max(0, Math.min(1, num(t._progress)));
+        el.innerHTML = `<i class="mdi ${iconFor(t)}"></i>`;
+        el.style.color = GOLD;
+        el.style.fontSize = `${Math.round(16 + prog * 16)}px`;
+        el.style.opacity = `${0.45 + prog * 0.55}`;
+      } else {
+        el.innerHTML = `<i class="mdi ${iconFor(t)}"></i>`;
+        el.style.color = impactColor(lev01);
+        el.style.fontSize = `${Math.round(14 + mag * 12)}px`;
+        if (t.status === 'in_progress') el.classList.add('is-doing');
+      }
       const iconObj = new CSS2DObject(el);
       mesh.add(iconObj);
 
@@ -387,7 +454,10 @@ export class Graph3D {
         if (n >= 220) break;
         const a = pos.get(Number(r.enabler_task_id));
         const b = pos.get(Number(r.enabled_task_id));
-        if (a && b) { curve(a, b, '#e0654b', 0.16); n++; }
+        if (!a || !b) continue;
+        const toGoal = kindById.get(Number(r.enabled_task_id)) === 'outcome';
+        curve(a, b, toGoal ? GOLD : '#e0654b', toGoal ? 0.06 : 0.16);
+        n++;
       }
     }
     if (this.showSubtasks) {

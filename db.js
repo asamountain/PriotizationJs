@@ -9,9 +9,11 @@ class Database {
 
   async init() {
     console.log("Connecting to Cloud PostgreSQL...");
+    const url = process.env.DATABASE_URL || '';
+    const isLocal = /@(localhost|127\.0\.0\.1|::1)[:/]/.test(url) && !/sslmode=require/.test(url);
     this.pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl: isLocal ? false : { rejectUnauthorized: false }
     });
     await this.createTablesPostgres();
   }
@@ -92,6 +94,7 @@ class Database {
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pomodoro_count INTEGER DEFAULT 0",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_worked_at TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'action'",
       "ALTER TABLE tasks ALTER COLUMN importance TYPE REAL",
       "ALTER TABLE tasks ALTER COLUMN urgency TYPE REAL",
       "ALTER TABLE tasks ALTER COLUMN progress TYPE REAL"
@@ -129,19 +132,20 @@ class Database {
 
     const res = await this.pool.query(
       `INSERT INTO tasks (
-        name, importance, urgency, user_id, done, link, due_date, 
+        name, importance, urgency, user_id, done, link, due_date,
         notes, parent_id, total_time_spent, pomodoro_count, category, status,
-        created_at, completed_at, icon, progress
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 
-        COALESCE($14, CURRENT_TIMESTAMP), $15, $16, $17) RETURNING id`,
+        created_at, completed_at, icon, progress, kind
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+        COALESCE($14, CURRENT_TIMESTAMP), $15, $16, $17, $18) RETURNING id`,
       [
-        task.name, importance, urgency, userId || null, !!task.done, 
-        task.link || null, task.due_date || null, task.notes || null, 
-        task.parent_id || null, totalTime, pomodoros, 
+        task.name, importance, urgency, userId || null, !!task.done,
+        task.link || null, task.due_date || null, task.notes || null,
+        task.parent_id || null, totalTime, pomodoros,
         task.category || null, task.status || null,
         task.created_at || null, task.completed_at || null,
         task.icon || 'mdi-checkbox-blank-circle-outline',
-        progress
+        progress,
+        task.kind || 'action'
       ]
     );
     return res.rows[0].id;
@@ -196,8 +200,8 @@ class Database {
     const importance = Number(task.importance) || 5;
     const urgency = Number(task.urgency) || 5;
     const progress = Number(task.progress) || 0;
-    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9, category = $10 WHERE id = $11";
-    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.category || null, task.id]);
+    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9, category = $10, kind = COALESCE($11, kind) WHERE id = $12";
+    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.category || null, task.kind ?? null, task.id]);
   }
 
   async bulkImportTasks(tasks, userId) {
