@@ -7,6 +7,7 @@ import { dirname, join } from "path";
 import { initDatabase, bulkImportTasks } from "./db.js";
 import setupSocket from "./socket.js";
 import { setupAuth, requireAuth } from "./auth.js";
+import { setupGate } from "./gate.js";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import { stringify } from "csv-stringify/sync";
@@ -23,16 +24,23 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server);
 
-// Health check endpoint for keep-alive pings
+// Health check endpoint for keep-alive pings — stays before the gate
 app.get("/healthz", (req, res) => res.status(200).send("OK"));
 
 // Middleware
 app.set('trust proxy', 1); // Enable proxy support for secure cookies
-app.use(express.static(join(__dirname, "public")));
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-// Setup authentication
-setupAuth(app);
+// Setup authentication (also builds the shared session middleware)
+const sessionMiddleware = setupAuth(app);
+io.engine.use(sessionMiddleware); // share session with socket.io handshakes
+
+// Password gate — must run before static so the app shell is protected too
+setupGate(app, io);
+
+// Static assets (served only past the gate)
+app.use(express.static(join(__dirname, "public")));
 
 // Setup socket connection
 setupSocket(io);

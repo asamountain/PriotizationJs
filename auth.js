@@ -1,11 +1,24 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import { upsertUser } from './db.js';
 
+const PgSession = connectPgSimple(session);
+
 export function setupAuth(app) {
+    const dbUrl = process.env.DATABASE_URL || '';
+    const isLocalDb = /@(localhost|127\.0\.0\.1|::1)[:/]/.test(dbUrl) && !/sslmode=require/.test(dbUrl);
+
     // Session configuration
-    app.use(session({
+    const sessionMiddleware = session({
+        store: new PgSession({
+            conObject: {
+                connectionString: dbUrl,
+                ssl: isLocalDb ? false : { rejectUnauthorized: false }
+            },
+            createTableIfMissing: true
+        }),
         secret: process.env.SESSION_SECRET || 'priority-task-manager-secret',
         resave: false,
         saveUninitialized: false,
@@ -14,7 +27,8 @@ export function setupAuth(app) {
             secure: process.env.NODE_ENV === 'production',
             maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
         }
-    }));
+    });
+    app.use(sessionMiddleware);
 
     app.use(passport.initialize());
     app.use(passport.session());
@@ -145,6 +159,8 @@ export function setupAuth(app) {
             googleEnabled: !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET)
         });
     });
+
+    return sessionMiddleware;
 }
 
 export function requireAuth(req, res, next) {
