@@ -3,6 +3,7 @@ import { ChartVisualization } from './modules/chartVisualization.js';
 import { Graph3D } from './modules/graph3d.js';
 import { TaskOperations } from './modules/taskOperations.js';
 import { TaskListManager } from './modules/taskListManager.js';
+import { track } from './services/telemetry.js';
 
 // Define these variables at the top level so they can be exported
 let chartVisualization = null;
@@ -532,7 +533,8 @@ window.addEventListener('DOMContentLoaded', () => {
       
       submitTask() {
         if (!this.taskName) return;
-        
+        track('task_add', 'submit');
+
         const taskData = {
           name: this.taskName,
           importance: this.taskImportance,
@@ -782,6 +784,7 @@ window.addEventListener('DOMContentLoaded', () => {
       
       saveTaskEdit() {
         if (!this.editingTask.name) return;
+        track('task_edit_save');
 
         taskOperations.editTask(this.editingTask);
 
@@ -1025,6 +1028,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
       openQuickAddModal(importance, urgency) {
+        track('quick_add_open');
         this.quickAddTask.importance = importance;
         this.quickAddTask.urgency = urgency;
         this.quickAddTask.name = '';
@@ -1350,6 +1354,7 @@ window.addEventListener('DOMContentLoaded', () => {
       openNodeCard(detail) {
         const task = (this.tasks || []).find(t => Number(t.id) === Number(detail.taskId)) || detail.task;
         if (!task) return;
+        track('node_card_open', task.kind || 'action');
         const m = 12;
         const x = Math.min(Math.max(detail.screenX + 16, m), window.innerWidth - 300 - m);
         const y = Math.max(detail.screenY - 20, m);
@@ -1404,6 +1409,7 @@ window.addEventListener('DOMContentLoaded', () => {
         return false;
       },
       pickEnable(id) {
+        track('relationship_add');
         this.addEnable(id);
         this.enableQuery = '';
         this.enableActive = 0;
@@ -1442,6 +1448,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
       selectQueueTask(task, ev) {
         if (!task) return;
+        track('queue_click', task.kind || 'action');
         const r = ev && ev.currentTarget && ev.currentTarget.getBoundingClientRect();
         this.openNodeCard({
           taskId: task.id,
@@ -1457,6 +1464,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!task) return;
         const next = Math.max(0, Math.min(10, Math.round(Number(task[field] || 0) + delta)));
         if (next === Number(task[field])) return;
+        track('metric_bump', field, { delta });
         task[field] = next;
         if (graph3d) this.renderGraph();
         this.commitNodeCard();
@@ -1465,6 +1473,7 @@ window.addEventListener('DOMContentLoaded', () => {
       setNodeKind(kind) {
         const task = this.nodeCard.task;
         if (!task || (task.kind || 'action') === kind) return;
+        track('set_kind', kind);
         task.kind = kind;
         if (graph3d) this.renderGraph();
         this.commitNodeCard();
@@ -1482,6 +1491,7 @@ window.addEventListener('DOMContentLoaded', () => {
       setNodeStatus(state) {
         const task = this.nodeCard.task;
         if (!task) return;
+        track('set_status', state);
         const wantDone = state === 'done';
         const status = state === 'in_progress' ? 'in_progress' : state === 'unsure' ? 'Not Sure' : '';
         if (wantDone !== !!task.done) taskOperations.toggleDone(task.id);
@@ -2168,6 +2178,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       },
       navView(v) {
+        track('view', v);
         this.currentView = v === 'analytics' ? 'analytics' : 'tasks';
         const onGraph = v === 'graph';
         if (graph3d) graph3d.setActive(onGraph);

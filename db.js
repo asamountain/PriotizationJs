@@ -73,10 +73,21 @@ class Database {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS events (
+        id SERIAL PRIMARY KEY,
+        ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        session_id TEXT,
+        event TEXT NOT NULL,
+        target TEXT,
+        meta JSONB
+      );
+
       CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
       CREATE INDEX IF NOT EXISTS idx_task_relationships_user_id ON task_relationships(user_id);
+      CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+      CREATE INDEX IF NOT EXISTS idx_events_event ON events(event);
     `;
     await this.pool.query(query);
     
@@ -371,6 +382,40 @@ class Database {
     const leverageScores = this.calculateLeverageScoresFromGraph(relationships, tasks);
     return tasks.map(task => ({ ...task, leverage_score: leverageScores[task.id] || 0 }));
   }
+
+  async logEvents(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return 0;
+    const capped = rows.slice(0, 200);
+    const values = [];
+    const params = [];
+    capped.forEach((r, i) => {
+      const b = i * 4;
+      values.push(`($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4})`);
+      params.push(
+        String(r.session_id || '').slice(0, 64) || null,
+        String(r.event || '').slice(0, 64),
+        r.target == null ? null : String(r.target).slice(0, 128),
+        r.meta == null ? null : JSON.stringify(r.meta).slice(0, 2000)
+      );
+    });
+    await this.query(
+      `INSERT INTO events (session_id, event, target, meta) VALUES ${values.join(', ')}`,
+      params
+    );
+    return capped.length;
+  }
+
+  async getEventSummary(days = 7) {
+    const d = Math.max(1, Math.min(365, Number(days) || 7));
+    const since = `NOW() - INTERVAL '${d} days'`;
+    const [byEvent, byTarget, byDay, sessions] = await Promise.all([
+      this.query(`SELECT event, COUNT(*)::int AS n FROM events WHERE ts >= ${since} GROUP BY event ORDER BY n DESC`),
+      this.query(`SELECT event, target, COUNT(*)::int AS n FROM events WHERE ts >= ${since} AND target IS NOT NULL GROUP BY event, target ORDER BY n DESC LIMIT 40`),
+      this.query(`SELECT to_char(ts::date, 'YYYY-MM-DD') AS day, COUNT(*)::int AS n FROM events WHERE ts >= ${since} GROUP BY day ORDER BY day`),
+      this.query(`SELECT COUNT(DISTINCT session_id)::int AS n FROM events WHERE ts >= ${since}`)
+    ]);
+    return { days: d, byEvent, byTarget, byDay, sessions: sessions[0] ? sessions[0].n : 0 };
+  }
 }
 
 const database = new Database();
@@ -399,5 +444,7 @@ export const getTasksThatEnable = (id) => database.getTasksThatEnable(id);
 export const getTaskRelationships = (id) => database.getTaskRelationships(id);
 export const calculateLeverageScore = (id) => database.calculateLeverageScore(id);
 export const getTaskDataWithLeverage = (u) => database.getTaskDataWithLeverage(u);
+export const logEvents = (rows) => database.logEvents(rows);
+export const getEventSummary = (days) => database.getEventSummary(days);
 export const initDatabase = () => database.init();
 export default database;

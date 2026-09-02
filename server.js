@@ -52,6 +52,29 @@ app.post("/api/log-client-error", (req, res) => {
     res.sendStatus(204);
 });
 
+// Usage telemetry: batched UI interaction counts (no per-user data, gated)
+app.post("/api/events", async (req, res) => {
+    try {
+        const { logEvents } = await import("./db.js");
+        const rows = Array.isArray(req.body?.events) ? req.body.events : [];
+        const n = await logEvents(rows);
+        res.json({ ok: true, stored: n });
+    } catch (error) {
+        console.error("Event log error:", error.message);
+        res.status(500).json({ error: "Failed to log events" });
+    }
+});
+
+app.get("/api/events/summary", async (req, res) => {
+    try {
+        const { getEventSummary } = await import("./db.js");
+        res.json(await getEventSummary(req.query.days));
+    } catch (error) {
+        console.error("Event summary error:", error.message);
+        res.status(500).json({ error: "Failed to build summary" });
+    }
+});
+
 // Routes
 app.get("/", (req, res) => {
     res.sendFile(join(__dirname, "public", "index.html"));
