@@ -381,10 +381,16 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       priorityQueue() {
         const list = (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure' && (t.kind || 'action') === 'action');
-        // composite: importance x urgency, lifted by goal weight (category proxy)
-        const score = (t) => Number(t.importance || 0) * Number(t.urgency || 0)
-          + this.weightFor(t) * 12;
-        return [...list].sort((a, b) => score(b) - score(a)).slice(0, 12);
+        return [...list].sort((a, b) => this.queueScore(b) - this.queueScore(a)).slice(0, 12);
+      },
+      horizonList() {
+        const list = (this.activeTasks || []).filter(t => {
+          const k = t.kind || 'action';
+          return !t.done && (k === 'outcome' || k === 'identity');
+        });
+        const rank = (k) => (k === 'outcome' ? 0 : 1);
+        return [...list].sort((a, b) =>
+          rank(a.kind) - rank(b.kind) || Number(b.importance || 0) - Number(a.importance || 0));
       },
       queueCount() {
         return (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure' && (t.kind || 'action') === 'action').length;
@@ -649,6 +655,14 @@ window.addEventListener('DOMContentLoaded', () => {
         const c = (task && task.category || '').trim();
         const w = Number(this.categoryWeights[c]);
         return Number.isFinite(w) ? w : 0;
+      },
+      // Priority Queue rank: importance (stake) x cost of inaction (time-sensitivity
+      // of the downside), lifted by goal weight. Cost of inaction replaces the older
+      // feeling-based urgency here. Low COI (long-term identity/outcome-ish work)
+      // sinks regardless of importance. Unset COI is treated as a neutral 5.
+      queueScore(task) {
+        const coi = task.cost_of_inaction == null ? 5 : Number(task.cost_of_inaction);
+        return Number(task.importance || 0) * coi + this.weightFor(task) * 12;
       },
       setCategoryWeight(cat, val) {
         const w = Math.max(0, Math.min(5, Math.round(Number(val) || 0)));

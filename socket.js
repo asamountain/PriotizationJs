@@ -26,6 +26,7 @@ const setupSocket = (io) => {
         icon: task.icon || 'mdi-checkbox-blank-circle-outline',
         color: task.color || null,
         kind: task.kind || 'action',
+        cost_of_inaction: task.cost_of_inaction ?? null,
         // Timer fields
         total_time_spent: task.total_time_spent || 0,
         active_timer_start: task.active_timer_start || null,

@@ -95,6 +95,7 @@ class Database {
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_worked_at TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'action'",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cost_of_inaction REAL",
       "ALTER TABLE tasks ALTER COLUMN importance TYPE REAL",
       "ALTER TABLE tasks ALTER COLUMN urgency TYPE REAL",
       "ALTER TABLE tasks ALTER COLUMN progress TYPE REAL"
@@ -134,9 +135,9 @@ class Database {
       `INSERT INTO tasks (
         name, importance, urgency, user_id, done, link, due_date,
         notes, parent_id, total_time_spent, pomodoro_count, category, status,
-        created_at, completed_at, icon, progress, kind
+        created_at, completed_at, icon, progress, kind, cost_of_inaction
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-        COALESCE($14, CURRENT_TIMESTAMP), $15, $16, $17, $18) RETURNING id`,
+        COALESCE($14, CURRENT_TIMESTAMP), $15, $16, $17, $18, $19) RETURNING id`,
       [
         task.name, importance, urgency, userId || null, !!task.done,
         task.link || null, task.due_date || null, task.notes || null,
@@ -145,7 +146,8 @@ class Database {
         task.created_at || null, task.completed_at || null,
         task.icon || 'mdi-checkbox-blank-circle-outline',
         progress,
-        task.kind || 'action'
+        task.kind || 'action',
+        task.cost_of_inaction ?? null
       ]
     );
     return res.rows[0].id;
@@ -200,8 +202,8 @@ class Database {
     const importance = Number(task.importance) || 5;
     const urgency = Number(task.urgency) || 5;
     const progress = Number(task.progress) || 0;
-    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9, category = $10, kind = COALESCE($11, kind) WHERE id = $12";
-    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.category || null, task.kind ?? null, task.id]);
+    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, link = $4, due_date = $5, notes = $6, status = $7, icon = $8, progress = $9, category = $10, kind = COALESCE($11, kind), cost_of_inaction = COALESCE($12, cost_of_inaction) WHERE id = $13";
+    await this.query(q, [task.name, importance, urgency, task.link, task.due_date, task.notes, task.status, task.icon || 'mdi-checkbox-blank-circle-outline', progress, task.category || null, task.kind ?? null, task.cost_of_inaction ?? null, task.id]);
   }
 
   async bulkImportTasks(tasks, userId) {

@@ -120,16 +120,6 @@
         border-right: 1px solid #111;
       }
 
-      /* GRAPH: docked Priority Queue rail */
-      .ed-queue-rail {
-        width: 360px;
-        flex-shrink: 0;
-        height: 100%;
-        overflow-y: auto;
-        padding: 22px;
-        background: #fff;
-      }
-
       /* HIERARCHY: full task list */
       .split-view-right {
         flex: 1;
@@ -618,7 +608,6 @@
         .ed-rail button { width: 40px; height: 40px; }
         .split-view-container { flex-wrap: wrap; overflow-y: auto; }
         .split-view-left { flex: 1 1 100%; height: 60vh; border-right: 0; border-bottom: 1px solid #111; }
-        .ed-queue-rail { width: 100%; height: auto; }
         .split-view-right { padding: 20px 16px 48px; -webkit-overflow-scrolling: touch; }
         .node-card { width: min(300px, calc(100vw - 32px)); }
         .ed-topbar__title { font-size: 15px; }
@@ -1096,6 +1085,14 @@
                                         <button type="button" @click="bumpMetric('importance', 1)">+</button>
                                     </div>
                                 </div>
+                                <div class="node-card__metric">
+                                    <span title="Cost of inaction: what gets worse if you don't do this now (1-10). Low = safe to defer.">Inaction cost</span>
+                                    <div class="node-card__step">
+                                        <button type="button" @click="bumpMetric('cost_of_inaction', -1)">&minus;</button>
+                                        <b>{{ nodeCard.task && (nodeCard.task.cost_of_inaction == null ? '—' : Number(nodeCard.task.cost_of_inaction).toFixed(0)) }}</b>
+                                        <button type="button" @click="bumpMetric('cost_of_inaction', 1)">+</button>
+                                    </div>
+                                </div>
                             </div>
                             <textarea
                                 v-if="nodeCard.task"
@@ -1158,31 +1155,6 @@
                         </div>
                     </div>
 
-                    <!-- GRAPH view: docked Priority Queue rail -->
-                    <aside class="ed-queue-rail" v-show="navView === 'graph'">
-                        <section class="ed-panel">
-                            <div class="ed-panel__head">
-                                <span>Priority Queue</span>
-                                <span class="ed-count">Active ({{ queueCount }})</span>
-                            </div>
-                            <ul class="ed-queue">
-                                <li
-                                    v-for="(t, i) in priorityQueue"
-                                    :key="t.id"
-                                    class="ed-queue__item"
-                                    :class="{ 'is-urgent': Number(t.importance) >= 5 && Number(t.urgency) >= 5 }"
-                                    @click="selectQueueTask(t, $event)"
-                                >
-                                    <span class="ed-queue__rank">{{ String(i + 1).padStart(2, '0') }}</span>
-                                    <span class="ed-queue__title">{{ t.name }}</span>
-                                    <span class="ed-queue__score">{{ Math.round(Number(t.importance) * Number(t.urgency)) }}</span>
-                                    <span class="ed-queue__arrow">&rarr;</span>
-                                </li>
-                                <li v-if="priorityQueue.length === 0" class="ed-queue__empty">No active tasks. Add one from the graph.</li>
-                            </ul>
-                        </section>
-                    </aside>
-
                     <!-- HIERARCHY view: full task list -->
                     <div class="split-view-right" ref="rightPanel" v-show="navView === 'hierarchy'">
 
@@ -1198,15 +1170,34 @@
                                         v-for="(t, i) in priorityQueue"
                                         :key="t.id"
                                         class="ed-queue__item"
-                                        :class="{ 'is-urgent': Number(t.importance) >= 5 && Number(t.urgency) >= 5 }"
+                                        :class="{ 'is-urgent': Number(t.importance) >= 5 && (t.cost_of_inaction == null ? 5 : Number(t.cost_of_inaction)) >= 5 }"
                                         @click="selectQueueTask(t, $event)"
                                     >
                                         <span class="ed-queue__rank">{{ String(i + 1).padStart(2, '0') }}</span>
                                         <span class="ed-queue__title">{{ t.name }}</span>
-                                        <span class="ed-queue__score">{{ Math.round(Number(t.importance) * Number(t.urgency)) }}</span>
+                                        <span class="ed-queue__score">{{ Math.round(queueScore(t)) }}</span>
                                         <span class="ed-queue__arrow">&rarr;</span>
                                     </li>
                                     <li v-if="priorityQueue.length === 0" class="ed-queue__empty">No active tasks yet.</li>
+                                </ul>
+                            </section>
+                            <section class="ed-panel" v-if="horizonList.length">
+                                <div class="ed-panel__head">
+                                    <span>Horizon</span>
+                                    <span class="ed-count">Goals &amp; vision ({{ horizonList.length }})</span>
+                                </div>
+                                <ul class="ed-queue ed-queue--horizon">
+                                    <li
+                                        v-for="t in horizonList"
+                                        :key="t.id"
+                                        class="ed-queue__item"
+                                        @click="selectQueueTask(t, $event)"
+                                    >
+                                        <span class="ed-queue__rank">{{ (t.kind || 'action') === 'outcome' ? '◆' : '❖' }}</span>
+                                        <span class="ed-queue__title">{{ t.name }}</span>
+                                        <span class="ed-queue__score" v-if="(t.kind || 'action') === 'outcome' && t._progress != null">{{ Math.round(t._progress * 100) }}%</span>
+                                        <span class="ed-queue__arrow">&rarr;</span>
+                                    </li>
                                 </ul>
                             </section>
                         </div>
@@ -1817,6 +1808,31 @@
                                 </template>
                                 <template v-slot:append>
                                     <v-icon size="small" :color="getPriorityColor(editingTask.urgency)">mdi-clock-fast</v-icon>
+                                </template>
+                            </v-slider>
+
+                            <div class="d-flex align-center justify-space-between mb-1">
+                                <span class="text-subtitle-2">Cost of inaction: {{ editingTask.cost_of_inaction == null ? 'not set' : Number(editingTask.cost_of_inaction).toFixed(1) }}</span>
+                                <v-chip size="x-small" variant="flat" color="grey">
+                                    {{ editingTask.cost_of_inaction == null ? '—' : (editingTask.cost_of_inaction >= 8 ? 'HIGH' : (editingTask.cost_of_inaction >= 5 ? 'MED' : 'LOW')) }}
+                                </v-chip>
+                            </div>
+                            <v-slider
+                                :model-value="editingTask.cost_of_inaction == null ? 5 : Number(editingTask.cost_of_inaction)"
+                                @update:model-value="editingTask.cost_of_inaction = $event"
+                                min="1"
+                                max="10"
+                                step="0.1"
+                                color="grey-darken-1"
+                                track-color="grey-lighten-3"
+                                hide-details
+                                class="mb-4"
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon size="small" color="grey">mdi-alert-circle-outline</v-icon>
+                                </template>
+                                <template v-slot:append>
+                                    <v-icon size="small" color="grey-darken-1">mdi-alert-decagram</v-icon>
                                 </template>
                             </v-slider>
 
