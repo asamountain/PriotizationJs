@@ -38,9 +38,18 @@ const setupSocket = (io) => {
     });
   };
 
-  // Helper function to get tasks with leverage scores
-  const getTasksWithLeverage = async (userId) => {
-    return database.getTaskDataWithLeverage(userId);
+  // Leverage scores only change when relationships change. Cache them and skip
+  // the graph walk + the extra DB round trip on the common field-edit path —
+  // that round trip is cheap locally but slow against a remote Postgres.
+  let _lev = { userId: undefined, scores: null };
+  const getTasksWithLeverage = async (userId, relsChanged = false) => {
+    const tasks = await getTaskData(userId);
+    if (relsChanged || !_lev.scores || _lev.userId !== userId) {
+      const rels = await database.getAllTaskRelationships(userId);
+      _lev = { userId, scores: database.calculateLeverageScoresFromGraph(rels, tasks) };
+    }
+    const s = _lev.scores || {};
+    return tasks.map((t) => ({ ...t, leverage_score: s[t.id] || 0 }));
   };
   io.on("connection", (socket) => {
     console.log("New client connected");
@@ -159,7 +168,7 @@ const setupSocket = (io) => {
     socket.on("addSubtask", async ({ subtask, parentId }) => {
       try {
         const subtaskId = await database.addSubtask(subtask, parentId, socket.userId);
-        const data = await getTasksWithLeverage(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId, true);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -316,7 +325,7 @@ const setupSocket = (io) => {
         await setTaskParent(taskId, parentId);
         
         // Broadcast updated tasks to all clients
-        const tasks = await getTasksWithLeverage(socket.userId);
+        const tasks = await getTasksWithLeverage(socket.userId, true);
         console.log(`SOCKET: Fetched ${tasks.length} tasks after parent change`);
         
         if (socket.userId) {
@@ -389,7 +398,7 @@ const setupSocket = (io) => {
         console.log(`Adding relationship: task ${enablerId} enables task ${enabledId}`);
         await addTaskRelationship(enablerId, enabledId, socket.userId);
 
-        const data = await getTasksWithLeverage(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId, true);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -407,7 +416,7 @@ const setupSocket = (io) => {
         console.log(`Removing relationship: task ${enablerId} enables task ${enabledId}`);
         await removeTaskRelationship(enablerId, enabledId);
 
-        const data = await getTasksWithLeverage(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId, true);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -451,7 +460,7 @@ const setupSocket = (io) => {
           console.log(`Added ${enables.length} relationships for task ${taskId}`);
         }
 
-        const data = await getTasksWithLeverage(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId, true);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
@@ -486,7 +495,7 @@ const setupSocket = (io) => {
 
         console.log(`Updated relationships: added ${toAdd.length}, removed ${toRemove.length}`);
 
-        const data = await getTasksWithLeverage(socket.userId);
+        const data = await getTasksWithLeverage(socket.userId, true);
         if (socket.userId) {
           socket.emit("updateTasks", { data: processTaskData(data) });
         } else {
