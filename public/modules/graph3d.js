@@ -22,7 +22,8 @@ const PICK_GEO = new THREE.SphereGeometry(0.5, 10, 8);
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 // cost of inaction: what gets worse if this is deferred. Unset -> neutral 5.
 function coiOf(t) { return t.cost_of_inaction == null ? 5 : num(t.cost_of_inaction); }
-function priority(t) { return num(t.importance) * coiOf(t); } // 0..100
+// cost of inaction is the spine; importance modulates it ~+/-50%. Range ~5..100.
+function priority(t) { return coiOf(t) * (5 + num(t.importance) / 2); }
 function clamp10(v) { return Math.max(0, Math.min(BOX, v)); }
 function kindOf(t) { return t.kind || 'action'; }
 

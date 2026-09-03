@@ -634,13 +634,14 @@ window.addEventListener('DOMContentLoaded', () => {
         const w = Number(this.categoryWeights[c]);
         return Number.isFinite(w) ? w : 0;
       },
-      // Priority Queue rank: importance (stake) x cost of inaction (time-sensitivity
-      // of the downside), lifted by goal weight. Cost of inaction replaces the older
-      // feeling-based urgency here. Low COI (long-term identity/outcome-ish work)
-      // sinks regardless of importance. Unset COI is treated as a neutral 5.
+      // Priority Queue rank: cost of inaction is the spine (it carries the "why now"
+      // signal); importance only modulates it by roughly +/- 50%. Goal weight lifts.
+      // Unset COI is treated as a neutral 5. Scale is ~5..100 so the display bars
+      // and numbers stay calibrated.
       queueScore(task) {
         const coi = task.cost_of_inaction == null ? 5 : Number(task.cost_of_inaction);
-        return Number(task.importance || 0) * coi + this.weightFor(task) * 12;
+        const imp = Number(task.importance || 0);
+        return coi * (5 + imp / 2) + this.weightFor(task) * 12;
       },
       setCategoryWeight(cat, val) {
         const w = Math.max(0, Math.min(5, Math.round(Number(val) || 0)));
