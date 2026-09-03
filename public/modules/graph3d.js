@@ -123,7 +123,6 @@ export class Graph3D {
     this.hoverId = null;
     this.focusId = null;
     this._easeTarget = null;
-    this.influenceMode = false;
     this.showRelationships = true;
     this.showSubtasks = true;
     this.rankMode = true; // floor position = percentile rank, not raw 0..10

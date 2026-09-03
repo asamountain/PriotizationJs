@@ -1261,18 +1261,6 @@
                                 Add Task
                             </v-btn>
                             <v-chip color="primary" size="small" class="me-2">{{ activeTasks.length }}</v-chip>
-                            <v-btn 
-                                variant="text" 
-                                icon 
-                                @click="toggleInfluenceMode"
-                                class="ms-2"
-                                :color="influenceMode ? 'purple' : 'primary'"
-                                :title="influenceMode ? 'Switch to Importance Mode' : 'Switch to Influence Mode'"
-                            >
-                                <v-icon>
-                                    {{ influenceMode ? 'mdi-arrow-up-bold-circle' : 'mdi-star-circle' }}
-                                </v-icon>
-                            </v-btn>
                             <v-btn
                                 variant="text"
                                 icon

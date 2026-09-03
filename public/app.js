@@ -149,7 +149,6 @@ window.addEventListener('DOMContentLoaded', () => {
         })(),
         showCsvImportDialog: false,
         showQuickAddModal: false,
-        influenceMode: localStorage.getItem('influenceMode') === 'true',
         barStyle: localStorage.getItem('barStyle') || 'chips', // 'chips' | 'segmented' | 'score'
         quickAddTask: {
           name: '',
@@ -247,7 +246,6 @@ window.addEventListener('DOMContentLoaded', () => {
           { value: 'priority-low', title: '🔥 Priority — importance × inaction cost (Low → High)' },
           { value: 'importance-high', title: '⭐ Importance (High → Low)' },
           { value: 'importance-low', title: '⭐ Importance (Low → High)' },
-          { value: 'influence-high', title: '↗️ Influence (High → Low)' },
           { value: 'newest', title: '🆕 Newest First' },
           { value: 'oldest', title: '📅 Oldest First' },
           { value: 'due-date', title: '⏰ Due Date (Closest)' },
@@ -451,9 +449,6 @@ window.addEventListener('DOMContentLoaded', () => {
           case 'importance-low':
             return sorted.sort((a, b) => (Number(a.importance) || 0) - (Number(b.importance) || 0));
 
-          case 'influence-high':
-            return sorted.sort((a, b) => (parseFloat(b.leverage_score) || 0) - (parseFloat(a.leverage_score) || 0));
-          
           case 'newest':
             return sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
           
@@ -634,7 +629,6 @@ window.addEventListener('DOMContentLoaded', () => {
       renderGraph() {
         if (!graph3d) return;
         try {
-          graph3d.influenceMode = this.influenceMode;
           graph3d.showRelationships = this.showRelationships;
           graph3d.showSubtasks = this.showChartSubtasks;
           // stamp goal-proxy impact onto the task objects the chart reads
@@ -789,14 +783,6 @@ window.addEventListener('DOMContentLoaded', () => {
         this.renderGraph();
 
         const msg = this.showNotSureTasks ? 'Showing "Not Sure" tasks' : 'Hiding "Not Sure" tasks';
-        this.showNotification(msg, 'info');
-      },
-
-      toggleInfluenceMode() {
-        this.influenceMode = !this.influenceMode;
-        localStorage.setItem('influenceMode', this.influenceMode);
-        this.renderGraph();
-        const msg = this.influenceMode ? 'Node size: impact (leverage)' : 'Node size: priority (importance x inaction cost)';
         this.showNotification(msg, 'info');
       },
 
