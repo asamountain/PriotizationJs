@@ -74,7 +74,6 @@ window.addEventListener('DOMContentLoaded', () => {
         completedTasks: [],
         taskName: '',
         taskImportance: 5,
-        taskUrgency: 5,
         taskLink: '',
         taskDueDate: null,
         isDarkTheme: localStorage.getItem('isDarkTheme') === 'true',
@@ -83,7 +82,7 @@ window.addEventListener('DOMContentLoaded', () => {
         newSubtask: {
           name: '',
           importance: 5,
-          urgency: 5,
+          cost_of_inaction: 5,
           link: '',
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
@@ -103,7 +102,7 @@ window.addEventListener('DOMContentLoaded', () => {
           id: null,
           name: '',
           importance: 5,
-          urgency: 5,
+          cost_of_inaction: 5,
           parent_id: null,
           link: '',
           due_date: null,
@@ -115,7 +114,7 @@ window.addEventListener('DOMContentLoaded', () => {
           id: null,
           name: '',
           importance: 5,
-          urgency: 5,
+          cost_of_inaction: 5,
           link: '',
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
@@ -155,7 +154,7 @@ window.addEventListener('DOMContentLoaded', () => {
         quickAddTask: {
           name: '',
           importance: 5,
-          urgency: 5,
+          cost_of_inaction: 5,
           link: '',
           notes: '',
           icon: 'mdi-checkbox-blank-circle-outline',
@@ -267,14 +266,11 @@ window.addEventListener('DOMContentLoaded', () => {
     },
     computed: {
       taskSortOptions() {
-        const priorityTitle = this.influenceMode ? '🔥 Priority (Influence × Urgency)' : '🔥 Priority (Importance × Urgency)';
         return [
-          { value: 'priority-high', title: `${priorityTitle} (High → Low)` },
-          { value: 'priority-low', title: `${priorityTitle} (Low → High)` },
+          { value: 'priority-high', title: '🔥 Priority — importance × inaction cost (High → Low)' },
+          { value: 'priority-low', title: '🔥 Priority — importance × inaction cost (Low → High)' },
           { value: 'importance-high', title: '⭐ Importance (High → Low)' },
           { value: 'importance-low', title: '⭐ Importance (Low → High)' },
-          { value: 'urgency-high', title: '⚡ Urgency (High → Low)' },
-          { value: 'urgency-low', title: '⚡ Urgency (Low → High)' },
           { value: 'influence-high', title: '↗️ Influence (High → Low)' },
           { value: 'newest', title: '🆕 Newest First' },
           { value: 'oldest', title: '📅 Oldest First' },
@@ -478,12 +474,6 @@ window.addEventListener('DOMContentLoaded', () => {
           
           case 'importance-low':
             return sorted.sort((a, b) => (Number(a.importance) || 0) - (Number(b.importance) || 0));
-          
-          case 'urgency-high':
-            return sorted.sort((a, b) => (Number(b.urgency) || 0) - (Number(a.urgency) || 0));
-          
-          case 'urgency-low':
-            return sorted.sort((a, b) => (Number(a.urgency) || 0) - (Number(b.urgency) || 0));
 
           case 'influence-high':
             return sorted.sort((a, b) => (parseFloat(b.leverage_score) || 0) - (parseFloat(a.leverage_score) || 0));
@@ -526,17 +516,15 @@ window.addEventListener('DOMContentLoaded', () => {
         const taskData = {
           name: this.taskName,
           importance: this.taskImportance,
-          urgency: this.taskUrgency,
           link: this.taskLink || null,
           due_date: this.taskDueDate || null
         };
-        
+
         taskOperations.addTask(taskData);
-        
+
         // Reset form
               this.taskName = '';
               this.taskImportance = 5;
-              this.taskUrgency = 5;
         this.taskLink = '';
         this.taskDueDate = null;
       },
@@ -600,7 +588,7 @@ window.addEventListener('DOMContentLoaded', () => {
         this.newSubtask = {
           name: '',
           importance: 5.0,
-          urgency: 5.0,
+          cost_of_inaction: 5.0,
           link: '',
           due_date: null,
           category: parentTask ? parentTask.category : null
@@ -625,7 +613,7 @@ window.addEventListener('DOMContentLoaded', () => {
         this.newSubtask = {
           name: '',
           importance: 5,
-          urgency: 5,
+          cost_of_inaction: 5,
           link: '',
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
@@ -743,7 +731,7 @@ window.addEventListener('DOMContentLoaded', () => {
           id: null,
           name: '',
           importance: 5,
-          urgency: 5,
+          cost_of_inaction: 5,
           parent_id: null,
           link: '',
           due_date: null,
@@ -789,7 +777,7 @@ window.addEventListener('DOMContentLoaded', () => {
           id: null,
           name: '',
           importance: 5,
-          urgency: 5,
+          cost_of_inaction: 5,
           link: '',
           due_date: null,
           icon: 'mdi-checkbox-blank-circle-outline',
@@ -826,7 +814,7 @@ window.addEventListener('DOMContentLoaded', () => {
         this.influenceMode = !this.influenceMode;
         localStorage.setItem('influenceMode', this.influenceMode);
         this.renderGraph();
-        const msg = this.influenceMode ? 'Node size: impact (leverage)' : 'Node size: priority (importance x urgency)';
+        const msg = this.influenceMode ? 'Node size: impact (leverage)' : 'Node size: priority (importance x inaction cost)';
         this.showNotification(msg, 'info');
       },
 
@@ -1015,15 +1003,20 @@ window.addEventListener('DOMContentLoaded', () => {
       },
 
 
-      openQuickAddModal(importance, urgency) {
+      openQuickAddModal(importance) {
         track('quick_add_open');
-        this.quickAddTask.importance = importance;
-        this.quickAddTask.urgency = urgency;
+        this.quickAddTask.importance = importance || 5;
+        this.quickAddTask.cost_of_inaction = 5;
         this.quickAddTask.name = '';
         this.quickAddTask.link = '';
         this.quickAddTask.notes = '';
         this.quickAddTask.enables = [];
         this.showQuickAddModal = true;
+      },
+
+      bumpQuick(field, delta) {
+        const next = Math.max(0, Math.min(10, Math.round(Number(this.quickAddTask[field] || 0) + delta)));
+        this.quickAddTask[field] = next;
       },
 
       submitQuickTask() {
@@ -1035,7 +1028,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const taskData = {
           name: this.quickAddTask.name,
           importance: this.quickAddTask.importance,
-          urgency: this.quickAddTask.urgency,
+          cost_of_inaction: this.quickAddTask.cost_of_inaction,
           link: this.quickAddTask.link || null,
           notes: this.quickAddTask.notes || null,
           icon: this.quickAddTask.icon || 'mdi-checkbox-blank-circle-outline',
@@ -1058,7 +1051,7 @@ window.addEventListener('DOMContentLoaded', () => {
         this.quickAddTask = {
           name: '',
           importance: 5,
-          urgency: 5,
+          cost_of_inaction: 5,
           link: '',
           notes: '',
           icon: 'mdi-checkbox-blank-circle-outline',
@@ -2605,23 +2598,20 @@ window.addEventListener('DOMContentLoaded', () => {
                     <div :style="{ width: (task.importance/10)*38 + 'px', background: '#3B82F6', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
                       <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">I</span>
                     </div>
-                    <div :style="{ width: (task.urgency/10)*38 + 'px', background: '#8B5CF6', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
-                      <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">U</span>
-                    </div>
-                    <div v-if="task.leverage_score > 0" :style="{ width: Math.min(task.leverage_score/20,1)*38 + 'px', background: '#F59E0B', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
-                      <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">L</span>
+                    <div :style="{ width: ((task.cost_of_inaction == null ? 5 : task.cost_of_inaction)/10)*38 + 'px', background: '#8B5CF6', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+                      <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">C</span>
                     </div>
                   </div>
-                  <span style="font-size:9px; color:#888;">{{ task.importance }}·{{ task.urgency }}{{ task.leverage_score > 0 ? '·' + Number(task.leverage_score).toFixed(1) : '' }}</span>
+                  <span style="font-size:9px; color:#888;">{{ task.importance }}·{{ task.cost_of_inaction == null ? '—' : task.cost_of_inaction }}</span>
                 </template>
 
                 <!-- STYLE: score bar (single priority %) -->
                 <template v-else-if="$root.barStyle === 'score'">
                   <div style="display:flex; align-items:center; gap:4px;">
                     <div style="width:80px; height:6px; background:#e5e7eb; border-radius:99px; overflow:hidden;">
-                      <div :style="{ width: Math.min(($root.influenceMode ? (task.leverage_score||1)*task.urgency : task.importance*task.urgency)/100,1)*100 + '%', height: '100%', borderRadius: '99px', background: 'linear-gradient(90deg, #22c55e, #f59e0b, #ef4444)' }"></div>
+                      <div :style="{ width: Math.min($root.queueScore(task)/100,1)*100 + '%', height: '100%', borderRadius: '99px', background: 'linear-gradient(90deg, #22c55e, #f59e0b, #ef4444)' }"></div>
                     </div>
-                    <span style="font-size:9px; color:#888; font-weight:600;">{{ Math.round(($root.influenceMode ? (task.leverage_score||1)*task.urgency : task.importance*task.urgency)) }}</span>
+                    <span style="font-size:9px; color:#888; font-weight:600;">{{ Math.round($root.queueScore(task)) }}</span>
                   </div>
                 </template>
 

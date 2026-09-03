@@ -201,8 +201,8 @@ class Database {
     const importance = Number(subtask.importance) || 5;
     const urgency = Number(subtask.urgency) || 5;
     const progress = Number(subtask.progress) || 0;
-    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6, icon = $7, notes = $8, status = $9, progress = $10 WHERE id = $11";
-    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.icon || 'mdi-checkbox-blank-circle-outline', subtask.notes, subtask.status, progress, subtask.id]);
+    const q = "UPDATE tasks SET name = $1, importance = $2, urgency = $3, parent_id = $4, link = $5, due_date = $6, icon = $7, notes = $8, status = $9, progress = $10, cost_of_inaction = COALESCE($11, cost_of_inaction) WHERE id = $12";
+    await this.query(q, [subtask.name, importance, urgency, subtask.parent_id, subtask.link, subtask.due_date, subtask.icon || 'mdi-checkbox-blank-circle-outline', subtask.notes, subtask.status, progress, subtask.cost_of_inaction ?? null, subtask.id]);
   }
 
   async updateTaskNotes(taskId, notes) {

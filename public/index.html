@@ -1529,21 +1529,21 @@
                                 hide-details
                                 class="mb-4"
                             ></v-slider>
-                            
+
                             <div class="d-flex align-center justify-space-between mb-1">
-                                <span class="text-subtitle-2">Urgency: {{ Number(newSubtask.urgency).toFixed(1) }}</span>
+                                <span class="text-subtitle-2">Cost of inaction: {{ Number(newSubtask.cost_of_inaction).toFixed(1) }}</span>
                             </div>
                             <v-slider
-                                v-model="newSubtask.urgency"
+                                v-model="newSubtask.cost_of_inaction"
                                 min="1"
                                 max="10"
                                 step="0.1"
-                                color="secondary"
+                                color="grey-darken-1"
                                 thumb-label
                                 hide-details
                                 class="mb-4"
                             ></v-slider>
-                            
+
                             <v-date-picker
                                 v-model="newSubtask.due_date"
                                 label="Due Date (Optional)"
@@ -1645,26 +1645,24 @@
                             </v-slider>
 
                             <div class="d-flex align-center justify-space-between mb-1">
-                                <span class="text-subtitle-2">Urgency: {{ Number(editingSubtask.urgency).toFixed(1) }}</span>
-                                <v-chip :color="getPriorityColor(editingSubtask.urgency)" size="x-small" variant="flat">
-                                    {{ editingSubtask.urgency >= 8 ? 'IMMEDIATE' : (editingSubtask.urgency >= 5 ? 'SOON' : 'LATER') }}
-                                </v-chip>
+                                <span class="text-subtitle-2">Cost of inaction: {{ editingSubtask.cost_of_inaction == null ? 'not set' : Number(editingSubtask.cost_of_inaction).toFixed(1) }}</span>
                             </div>
                             <v-slider
-                                v-model="editingSubtask.urgency"
+                                :model-value="editingSubtask.cost_of_inaction == null ? 5 : Number(editingSubtask.cost_of_inaction)"
+                                @update:model-value="editingSubtask.cost_of_inaction = $event"
                                 min="1"
                                 max="10"
                                 step="0.1"
-                                :color="getPriorityColor(editingSubtask.urgency)"
+                                color="grey-darken-1"
                                 track-color="grey-lighten-3"
                                 hide-details
                                 class="mb-4"
                             >
                                 <template v-slot:prepend>
-                                    <v-icon size="small" color="grey">mdi-clock-outline</v-icon>
+                                    <v-icon size="small" color="grey">mdi-alert-circle-outline</v-icon>
                                 </template>
                                 <template v-slot:append>
-                                    <v-icon size="small" :color="getPriorityColor(editingSubtask.urgency)">mdi-clock-fast</v-icon>
+                                    <v-icon size="small" color="grey-darken-1">mdi-alert-decagram</v-icon>
                                 </template>
                             </v-slider>
 
@@ -1836,7 +1834,7 @@
                                         </template>
                                         <template v-slot:subtitle>
                                             <span class="text-caption">
-                                                Importance: {{ Number(item.raw.importance).toFixed(1) }} | Urgency: {{ Number(item.raw.urgency).toFixed(1) }}
+                                                Importance: {{ Number(item.raw.importance).toFixed(1) }}
                                             </span>
                                         </template>
                                     </v-list-item>
@@ -2026,57 +2024,24 @@
                                 </template>
                             </v-text-field>
 
-                            <v-row class="mb-3">
-                                <v-col cols="12">
-                                    <div class="d-flex align-center justify-space-between mb-1">
-                                        <span class="text-subtitle-2">Importance: {{ isQ1ZoomMode ? quickAddTask.importance.toFixed(1) : quickAddTask.importance }}</span>
-                                        <v-chip :color="getPriorityColor(quickAddTask.importance)" size="x-small" variant="flat">
-                                            {{ quickAddTask.importance >= 8 ? 'CRITICAL' : (quickAddTask.importance >= 5 ? 'HIGH' : 'LOW') }}
-                                        </v-chip>
+                            <div class="node-card__metrics mb-4">
+                                <div class="node-card__metric is-impact">
+                                    <span>Importance</span>
+                                    <div class="node-card__step">
+                                        <button type="button" @click="bumpQuick('importance', -1)">&minus;</button>
+                                        <b>{{ Number(quickAddTask.importance || 0).toFixed(0) }}</b>
+                                        <button type="button" @click="bumpQuick('importance', 1)">+</button>
                                     </div>
-                                    <v-slider
-                                        v-model="quickAddTask.importance"
-                                        :min="isQ1ZoomMode ? 5 : 1"
-                                        :max="10"
-                                        :step="isQ1ZoomMode ? 0.1 : 1"
-                                        :color="getPriorityColor(quickAddTask.importance)"
-                                        track-color="grey-lighten-3"
-                                        hide-details
-                                    >
-                                        <template v-slot:prepend>
-                                            <v-icon size="small" color="grey">mdi-star-outline</v-icon>
-                                        </template>
-                                        <template v-slot:append>
-                                            <v-icon size="small" :color="getPriorityColor(quickAddTask.importance)">mdi-star</v-icon>
-                                        </template>
-                                    </v-slider>
-                                </v-col>
-
-                                <v-col cols="12" class="mt-2">
-                                    <div class="d-flex align-center justify-space-between mb-1">
-                                        <span class="text-subtitle-2">Urgency: {{ isQ1ZoomMode ? quickAddTask.urgency.toFixed(1) : quickAddTask.urgency }}</span>
-                                        <v-chip :color="getPriorityColor(quickAddTask.urgency)" size="x-small" variant="flat">
-                                            {{ quickAddTask.urgency >= 8 ? 'IMMEDIATE' : (quickAddTask.urgency >= 5 ? 'SOON' : 'LATER') }}
-                                        </v-chip>
+                                </div>
+                                <div class="node-card__metric">
+                                    <span title="Cost of inaction: what gets worse if you don't do this now (1-10). Low = safe to defer.">Inaction cost</span>
+                                    <div class="node-card__step">
+                                        <button type="button" @click="bumpQuick('cost_of_inaction', -1)">&minus;</button>
+                                        <b>{{ Number(quickAddTask.cost_of_inaction || 0).toFixed(0) }}</b>
+                                        <button type="button" @click="bumpQuick('cost_of_inaction', 1)">+</button>
                                     </div>
-                                    <v-slider
-                                        v-model="quickAddTask.urgency"
-                                        :min="isQ1ZoomMode ? 5 : 1"
-                                        :max="10"
-                                        :step="isQ1ZoomMode ? 0.1 : 1"
-                                        :color="getPriorityColor(quickAddTask.urgency)"
-                                        track-color="grey-lighten-3"
-                                        hide-details
-                                    >
-                                        <template v-slot:prepend>
-                                            <v-icon size="small" color="grey">mdi-clock-outline</v-icon>
-                                        </template>
-                                        <template v-slot:append>
-                                            <v-icon size="small" :color="getPriorityColor(quickAddTask.urgency)">mdi-clock-fast</v-icon>
-                                        </template>
-                                    </v-slider>
-                                </v-col>
-                            </v-row>
+                                </div>
+                            </div>
 
                             <v-text-field
                                 v-model="quickAddTask.link"
@@ -2127,7 +2092,7 @@
                                         </template>
                                         <template v-slot:subtitle>
                                             <span class="text-caption">
-                                                Importance: {{ item.raw.importance }} | Urgency: {{ item.raw.urgency }}
+                                                Importance: {{ item.raw.importance }}
                                             </span>
                                         </template>
                                     </v-list-item>

@@ -38,8 +38,8 @@ const VISION_Z = BOX + 5;     // identity band, further back and higher
 const VISION_Y = 9.4;
 const GOLD = '#c9a227';
 
-// deterministic per-task offset so tasks sharing the same (urgency, importance)
-// don't stack into one unclickable blob
+// deterministic per-task offset so tasks sharing the same (cost of inaction,
+// importance) don't stack into one unclickable blob
 function jitter(id) {
   const h = (Number(id) * 2654435761) >>> 0;
   return { x: ((h & 255) / 255 - 0.5) * 0.9, z: (((h >> 8) & 255) / 255 - 0.5) * 0.9 };
@@ -74,10 +74,11 @@ function iconFor(t) {
   return 'mdi-circle-medium';
 }
 
-// floor placement = Eisenhower plane (X urgency, Z importance); height set later
-// from impact. Spread tie-heavy scores across the floor: map a value to its percentile rank
-// within the current set, then onto 0.5..BOX-0.5. A board where every task is
-// rated 8-10 still fans out instead of stacking in one corner. Ties share a spot.
+// floor placement: X = cost of inaction, Z = importance. Spread tie-heavy boards
+// across the floor: map a value to its percentile rank within the current set,
+// then onto 0.5..BOX-0.5. Callers pass a tiny per-id epsilon into the ranked
+// value (rankKey) so that a board where every task is rated 8-10 still fans out
+// into a readable line instead of piling into one corner.
 function rankMapper(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const n = sorted.length;
@@ -85,9 +86,15 @@ function rankMapper(values) {
     if (n <= 1) return BOX / 2;
     let below = 0, equal = 0;
     for (const s of sorted) { if (s < v) below++; else if (s === v) equal++; }
-    const pct = (below + equal / 2) / n; // 0..1, ties land at their block midpoint
+    const pct = (below + equal / 2) / n;
     return 0.5 + pct * (BOX - 1);
   };
+}
+// deterministic epsilon per task id, smaller than the finest metric step (0.1),
+// added to a ranked value so exact ties get distinct percentile slots
+function rankEps(id) {
+  const h = (Number(id) * 40503) >>> 0;
+  return (h % 997) / 997 * 0.05;
 }
 
 export class Graph3D {
@@ -206,9 +213,8 @@ export class Graph3D {
     );
     this.scene.add(axis);
 
-    this.scene.add(this._caption('URGENCY  →', new THREE.Vector3(BOX / 2, -0.4, BOX + 0.7)));
+    this.scene.add(this._caption('COST OF INACTION  →', new THREE.Vector3(BOX / 2, -0.4, BOX + 0.7)));
     this.scene.add(this._caption('IMPORTANCE  →', new THREE.Vector3(-1.4, -0.4, BOX / 2)));
-    this.scene.add(this._caption('IMPACT  ↑', new THREE.Vector3(-0.6, BOX + 0.5, 0)));
   }
 
   _caption(text, pos) {
@@ -316,12 +322,15 @@ export class Graph3D {
 
     // Floor plane: X = cost of inaction, Z = importance (percentile-ranked so
     // tie-heavy boards fan out). Action nodes sit flat on the floor.
-    const rankC = this.rankMode ? rankMapper(actions.map((t) => coiOf(t))) : null;
-    const rankI = this.rankMode ? rankMapper(actions.map((t) => num(t.importance))) : null;
+    // rank keys carry a per-id epsilon so a wall of 8-10 ratings still fans out
+    const cKey = (t) => coiOf(t) + rankEps(Number(t.id));
+    const iKey = (t) => num(t.importance) + rankEps(Number(t.id) * 7 + 3);
+    const rankC = this.rankMode ? rankMapper(actions.map(cKey)) : null;
+    const rankI = this.rankMode ? rankMapper(actions.map(iKey)) : null;
     const pos = new Map(actions.map((t) => {
       const j = jitter(t.id);
-      const cx = rankC ? rankC(coiOf(t)) : clamp10(coiOf(t));
-      const iz = rankI ? rankI(num(t.importance)) : clamp10(num(t.importance));
+      const cx = rankC ? rankC(cKey(t)) : clamp10(coiOf(t));
+      const iz = rankI ? rankI(iKey(t)) : clamp10(num(t.importance));
       return [Number(t.id), new THREE.Vector3(clamp10(cx + j.x), 0, clamp10(iz + j.z))];
     }));
     outcomes.forEach((t, i) => {
