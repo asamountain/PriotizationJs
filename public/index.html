@@ -17,7 +17,7 @@
     <!-- Material Design Icons (still used internally by Vuetify components) -->
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
     <!-- Lucide icons (per-task icons + nav) -->
-    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
     <!-- Roboto Font -->
     <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
     <!-- Pretendard (editorial + Hangul) -->
@@ -95,6 +95,10 @@
         transition: background .12s, color .12s;
       }
       .ed-rail button i { font-size: 20px; line-height: 1; }
+      .rail-ico { display: grid; place-items: center; }
+      .rail-ico svg { width: 21px; height: 21px; display: block; stroke-width: 1.75; }
+      .picker-ico { display: inline-grid; place-items: center; }
+      .picker-ico svg { width: 20px; height: 20px; display: block; }
       .ed-rail button:hover:not(.is-active) { background: #faf7f0; }
       .ed-rail button.is-active { background: #e5484d; border-color: #e5484d; color: #fff; }
 
@@ -883,16 +887,16 @@
                     <!-- Left icon nav rail -->
                     <nav class="ed-rail">
                         <button type="button" :class="{ 'is-active': navView === 'graph' }" @click="navView = 'graph'" title="Graph">
-                            <i class="mdi mdi-cube-outline"></i>
+                            <span class="rail-ico" v-html="iconSvg('box')"></span>
                         </button>
                         <button type="button" :class="{ 'is-active': navView === 'hierarchy' }" @click="navView = 'hierarchy'" title="Hierarchy">
-                            <i class="mdi mdi-format-list-bulleted"></i>
+                            <span class="rail-ico" v-html="iconSvg('list')"></span>
                         </button>
                         <button type="button" :class="{ 'is-active': navView === 'analytics' }" @click="navView = 'analytics'" title="Analytics">
-                            <i class="mdi mdi-chart-box-outline"></i>
+                            <span class="rail-ico" v-html="iconSvg('bar-chart-3')"></span>
                         </button>
                         <button type="button" :class="{ 'is-active': navView === 'settings' }" @click="navView = 'settings'" title="Settings">
-                            <i class="mdi mdi-cog-outline"></i>
+                            <span class="rail-ico" v-html="iconSvg('settings')"></span>
                         </button>
                     </nav>
 
@@ -1511,7 +1515,7 @@
                                     <v-menu location="bottom start">
                                         <template v-slot:activator="{ props }">
                                             <v-btn icon size="small" variant="text" v-bind="props" class="me-2">
-                                                <v-icon>{{ newSubtask.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                                                <span class="picker-ico" v-html="iconSvg(newSubtask.icon)"></span>
                                             </v-btn>
                                         </template>
                                         <v-card max-width="300" class="pa-2">
@@ -1525,7 +1529,7 @@
                                                     @click="newSubtask.icon = icon"
                                                     :color="newSubtask.icon === icon ? 'primary' : ''"
                                                 >
-                                                    <v-icon>{{ icon }}</v-icon>
+                                                    <span class="picker-ico" v-html="iconSvg(icon)"></span>
                                                 </v-btn>
                                             </div>
                                         </v-card>
@@ -1614,7 +1618,7 @@
                                     <v-menu location="bottom start">
                                         <template v-slot:activator="{ props }">
                                             <v-btn icon size="small" variant="text" v-bind="props" class="me-2">
-                                                <v-icon>{{ editingSubtask.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                                                <span class="picker-ico" v-html="iconSvg(editingSubtask.icon)"></span>
                                             </v-btn>
                                         </template>
                                         <v-card max-width="300" class="pa-2">
@@ -1628,7 +1632,7 @@
                                                     @click="editingSubtask.icon = icon"
                                                     :color="editingSubtask.icon === icon ? 'primary' : ''"
                                                 >
-                                                    <v-icon>{{ icon }}</v-icon>
+                                                    <span class="picker-ico" v-html="iconSvg(icon)"></span>
                                                 </v-btn>
                                             </div>
                                         </v-card>
@@ -1746,7 +1750,7 @@
                                     <v-menu location="bottom start">
                                         <template v-slot:activator="{ props }">
                                             <v-btn icon size="small" variant="text" v-bind="props" class="me-2">
-                                                <v-icon>{{ editingTask.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                                                <span class="picker-ico" v-html="iconSvg(editingTask.icon)"></span>
                                             </v-btn>
                                         </template>
                                         <v-card max-width="300" class="pa-2">
@@ -1760,7 +1764,7 @@
                                                     @click="editingTask.icon = icon"
                                                     :color="editingTask.icon === icon ? 'primary' : ''"
                                                 >
-                                                    <v-icon>{{ icon }}</v-icon>
+                                                    <span class="picker-ico" v-html="iconSvg(icon)"></span>
                                                 </v-btn>
                                             </div>
                                         </v-card>
@@ -2034,7 +2038,7 @@
                                     <v-menu location="bottom start">
                                         <template v-slot:activator="{ props }">
                                             <v-btn icon size="small" variant="text" v-bind="props" class="me-2">
-                                                <v-icon>{{ quickAddTask.icon || 'mdi-checkbox-blank-circle-outline' }}</v-icon>
+                                                <span class="picker-ico" v-html="iconSvg(quickAddTask.icon)"></span>
                                             </v-btn>
                                         </template>
                                         <v-card max-width="300" class="pa-2">
@@ -2048,7 +2052,7 @@
                                                     @click="quickAddTask.icon = icon"
                                                     :color="quickAddTask.icon === icon ? 'primary' : ''"
                                                 >
-                                                    <v-icon>{{ icon }}</v-icon>
+                                                    <span class="picker-ico" v-html="iconSvg(icon)"></span>
                                                 </v-btn>
                                             </div>
                                         </v-card>

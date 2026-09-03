@@ -1,6 +1,6 @@
 import { TaskManager } from './taskManager.js';
 import { ChartVisualization } from './modules/chartVisualization.js';
-import { Graph3D } from './modules/graph3d.js';
+import { Graph3D, lucideSvg } from './modules/graph3d.js';
 import { TaskOperations } from './modules/taskOperations.js';
 import { TaskListManager } from './modules/taskListManager.js';
 import { track } from './services/telemetry.js';
@@ -168,36 +168,12 @@ window.addEventListener('DOMContentLoaded', () => {
         allRelationships: [],
         selectedCategories: ['Active Projects', 'Strategic Goals', 'Life/Vision', 'Other Tasks'],
         availableIcons: [
-          'mdi-checkbox-blank-circle-outline',
-          'mdi-star',
-          'mdi-lightning-bolt',
-          'mdi-fire',
-          'mdi-water',
-          'mdi-earth',
-          'mdi-airballoon',
-          'mdi-rocket',
-          'mdi-target',
-          'mdi-flag',
-          'mdi-alert-circle',
-          'mdi-check-circle',
-          'mdi-clock',
-          'mdi-calendar',
-          'mdi-book',
-          'mdi-code-tags',
-          'mdi-laptop',
-          'mdi-phone',
-          'mdi-email',
-          'mdi-home',
-          'mdi-briefcase',
-          'mdi-account',
-          'mdi-group',
-          'mdi-heart',
-          'mdi-coffee',
-          'mdi-food',
-          'mdi-cart',
-          'mdi-finance',
-          'mdi-chart-line',
-          'mdi-lightbulb'
+          'circle-dot', 'star', 'zap', 'flame', 'droplet', 'globe', 'rocket',
+          'target', 'flag', 'alert-circle', 'check-circle', 'clock', 'calendar',
+          'book-open', 'code', 'laptop', 'phone', 'mail', 'home', 'briefcase',
+          'user', 'users', 'heart', 'coffee', 'utensils', 'shopping-cart',
+          'banknote', 'trending-up', 'lightbulb', 'sprout', 'cpu', 'megaphone',
+          'graduation-cap', 'activity', 'search', 'car', 'trees', 'file-text', 'film'
         ],
         availableColors: [
           { name: 'Red', value: '#FF5252' },
@@ -628,6 +604,11 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       },
 
+      // inline <svg> for a Lucide icon name (old mdi-* values fall back to a dot)
+      iconSvg(name) {
+        const n = (!name || String(name).startsWith('mdi-')) ? 'circle-dot' : name;
+        return lucideSvg(n) || lucideSvg('circle-dot');
+      },
       // goal proxy: a task's impact = the weight assigned to its category (0 if unset)
       weightFor(task) {
         const c = (task && task.category || '').trim();

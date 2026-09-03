@@ -49,30 +49,44 @@ function jitter(id) {
 
 // topic -> glyph, matched against the task's category string (ko/en substrings)
 const TOPIC_ICONS = [
-  [['농사', '농지', '작물', '종자', '텃밭', 'farm', 'garden', 'plant'], 'mdi-sprout'],
-  [['iot', '센서', '펌웨어', '하드웨어', '임베디드', 'esp32', 'stm32', 'raspberry', 'device'], 'mdi-chip'],
-  [['브랜딩', '마케팅', '콘텐츠', '유튜브', '인스타', 'brand', 'content', 'market', 'sns'], 'mdi-bullhorn-outline'],
-  [['교육', '학습', '강의', '수료', 'course', 'study', 'school', 'learn'], 'mdi-school-outline'],
-  [['소득', '수입', '경제', '판매', '직거래', 'income', 'revenue', 'sales', 'cash'], 'mdi-cash-multiple'],
-  [['건강', '운동', '헬스', '루틴', 'health', 'fitness', 'workout'], 'mdi-run'],
-  [['리서치', '조사', '분석', 'research', 'survey', 'analysis'], 'mdi-magnify'],
-  [['관계', '사랑', '가족', '협업', 'relationship', 'love', 'family'], 'mdi-heart-outline'],
-  [['자기계발', '독서', '스킬', 'self', 'skill', 'read'], 'mdi-book-open-page-variant-outline'],
-  [['차량', '자동차', 'car', 'vehicle'], 'mdi-car-outline'],
-  [['올리브', '나무', '과수', 'olive', 'tree'], 'mdi-leaf'],
-  [['서류', '행정', '신청', '비자', 'admin', 'visa', 'document'], 'mdi-file-document-outline'],
-  [['영상', '편집', '촬영', 'video', 'edit', 'film'], 'mdi-movie-open-outline'],
+  [['농사', '농지', '작물', '종자', '텃밭', 'farm', 'garden', 'plant'], 'sprout'],
+  [['iot', '센서', '펌웨어', '하드웨어', '임베디드', 'esp32', 'stm32', 'raspberry', 'device'], 'cpu'],
+  [['브랜딩', '마케팅', '콘텐츠', '유튜브', '인스타', 'brand', 'content', 'market', 'sns'], 'megaphone'],
+  [['교육', '학습', '강의', '수료', 'course', 'study', 'school', 'learn'], 'graduation-cap'],
+  [['소득', '수입', '경제', '판매', '직거래', 'income', 'revenue', 'sales', 'cash'], 'banknote'],
+  [['건강', '운동', '헬스', '루틴', 'health', 'fitness', 'workout'], 'activity'],
+  [['리서치', '조사', '분석', 'research', 'survey', 'analysis'], 'search'],
+  [['관계', '사랑', '가족', '협업', 'relationship', 'love', 'family'], 'heart'],
+  [['자기계발', '독서', '스킬', 'self', 'skill', 'read'], 'book-open'],
+  [['차량', '자동차', 'car', 'vehicle'], 'car'],
+  [['올리브', '나무', '과수', 'olive', 'tree'], 'trees'],
+  [['서류', '행정', '신청', '비자', 'admin', 'visa', 'document'], 'file-text'],
+  [['영상', '편집', '촬영', 'video', 'edit', 'film'], 'film'],
 ];
-const DEFAULT_ICONS = new Set(['', 'mdi-checkbox-blank-circle-outline', 'mdi-circle-outline', 'mdi-circle-small']);
+// old MDI values (and blank) count as "not chosen" so they fall through to topic matching
+function isPlaceholderIcon(v) { return !v || v.startsWith('mdi-'); }
 
 function iconFor(t) {
   const chosen = (t.icon || '').trim();
-  if (chosen && !DEFAULT_ICONS.has(chosen)) return chosen; // user set it explicitly
+  if (!isPlaceholderIcon(chosen)) return chosen; // user picked a Lucide name
   const hay = `${t.category || ''} ${t.name || ''}`.toLowerCase();
   for (const [keys, icon] of TOPIC_ICONS) {
     if (keys.some((k) => hay.includes(k))) return icon;
   }
-  return 'mdi-circle-medium';
+  return 'circle-dot';
+}
+
+// render a Lucide icon name to an inline <svg> string (empty if the lib/name is missing)
+export function lucideSvg(name) {
+  const L = typeof window !== 'undefined' && window.lucide;
+  if (!L || !L.icons || !name) return '';
+  const pascal = String(name).split(/[-_]/).map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+  const data = L.icons[pascal];
+  if (!data) return '';
+  const el = L.createElement(data);
+  el.setAttribute('width', '1em');
+  el.setAttribute('height', '1em');
+  return el.outerHTML;
 }
 
 // floor placement: X = cost of inaction, Z = importance. Spread tie-heavy boards
@@ -402,12 +416,12 @@ export class Graph3D {
         // goal: coloured ring on the horizon, sized/lit by roll-up progress
         el.classList.add('is-outcome');
         const prog = Math.max(0, Math.min(1, num(t._progress)));
-        el.innerHTML = `<i class="mdi ${iconFor(t)}"></i>`;
+        el.innerHTML = lucideSvg(iconFor(t)) || '&bull;';
         el.style.color = outcomeColor.get(id) || GOLD;
         el.style.fontSize = `${Math.round(16 + prog * 16)}px`;
         el.style.opacity = `${0.45 + prog * 0.55}`;
       } else {
-        el.innerHTML = `<i class="mdi ${iconFor(t)}"></i>`;
+        el.innerHTML = lucideSvg(iconFor(t)) || '&bull;';
         el.style.color = actionColor.get(id) || UNROUTED;
         el.style.fontSize = `${Math.round(14 + mag * 12)}px`;
         if (t.status === 'in_progress') el.classList.add('is-doing');
