@@ -468,22 +468,10 @@ window.addEventListener('DOMContentLoaded', () => {
         
         switch (this.taskSortBy) {
           case 'priority-high':
-            return sorted.sort((a, b) => {
-              const valA = this.influenceMode ? (Number(a.leverage_score) || 1) : Number(a.importance);
-              const valB = this.influenceMode ? (Number(b.leverage_score) || 1) : Number(b.importance);
-              const priorityA = valA * (Number(a.urgency) || 5);
-              const priorityB = valB * (Number(b.urgency) || 5);
-              return priorityB - priorityA;
-            });
-          
+            return sorted.sort((a, b) => this.queueScore(b) - this.queueScore(a));
+
           case 'priority-low':
-            return sorted.sort((a, b) => {
-              const valA = this.influenceMode ? (Number(a.leverage_score) || 1) : Number(a.importance);
-              const valB = this.influenceMode ? (Number(b.leverage_score) || 1) : Number(b.importance);
-              const priorityA = valA * (Number(a.urgency) || 5);
-              const priorityB = valB * (Number(b.urgency) || 5);
-              return priorityA - priorityB;
-            });
+            return sorted.sort((a, b) => this.queueScore(a) - this.queueScore(b));
           
           case 'importance-high':
             return sorted.sort((a, b) => (Number(b.importance) || 0) - (Number(a.importance) || 0));

@@ -1,7 +1,8 @@
-// 3D impact graph. Floor = Eisenhower plane: X = urgency, Z = importance.
-// Height Y = IMPACT (leverage): how much finishing a task unblocks / eases others,
-// derived from enabler->enabled relationships; tasks that unblock nothing sit on the floor.
-// Node size = priority (importance x urgency). Orange edges = the impact flow.
+// 3D execution plane. Floor = X: cost of inaction, Z: importance.
+// Action nodes sit flat on the floor; node size = importance x cost of inaction.
+// Each action is tinted by the outcome it leads to (follow enable edges downstream
+// to the nearest outcome); actions that reach no outcome stay grey.
+// Outcomes ride the horizon band, identity floats behind as vision text.
 // Rendered with Three.js (loaded via importmap: "three" + "three/addons/").
 
 import * as THREE from 'three';
@@ -19,15 +20,15 @@ const BODY = '"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Ne
 const PICK_GEO = new THREE.SphereGeometry(0.5, 10, 8);
 
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
-// impact axis: goal-proxy weight (_impact, set by the app) if present, else the
-// relationship-derived leverage score
-function leverage(t) {
-  if (t._impact != null) return Math.max(0, num(t._impact));
-  return Math.max(0, num(t.leverage_score));
-}
-function priority(t) { return num(t.importance) * num(t.urgency); } // 0..100
+// cost of inaction: what gets worse if this is deferred. Unset -> neutral 5.
+function coiOf(t) { return t.cost_of_inaction == null ? 5 : num(t.cost_of_inaction); }
+function priority(t) { return num(t.importance) * coiOf(t); } // 0..100
 function clamp10(v) { return Math.max(0, Math.min(BOX, v)); }
 function kindOf(t) { return t.kind || 'action'; }
+
+// distinct tint per outcome, so actions can be colour-grouped by the goal they serve
+const OUTCOME_PALETTE = ['#c9a227', '#b5651d', '#5f7d5f', '#4f6d7a', '#a15c5c', '#6b5b95', '#8a7d3f', '#7a5c8a'];
+const UNROUTED = '#9aa0a0';
 
 // goals ("outcome") and vision ("identity") are parked BEHIND the Eisenhower
 // floor on their own bands, not scored on it
@@ -44,17 +45,6 @@ function jitter(id) {
   return { x: ((h & 255) / 255 - 0.5) * 0.9, z: (((h >> 8) & 255) / 255 - 0.5) * 0.9 };
 }
 
-// node colour encodes IMPACT: low (unblocks little) -> grey, mid -> amber, high -> red
-const IMPACT_LOW = new THREE.Color('#c2c4c4');
-const IMPACT_MID = new THREE.Color('#f5a623');
-const IMPACT_HIGH = new THREE.Color('#e5484d');
-function impactColor(t01) {
-  const t = Math.max(0, Math.min(1, t01));
-  const c = t < 0.5
-    ? IMPACT_LOW.clone().lerp(IMPACT_MID, t * 2)
-    : IMPACT_MID.clone().lerp(IMPACT_HIGH, (t - 0.5) * 2);
-  return `#${c.getHexString()}`;
-}
 
 // topic -> glyph, matched against the task's category string (ko/en substrings)
 const TOPIC_ICONS = [
@@ -324,20 +314,15 @@ export class Graph3D {
     const outcomes = list.filter((t) => kindOf(t) === 'outcome');
     const idents = list.filter((t) => kindOf(t) === 'identity');
 
-    // HEIGHT = impact (leverage) for floor tasks, normalized to the box.
-    // Tasks that unblock nothing sit on the floor (y = 0); goals/vision get
-    // their own bands behind it.
-    const maxLev = Math.max(0, ...actions.map(leverage));
-    const rankU = this.rankMode ? rankMapper(actions.map((t) => num(t.urgency))) : null;
+    // Floor plane: X = cost of inaction, Z = importance (percentile-ranked so
+    // tie-heavy boards fan out). Action nodes sit flat on the floor.
+    const rankC = this.rankMode ? rankMapper(actions.map((t) => coiOf(t))) : null;
     const rankI = this.rankMode ? rankMapper(actions.map((t) => num(t.importance))) : null;
     const pos = new Map(actions.map((t) => {
       const j = jitter(t.id);
-      const ux = rankU ? rankU(num(t.urgency)) : clamp10(num(t.urgency));
+      const cx = rankC ? rankC(coiOf(t)) : clamp10(coiOf(t));
       const iz = rankI ? rankI(num(t.importance)) : clamp10(num(t.importance));
-      const p = new THREE.Vector3(clamp10(ux + j.x), 0, clamp10(iz + j.z));
-      const lev = leverage(t);
-      p.y = maxLev > 0 && lev > 0 ? 0.7 + (lev / maxLev) * 7.3 : 0;
-      return [Number(t.id), p];
+      return [Number(t.id), new THREE.Vector3(clamp10(cx + j.x), 0, clamp10(iz + j.z))];
     }));
     outcomes.forEach((t, i) => {
       const x = outcomes.length < 2 ? BOX / 2 : 1 + (i / (outcomes.length - 1)) * (BOX - 2);
@@ -347,6 +332,33 @@ export class Graph3D {
       const x = idents.length < 2 ? BOX / 2 : 1.5 + (i / (idents.length - 1)) * (BOX - 3);
       pos.set(Number(t.id), new THREE.Vector3(x, VISION_Y, VISION_Z));
     });
+
+    // colour per outcome; each action inherits the colour of the nearest outcome
+    // it leads to via enable edges (BFS downstream), else grey.
+    const outcomeColor = new Map();
+    outcomes.forEach((t, i) => outcomeColor.set(Number(t.id), OUTCOME_PALETTE[i % OUTCOME_PALETTE.length]));
+    const enableAdj = new Map();
+    for (const r of rels) {
+      const a = Number(r.enabler_task_id);
+      if (!enableAdj.has(a)) enableAdj.set(a, []);
+      enableAdj.get(a).push(Number(r.enabled_task_id));
+    }
+    const routeColor = (id) => {
+      const seen = new Set([id]);
+      let frontier = [id];
+      for (let depth = 0; depth < 12 && frontier.length; depth++) {
+        const next = [];
+        for (const cur of frontier) {
+          for (const nb of (enableAdj.get(cur) || [])) {
+            if (outcomeColor.has(nb)) return outcomeColor.get(nb);
+            if (!seen.has(nb)) { seen.add(nb); next.push(nb); }
+          }
+        }
+        frontier = next;
+      }
+      return UNROUTED;
+    };
+    const actionColor = new Map(actions.map((t) => [Number(t.id), routeColor(Number(t.id))]));
 
     // horizon rule the outcome nodes rest on
     if (outcomes.length) {
@@ -358,26 +370,11 @@ export class Graph3D {
       })));
     }
 
-    // thin vertical stems: floating (impactful) floor tasks drop a line to their spot
-    const stem = [];
-    for (const t of actions) {
-      const p = pos.get(Number(t.id));
-      if (p && p.y > 0.05) stem.push(p.x, p.y, p.z, p.x, 0, p.z);
-    }
-    if (stem.length) {
-      const sg = new THREE.BufferGeometry();
-      sg.setAttribute('position', new THREE.Float32BufferAttribute(stem, 3));
-      this.edgeGroup.add(new THREE.LineSegments(sg, new THREE.LineBasicMaterial({
-        color: 0x9aa0a0, transparent: true, opacity: 0.5,
-      })));
-    }
-
     // Each node = a topic glyph (MDI) via CSS2D; an invisible mesh is the click target.
     for (const t of list) {
       const id = Number(t.id);
       const k = kindOf(t);
-      const mag = 0.55 + priority(t) / 100 * 0.85; // node size = importance x urgency
-      const lev01 = maxLev > 0 ? leverage(t) / maxLev : 0; // impact, 0..1
+      const mag = 0.55 + priority(t) / 100 * 0.85; // node size = importance x cost of inaction
       const p = pos.get(id);
       if (!p) continue;
 
@@ -392,16 +389,16 @@ export class Graph3D {
         el.classList.add('is-identity');
         el.textContent = t.name || `Task ${id}`;
       } else if (k === 'outcome') {
-        // goal: gold ring on the horizon, sized/lit by roll-up progress
+        // goal: coloured ring on the horizon, sized/lit by roll-up progress
         el.classList.add('is-outcome');
         const prog = Math.max(0, Math.min(1, num(t._progress)));
         el.innerHTML = `<i class="mdi ${iconFor(t)}"></i>`;
-        el.style.color = GOLD;
+        el.style.color = outcomeColor.get(id) || GOLD;
         el.style.fontSize = `${Math.round(16 + prog * 16)}px`;
         el.style.opacity = `${0.45 + prog * 0.55}`;
       } else {
         el.innerHTML = `<i class="mdi ${iconFor(t)}"></i>`;
-        el.style.color = impactColor(lev01);
+        el.style.color = actionColor.get(id) || UNROUTED;
         el.style.fontSize = `${Math.round(14 + mag * 12)}px`;
         if (t.status === 'in_progress') el.classList.add('is-doing');
       }
@@ -456,7 +453,10 @@ export class Graph3D {
         const b = pos.get(Number(r.enabled_task_id));
         if (!a || !b) continue;
         const toGoal = kindById.get(Number(r.enabled_task_id)) === 'outcome';
-        curve(a, b, toGoal ? GOLD : '#e0654b', toGoal ? 0.06 : 0.16);
+        const hex = toGoal
+          ? (outcomeColor.get(Number(r.enabled_task_id)) || GOLD)
+          : (actionColor.get(Number(r.enabler_task_id)) || '#e0654b');
+        curve(a, b, hex, toGoal ? 0.06 : 0.16);
         n++;
       }
     }

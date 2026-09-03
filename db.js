@@ -107,6 +107,7 @@ class Database {
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'action'",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cost_of_inaction REAL",
+      "UPDATE tasks SET cost_of_inaction = urgency WHERE cost_of_inaction IS NULL",
       "ALTER TABLE tasks ALTER COLUMN importance TYPE REAL",
       "ALTER TABLE tasks ALTER COLUMN urgency TYPE REAL",
       "ALTER TABLE tasks ALTER COLUMN progress TYPE REAL"
