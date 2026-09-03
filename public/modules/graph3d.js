@@ -11,7 +11,9 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 
 const INK = '#111111';
 const BOX = 10; // world box is BOX x BOX x BOX
-const TARGET = new THREE.Vector3(BOX / 2, 3, BOX / 2);
+// orbit centre: nudged up and toward the viewer so the floor plus the horizon
+// bands behind it frame roughly centred instead of hugging the left
+const TARGET = new THREE.Vector3(BOX / 2, 2.4, BOX / 2 + 2);
 // English axis captions keep the editorial serif; task-name labels (often Hangul) use Pretendard
 const DISPLAY = 'Georgia,"Times New Roman",Times,serif';
 const BODY = '"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif';
@@ -161,7 +163,7 @@ export class Graph3D {
     this.scene = new THREE.Scene();
 
     this.camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 1000);
-    this.camera.position.set(BOX / 2 + 6, 15, BOX / 2 + 20);
+    this.camera.position.set(BOX / 2 + 2, 14, BOX / 2 + 21);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -199,6 +201,12 @@ export class Graph3D {
     this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown);
     this.renderer.domElement.addEventListener('pointerup', this._onPointerUp);
     window.addEventListener('resize', this._onResize);
+    // also react to the container itself changing size (view toggles, layout shifts),
+    // not just the window — otherwise the canvas keeps a stale size and looks off-centre
+    if (typeof ResizeObserver !== 'undefined') {
+      this._ro = new ResizeObserver(() => this.resize());
+      this._ro.observe(this.el);
+    }
 
     this._active = true;
     this._loop();
@@ -207,11 +215,18 @@ export class Graph3D {
   }
 
   _buildStage() {
-    const grid = new THREE.GridHelper(BOX, BOX, 0xcfcfcf, 0xe4e4e4);
+    // fewer, softer lines: a dense 1px grid moirés badly under perspective and
+    // flickers as whole rows go edge-on. Half the divisions, drawn semi-transparent
+    // and without depth writes so it reads as a calm ground, not a shimmering mesh.
+    const grid = new THREE.GridHelper(BOX, BOX / 2, 0xc4c4c4, 0xe0e0e0);
     grid.position.set(BOX / 2, 0, BOX / 2);
+    grid.material.transparent = true;
+    grid.material.opacity = 0.55;
+    grid.material.depthWrite = false;
+    grid.renderOrder = -1;
     this.scene.add(grid);
 
-    const inkMat = new THREE.LineBasicMaterial({ color: INK });
+    const inkMat = new THREE.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.9, depthWrite: false });
     const border = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, 0, 0), new THREE.Vector3(BOX, 0, 0),
@@ -607,6 +622,7 @@ export class Graph3D {
     if (this._raf) cancelAnimationFrame(this._raf);
     this._raf = null;
     window.removeEventListener('resize', this._onResize);
+    if (this._ro) { this._ro.disconnect(); this._ro = null; }
     if (this.renderer) {
       this.renderer.domElement.removeEventListener('pointermove', this._onPointerMove);
       this.renderer.domElement.removeEventListener('pointerleave', this._onPointerLeave);
