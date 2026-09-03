@@ -173,7 +173,7 @@ export class Graph3D {
     this.labelRenderer = new CSS2DRenderer();
     this.labelRenderer.setSize(w, h);
     Object.assign(this.labelRenderer.domElement.style, {
-      position: 'absolute', top: '0', left: '0', pointerEvents: 'none',
+      position: 'absolute', top: '0', left: '0', pointerEvents: 'none', zIndex: '2',
     });
     this.el.appendChild(this.labelRenderer.domElement);
 

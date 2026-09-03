@@ -1,0 +1,21 @@
+name: keep-alive
+
+# Pings the Render free instance so it does not cold-start during waking hours.
+# ~06:00-01:00 KST (window in UTC below). GitHub's scheduler is best-effort and
+# can lag 10-30 min under load; cron-job.org / UptimeRobot are more reliable if
+# the cold starts still bite.
+
+on:
+  schedule:
+    - cron: '*/12 21-23,0-16 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: hit /healthz
+        run: |
+          curl -sS -m 60 --retry 2 --retry-delay 5 \
+            -o /dev/null -w "healthz -> %{http_code} in %{time_total}s\n" \
+            https://priority-task-manager.onrender.com/healthz
