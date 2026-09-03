@@ -68,7 +68,7 @@ window.addEventListener('DOMContentLoaded', () => {
     data() {
       return {
         currentView: 'tasks', // legacy: 'tasks' or 'analytics' (kept in sync from navView)
-        navView: 'graph', // left rail: 'graph' | 'hierarchy' | 'analytics' | 'settings'
+        navView: (typeof window !== 'undefined' && window.innerWidth <= 700) ? 'hierarchy' : 'graph', // left rail: 'graph' | 'hierarchy' | 'analytics' | 'settings'; phones open to the list
         tasks: [],
         activeTasks: [],
         completedTasks: [],

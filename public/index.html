@@ -14,8 +14,10 @@
 
       gtag('config', 'G-LM04J3WC3L');
     </script>
-    <!-- Material Design Icons -->
+    <!-- Material Design Icons (still used internally by Vuetify components) -->
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+    <!-- Lucide icons (per-task icons + nav) -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.min.js"></script>
     <!-- Roboto Font -->
     <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
     <!-- Pretendard (editorial + Hangul) -->
@@ -611,6 +613,36 @@
         .split-view-right { padding: 20px 16px 48px; -webkit-overflow-scrolling: touch; }
         .node-card { width: min(300px, calc(100vw - 32px)); }
         .ed-topbar__title { font-size: 15px; }
+      }
+
+      /* Phone: left rail becomes a bottom tab bar, list view leads */
+      @media (max-width: 700px) {
+        .ed-shell { flex-direction: column; height: calc(100vh - 56px); }
+        .ed-rail {
+          width: 100%;
+          flex-direction: row;
+          justify-content: space-around;
+          align-items: stretch;
+          gap: 0;
+          padding: 0;
+          border-right: 0;
+          border-top: 1px solid #111;
+          position: fixed;
+          bottom: 0; left: 0; right: 0;
+          z-index: 50;
+          background: #fff;
+        }
+        .ed-rail button {
+          width: auto; height: 52px;
+          flex: 1;
+          border: 0;
+          border-right: 1px solid #eee;
+        }
+        .ed-rail button:last-child { border-right: 0; }
+        .ed-rail button.is-active { background: #e5484d; }
+        .ed-body { padding-bottom: 52px; }
+        .ed-topbar__v, .ed-topbar__date { display: none; }
+        .ed-topbar__title { font-size: 13px; }
       }
       
       :root {
