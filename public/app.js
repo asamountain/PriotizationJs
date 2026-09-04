@@ -2246,7 +2246,18 @@ window.addEventListener('DOMContentLoaded', () => {
     mounted() {
       // Make app globally available FIRST
       window.app = this;
-      
+
+      // Surface a failed Google sign-in instead of silently landing back on
+      // the login gate with no explanation (common on Render's free-tier
+      // cold starts, where the first attempt can time out).
+      const loginError = new URLSearchParams(window.location.search).get('login_error');
+      if (loginError) {
+        this.showNotification('Sign-in failed (' + loginError + '). The server may still be waking up — please try again.', 'error', 8000);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('login_error');
+        window.history.replaceState({}, '', url);
+      }
+
       // Check authentication
       this.checkAuth();
       

@@ -75,9 +75,18 @@ export function setupAuth(app) {
                     provider: 'google'
                 };
                 
+                // Critical: without this, the user can't be logged in at all.
                 await upsertUser(userData);
-                await claimLegacyDataIfFirstUser(userData.id);
-                await seedDefaultPipelinesIfFirstUser(userData.id);
+
+                // Best-effort only — a slow/cold DB on these secondary, one-time
+                // steps must never block or fail the actual login.
+                try {
+                    await claimLegacyDataIfFirstUser(userData.id);
+                    await seedDefaultPipelinesIfFirstUser(userData.id);
+                } catch (secondaryError) {
+                    console.error('Auth Debug: non-critical post-login step failed (login still proceeds):', secondaryError);
+                }
+
                 return done(null, userData);
             } catch (error) {
                 console.error('Auth Debug: Error in verify callback:', error);
@@ -107,15 +116,31 @@ export function setupAuth(app) {
             const host = req.get('host');
             const protocol = req.headers['x-forwarded-proto'] || req.protocol;
             const dynamicCallbackURL = `${protocol}://${host}/auth/google/callback`;
-            
+
             console.log('Auth Debug: Handling Google callback');
-            
-            passport.authenticate('google', { 
-                failureRedirect: '/',
-                callbackURL: dynamicCallbackURL
+
+            // Custom callback (instead of failureRedirect) so a failure is
+            // logged with its actual reason and surfaced to the user, rather
+            // than silently bouncing back to the sign-in gate with no
+            // explanation — that silent bounce is what made repeated retries
+            // look like "nothing happens" on Render's free-tier cold starts.
+            passport.authenticate('google', { callbackURL: dynamicCallbackURL }, (err, user, info) => {
+                if (err) {
+                    console.error('Auth Debug: OAuth callback error:', err);
+                    return res.redirect('/?login_error=' + encodeURIComponent(err.message || 'oauth_error'));
+                }
+                if (!user) {
+                    console.warn('Auth Debug: OAuth callback returned no user:', info);
+                    return res.redirect('/?login_error=' + encodeURIComponent((info && info.message) || 'denied'));
+                }
+                req.logIn(user, (loginErr) => {
+                    if (loginErr) {
+                        console.error('Auth Debug: req.logIn failed:', loginErr);
+                        return res.redirect('/?login_error=' + encodeURIComponent('session_save_failed'));
+                    }
+                    res.redirect('/');
+                });
             })(req, res, next);
-        }, (req, res) => {
-            res.redirect('/');
         });
     } else {
         console.warn('⚠️ Google OAuth credentials not found.');
