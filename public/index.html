@@ -548,6 +548,27 @@
       }
       .split-view-right .ed-list .task-checkbox .v-selection-control__input::before { display: none !important; }
 
+      /* The reference is strictly black/white/gray — no colored priority
+         icon, no colored badges. Force the whole row monochrome instead of
+         only having fixed the typography last time. */
+      .split-view-right .ed-list .toggle-junction .v-icon {
+        color: #111 !important; opacity: .5;
+      }
+      .split-view-right .ed-list .v-list-item-subtitle .v-chip {
+        display: none !important;
+      }
+      .split-view-right .ed-list .task-item[style*="border-left"] {
+        border-left: 0 !important; background: transparent !important;
+      }
+      .subtasks-wrapper { border-left-color: #ddd !important; }
+      .split-view-right .ed-list .v-list-item-subtitle .text-orange,
+      .split-view-right .ed-list .v-list-item-subtitle .v-icon {
+        color: var(--muted, #6b6b6b) !important;
+      }
+      .split-view-right .ed-list .text-error:not(.v-list-item) {
+        color: #111 !important; font-weight: 700 !important;
+      }
+
       /* Sort dropdown: icon + label as a real flex row instead of one long
          emoji+text string, so it stops truncating mid-word on narrow panels. */
       .sort-select__row { display: flex; align-items: center; gap: 8px; min-width: 0; }
