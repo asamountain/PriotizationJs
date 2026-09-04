@@ -143,10 +143,6 @@ window.addEventListener('DOMContentLoaded', () => {
         enableQuery: '',
         enableOpen: false,
         enableActive: 0,
-        categoryWeights: (() => {
-          try { return JSON.parse(localStorage.getItem('categoryWeights') || '{}'); }
-          catch (e) { return {}; }
-        })(),
         showCsvImportDialog: false,
         showQuickAddModal: false,
         barStyle: localStorage.getItem('barStyle') || 'chips', // 'chips' | 'segmented' | 'score'
@@ -299,14 +295,6 @@ window.addEventListener('DOMContentLoaded', () => {
         const q = (this.enableQuery || '').trim().toLowerCase();
         if (!q) return this.enableCandidates.slice(0, 60);
         return this.enableCandidates.filter(c => this.matchTask(c.name, q)).slice(0, 60);
-      },
-      distinctCategories() {
-        const set = new Set();
-        for (const t of (this.tasks || [])) {
-          const c = (t.category || '').trim();
-          if (c) set.add(c);
-        }
-        return [...set].sort((a, b) => a.localeCompare(b));
       },
       nodeCardStatus() {
         const t = this.nodeCard.task;
@@ -606,29 +594,17 @@ window.addEventListener('DOMContentLoaded', () => {
         const n = (!name || String(name).startsWith('mdi-')) ? 'circle-dot' : name;
         return lucideSvg(n) || lucideSvg('circle-dot');
       },
-      // goal proxy: a task's impact = the weight assigned to its category (0 if unset)
-      weightFor(task) {
-        const c = (task && task.category || '').trim();
-        const w = Number(this.categoryWeights[c]);
-        return Number.isFinite(w) ? w : 0;
-      },
-      // Priority Queue rank: cost of inaction is the spine (it carries the "why now"
-      // signal); importance only modulates it by roughly +/- 50%. Goal weight lifts.
-      // Unset COI is treated as a neutral 5. Scale is ~5..100 so the display bars
-      // and numbers stay calibrated.
+      // Priority rank: cost of inaction is the spine (it carries the "why now"
+      // signal); importance only modulates it by roughly +/- 50%. Unset COI is
+      // treated as a neutral 5. Scale is ~5..100 so the display bars and
+      // numbers stay calibrated.
       queueScore(task) {
         const coi = task.cost_of_inaction == null ? 5 : Number(task.cost_of_inaction);
         const imp = Number(task.importance || 0);
-        return coi * (5 + imp / 2) + this.weightFor(task) * 12;
+        return coi * (5 + imp / 2);
       },
       resetGraphView() {
         if (graph3d) graph3d.resetView();
-      },
-      setCategoryWeight(cat, val) {
-        const w = Math.max(0, Math.min(5, Math.round(Number(val) || 0)));
-        this.categoryWeights = { ...this.categoryWeights, [cat]: w };
-        localStorage.setItem('categoryWeights', JSON.stringify(this.categoryWeights));
-        this.renderGraph();
       },
 
       renderGraph() {
@@ -636,12 +612,10 @@ window.addEventListener('DOMContentLoaded', () => {
         try {
           graph3d.showRelationships = this.showRelationships;
           graph3d.showSubtasks = this.showChartSubtasks;
-          // stamp goal-proxy impact onto the task objects the chart reads
           const tasks = this.filteredTasksForChart;
           const rels = this.allRelationships || [];
           const allById = new Map((this.tasks || []).map(t => [Number(t.id), t]));
           for (const t of tasks) {
-            t._impact = this.weightFor(t);
             // outcome nodes are sized by roll-up progress: share of their
             // enabling actions (weighted by importance) that are done
             if ((t.kind || 'action') === 'outcome') {

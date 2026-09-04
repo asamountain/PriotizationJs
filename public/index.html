@@ -462,25 +462,6 @@
         font-family: var(--ed-font); font-size: 12px; cursor: pointer;
       }
       .ed-pipeline-add button:hover { background: #111; color: #fff; }
-      .ed-goalnote {
-        margin: 0; padding: 12px 16px; border-bottom: 1px solid #e4e4e4;
-        font-family: var(--ed-font); font-size: 12px; line-height: 1.5; color: var(--muted);
-      }
-      .ed-goals { list-style: none; margin: 0; padding: 0; }
-      .ed-goals li {
-        display: flex; align-items: center; justify-content: space-between; gap: 12px;
-        padding: 10px 16px; border-bottom: 1px solid #e4e4e4;
-      }
-      .ed-goals li:last-child { border-bottom: 0; }
-      .ed-goals__cat { font-family: var(--ed-font); font-size: 14px; color: var(--ink); }
-      .ed-goals__empty { font-family: var(--ed-font); font-style: italic; color: var(--muted); }
-      .ed-goals__step { display: inline-flex; align-items: center; gap: 8px; }
-      .ed-goals__step b { min-width: 16px; text-align: center; font-weight: 400; font-size: 14px; }
-      .ed-goals__step button {
-        width: 24px; height: 24px; border: 1px solid #111; background: #fff;
-        font-family: var(--ed-font); font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
-      }
-      .ed-goals__step button:hover { background: #111; color: #fff; }
 
       /* Flatten the Vuetify "Active Tasks" card into the editorial sheet */
       .split-view-right .ed-list.v-card {
@@ -1643,25 +1624,6 @@
                                     <span class="ed-queue__title">Log in with Google</span>
                                     <span class="ed-queue__arrow">&rarr;</span>
                                 </li>
-                            </ul>
-                        </section>
-
-                        <section class="ed-panel" style="margin-top: 24px;">
-                            <div class="ed-panel__head">
-                                <span>Goal weights</span>
-                                <span class="ed-count">impact = category weight</span>
-                            </div>
-                            <p class="ed-goalnote">How much does each category move your goals? 0 = irrelevant, 5 = core. This drives the 3D chart's height &amp; colour.</p>
-                            <ul class="ed-goals">
-                                <li v-for="cat in distinctCategories" :key="cat">
-                                    <span class="ed-goals__cat">{{ cat }}</span>
-                                    <span class="ed-goals__step">
-                                        <button type="button" @click="setCategoryWeight(cat, weightFor({category: cat}) - 1)">&minus;</button>
-                                        <b>{{ weightFor({ category: cat }) }}</b>
-                                        <button type="button" @click="setCategoryWeight(cat, weightFor({category: cat}) + 1)">+</button>
-                                    </span>
-                                </li>
-                                <li v-if="distinctCategories.length === 0" class="ed-goals__empty">No categories on your tasks yet.</li>
                             </ul>
                         </section>
                     </div>
