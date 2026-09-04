@@ -416,6 +416,12 @@
         cursor: pointer;
       }
       .ed-login-gate__btn:hover { background: #e8d8ab; }
+      .ed-login-gate__btn:disabled { cursor: default; opacity: 0.85; }
+      .ed-login-gate__spinner {
+        width: 15px; height: 15px; flex-shrink: 0;
+        border: 2px solid rgba(17, 17, 17, 0.25); border-top-color: #111;
+        border-radius: 50%; animation: spin 0.8s linear infinite;
+      }
       .ed-pipeline-list { list-style: none; margin: 0; padding: 0; }
       .ed-pipeline-card { border-bottom: 1px solid #e4e4e4; }
       .ed-pipeline-card:last-child { border-bottom: 0; }
@@ -993,7 +999,10 @@
                 <div class="ed-login-gate__card">
                     <h1 class="ed-login-gate__title">Priority Task Manager</h1>
                     <p class="ed-login-gate__sub">Sign in with Google to see and manage your own tasks. Each account gets its own private list.</p>
-                    <button class="ed-login-gate__btn" @click="loginWithGoogle">Sign in with Google</button>
+                    <button class="ed-login-gate__btn" :disabled="isSigningIn" @click="loginWithGoogle">
+                        <span v-if="isSigningIn" class="ed-login-gate__spinner"></span>
+                        {{ isSigningIn ? 'Redirecting to Google…' : 'Sign in with Google' }}
+                    </button>
                 </div>
             </div>
             <!-- app bar removed: editorial layout. Actions relocated:

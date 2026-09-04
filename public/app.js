@@ -209,6 +209,7 @@ window.addEventListener('DOMContentLoaded', () => {
           googleEnabled: false
         },
         showLoginGate: false,
+        isSigningIn: false,
         // Income pipelines
         pipelines: [],
         newPipelineName: '',
@@ -1662,6 +1663,8 @@ window.addEventListener('DOMContentLoaded', () => {
       },
 
       loginWithGoogle() {
+        if (this.isSigningIn) return;
+        this.isSigningIn = true;
         window.location.href = '/auth/google';
       },
 
