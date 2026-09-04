@@ -15,6 +15,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: SESSION_SECRET
-        generateValue: true
+        sync: false # generated once, then left alone — regenerating it on every
+        # deploy would invalidate every logged-in user's session cookie each time
       - key: BASE_URL
         sync: false # Set to your https://xxx.onrender.com URL
