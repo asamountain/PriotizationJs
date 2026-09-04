@@ -861,8 +861,28 @@
         height: 100%;
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start; /* predictable left edge, so the tree tick below lands exactly */
         gap: 4px; /* Tight gap for toggle group */
+        position: relative;
+      }
+      /* Force the expand chevron to the same footprint as the no-children
+         placeholder div (also 24px) so the bullet always sits at the same
+         offset whether or not a row has children. */
+      .toggle-junction .expand-btn { width: 24px !important; height: 24px !important; }
+      /* Tree tick: connects each subtask's bullet back to the vertical trunk
+         line drawn by .subtasks-wrapper's border-left, the way the variant.com
+         reference does — the tick's left end lands exactly on the trunk
+         (task-item's own left padding, --space-2) and its right end lands
+         exactly on the bullet's left edge (past the 24px expand/placeholder
+         column + 4px gap), so there's no visible gap on either side. */
+      .task-item.subtask .toggle-junction::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: calc(var(--space-2) * -1);
+        width: calc(var(--space-2) + 24px + 4px);
+        height: 1px;
+        background: #ddd;
       }
 
       /* Checkbox & List Item Tweaks */
