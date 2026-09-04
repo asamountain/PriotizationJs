@@ -86,6 +86,15 @@
         background: #fff;
       }
       .ed-topbar__v { font-family: var(--ed-display); font-size: 12px; letter-spacing: .16em; color: #111; }
+      .ed-topbar__left { display: flex; align-items: center; gap: 12px; }
+      .ed-topbar__auth {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--ed-font); font-size: 11px; color: #6b6b6b;
+        max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        cursor: pointer;
+      }
+      .ed-topbar__auth-dot { width: 7px; height: 7px; border-radius: 50%; background: #c7c7c7; flex-shrink: 0; }
+      .ed-topbar__auth-dot.is-on { background: #3a9d5d; }
       .ed-topbar__title {
         position: absolute; left: 50%; transform: translateX(-50%);
         font-family: var(--ed-display); font-style: italic; font-size: 19px; color: #111;
@@ -940,7 +949,17 @@
             <v-main class="split-view-main">
                 <!-- Editorial top bar -->
                 <header class="ed-topbar">
-                    <span class="ed-topbar__v">V.04</span>
+                    <div class="ed-topbar__left">
+                        <span class="ed-topbar__v">V.04</span>
+                        <span
+                            class="ed-topbar__auth"
+                            :title="user ? (user.email || user.name) : 'Not signed in — tap to sign in with Google'"
+                            @click="user ? null : loginWithGoogle()"
+                        >
+                            <span class="ed-topbar__auth-dot" :class="{ 'is-on': !!user }"></span>
+                            {{ user ? (user.name || user.email) : 'Guest' }}
+                        </span>
+                    </div>
                     <span class="ed-topbar__title">The Hierarchy of Execution</span>
                     <span class="ed-topbar__date">{{ todayLabel }}</span>
                 </header>
