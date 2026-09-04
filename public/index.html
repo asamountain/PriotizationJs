@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>Priority Task Manager</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>">
     <!-- PWA: lets mobile users "Add to Home Screen" for an instant, icon-tap launch,
@@ -670,6 +670,16 @@
         .ed-body { padding-bottom: 52px; }
         .ed-topbar__v, .ed-topbar__date { display: none; }
         .ed-topbar__title { font-size: 13px; }
+
+        /* Priority Queue rows: rank/score/arrow were eating most of the width,
+           squeezing task titles into a cramped 3-line wrap. Give the title
+           the room back and size text for touch, not print. */
+        .ed-queue__item { grid-template-columns: 20px 1fr auto 18px; gap: 8px; padding: 14px 12px; }
+        .ed-queue__rank { font-size: 11px; }
+        .ed-queue__title { font-size: 16px; line-height: 1.4; }
+        .ed-queue__score { font-size: 11px; padding: 1px 5px; min-width: 20px; border-color: #e2e2e2; }
+        .ed-panel__head { padding: 12px; }
+        .ed-title { font-size: clamp(20px, 6vw, 26px); }
       }
       
       :root {
