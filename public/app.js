@@ -205,6 +205,12 @@ window.addEventListener('DOMContentLoaded', () => {
         // Drag and drop state
         draggedTask: null,
         dragOverTaskId: null,
+        // Touch reparenting: native HTML5 draggable="true" (used above for
+        // mouse) never fires on touch devices, so this is a separate
+        // pointer-event gesture (see task-node's startPress/onPressMove) —
+        // swipe a row sideways past a small threshold to "detach" it, drag
+        // over another row, release to nest under it.
+        touchDrag: null,
         expandedTasks: new Set(),
         // Authentication state
         user: null,
@@ -1562,6 +1568,18 @@ window.addEventListener('DOMContentLoaded', () => {
         this.dragOverTaskId = null;
       },
 
+      touchReparentTask(taskId, parentTask) {
+        const dragged = this.tasks.find(t => t.id === taskId);
+        if (!dragged || !parentTask || dragged.id === parentTask.id) return;
+        if (this.isDescendant(parentTask.id, dragged.id)) {
+          this.showNotification('Cannot create circular reference!', 'error');
+          return;
+        }
+        this.socket.emit('setTaskParent', { taskId: dragged.id, parentId: parentTask.id });
+        this.expandedTasks.add(parentTask.id);
+        this.expandedTasks = new Set(this.expandedTasks);
+        this.showNotification(`Moved "${dragged.name}" under "${parentTask.name}"`, 'success');
+      },
       isDescendant(taskId, potentialAncestorId) {
         let currentTask = this.tasks.find(t => t.id === taskId);
         
@@ -2417,25 +2435,21 @@ window.addEventListener('DOMContentLoaded', () => {
           :value="task.id"
           @click="$root.selectTask(task)"
           @dblclick="$root.showAddSubtaskForm(task.id)"
-          :data-task-id="task.id" 
-          :class="['task-item', depth > 0 ? 'subtask' : '', task.active_timer_start ? 'timer-active' : '']"
-          :style="{ 
-            cursor: 'grab', 
-            position: 'relative',
-            backgroundColor: task.color ? (task.color + '15') : '',
-            borderLeft: task.color ? ('4px solid ' + task.color) : ''
-          }"
+          :data-task-id="task.id"
+          :class="['task-item', depth > 0 ? 'subtask' : '', task.active_timer_start ? 'timer-active' : '',
+                   $root.touchDrag && $root.touchDrag.taskId === task.id ? 'is-dragging' : '',
+                   $root.touchDrag && $root.touchDrag.overTaskId === task.id ? 'is-drop-target' : '']"
+          :style="rowStyle"
           draggable="true"
           @dragstart="$root.handleDragStart(task, $event)"
           @dragover="$root.handleDragOver"
           @dragleave="$root.handleDragLeave"
           @drop.stop="$root.handleDropOnTask(task, $event)"
           @dragend="$root.handleDragEnd"
-          @mousedown="startPress"
-          @mouseup="endPress"
-          @mouseleave="endPress"
-          @touchstart="startPress"
-          @touchend="endPress"
+          @pointerdown="startPress"
+          @pointermove="onPressMove"
+          @pointerup="onPressEnd"
+          @pointercancel="onPressEnd"
         >
           <!-- Hidden anchor for the menu positioning -->
           <div 
@@ -2699,8 +2713,26 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       hasChildren() { return this.children.length > 0; },
       isExpanded() { return this.expandedTasks.has(this.task.id); },
-      isHovered() { 
+      isHovered() {
         return this.$root.hoveredTaskId === this.task.id || this.$root.hoveredTaskAncestors.has(this.task.id);
+      },
+      rowStyle() {
+        const style = { cursor: 'grab' };
+        if (this.task.color) {
+          style.backgroundColor = this.task.color + '15';
+          style.borderLeft = '4px solid ' + this.task.color;
+        }
+        const drag = this.$root.touchDrag;
+        if (drag && drag.taskId === this.task.id) {
+          style.transform = `translate(${drag.curX - drag.startX}px, ${drag.curY - drag.startY}px) scale(1.02)`;
+          style.zIndex = 50;
+          style.boxShadow = '0 8px 24px rgba(0,0,0,.18)';
+          style.position = 'relative';
+          style.opacity = 0.92;
+        } else {
+          style.position = 'relative';
+        }
+        return style;
       }
     },
     methods: {
@@ -2714,9 +2746,14 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       startPress(e) {
         // Only trigger on left click
-        if (e.type === 'mousedown' && e.button !== 0) return;
-        
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+
         this.isPressing = true;
+        this._gestureStartX = e.clientX;
+        this._gestureStartY = e.clientY;
+        this._gesturePointerId = e.pointerId;
+        this._gesturePointerType = e.pointerType;
+        this._dragStarted = false;
         this.longPressTimer = setTimeout(() => {
           this.showModeMenu(e);
         }, 500); // 0.5 seconds
@@ -2727,6 +2764,56 @@ window.addEventListener('DOMContentLoaded', () => {
           clearTimeout(this.longPressTimer);
           this.longPressTimer = null;
         }
+      },
+      // Touch-only: swipe a row sideways past a small threshold to "detach"
+      // it into reparent-drag mode (mouse keeps using native draggable="true"
+      // drag-and-drop instead — see the dragstart/dragover/drop handlers).
+      onPressMove(e) {
+        if (this._gestureStartX == null) return;
+        const root = this.$root;
+
+        if (root.touchDrag && root.touchDrag.taskId === this.task.id) {
+          e.preventDefault();
+          root.touchDrag.curX = e.clientX;
+          root.touchDrag.curY = e.clientY;
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          const rowEl = el && el.closest ? el.closest('.task-item') : null;
+          const overId = rowEl && rowEl.dataset.taskId ? Number(rowEl.dataset.taskId) : null;
+          root.touchDrag.overTaskId = (overId && overId !== this.task.id) ? overId : null;
+          return;
+        }
+
+        if (this._gesturePointerType !== 'touch' || this._dragStarted) return;
+        const dx = e.clientX - this._gestureStartX;
+        const dy = e.clientY - this._gestureStartY;
+        if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+          this._dragStarted = true;
+          this.endPress();
+          root.touchDrag = {
+            taskId: this.task.id,
+            taskName: this.task.name,
+            startX: this._gestureStartX,
+            startY: this._gestureStartY,
+            curX: e.clientX,
+            curY: e.clientY,
+            overTaskId: null
+          };
+          try { e.target.setPointerCapture(this._gesturePointerId); } catch (err) {}
+        }
+      },
+      onPressEnd(e) {
+        this.endPress();
+        const root = this.$root;
+        if (root.touchDrag && root.touchDrag.taskId === this.task.id) {
+          const overId = root.touchDrag.overTaskId;
+          root.touchDrag = null;
+          if (overId) {
+            const targetTask = root.tasks.find(t => t.id === overId);
+            if (targetTask) root.touchReparentTask(this.task.id, targetTask);
+          }
+        }
+        this._gestureStartX = null;
+        this._dragStarted = false;
       },
       showModeMenu(e) {
         this.isPressing = false;

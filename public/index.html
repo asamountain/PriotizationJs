@@ -904,6 +904,13 @@
       .task-item {
         min-height: 64px !important;
         border-bottom: 1px solid #e8edea !important;
+        touch-action: pan-y; /* keep vertical list scroll native; horizontal swipe is ours to read */
+      }
+      .task-item.is-dragging { transition: none !important; }
+      .task-item.is-drop-target {
+        background: #fbf8ef !important;
+        outline: 2px dashed #111;
+        outline-offset: -2px;
       }
 
       .task-metrics-group {
