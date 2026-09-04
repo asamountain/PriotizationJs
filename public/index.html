@@ -500,10 +500,55 @@
         letter-spacing: .04em;
       }
       .split-view-right .ed-list .v-btn { border-radius: 0 !important; box-shadow: none !important; }
+
+      /* Numbered category headers ("1 OBSERVE") — count only the
+         non-empty groups the v-if already filters down to. */
+      .split-view-right .ed-list .v-card-text { counter-reset: task-cat; }
+      .split-view-right .ed-list .mb-4 { counter-increment: task-cat; }
       .split-view-right .ed-list .section-header,
       .split-view-right .ed-list .text-caption.text-uppercase {
         font-family: var(--ed-font) !important; letter-spacing: .16em !important;
+        font-size: 11px !important; color: var(--muted, #6b6b6b) !important;
+        border-top: 1px solid #111; padding-top: 14px !important;
       }
+      .split-view-right .ed-list .mb-4:first-child .text-caption.text-uppercase {
+        border-top: 0;
+      }
+      .split-view-right .ed-list .text-caption.text-uppercase::before {
+        content: counter(task-cat) '  '; font-weight: 700; color: #111;
+      }
+
+      /* Bigger, bolder titles for top-level tasks; lighter/smaller for
+         subtasks — matches an editorial "heading + description" row
+         instead of a dense Material list item. */
+      .split-view-right .ed-list .task-item:not(.subtask) .task-name {
+        font-size: 17px !important; font-weight: 700 !important; line-height: 1.3;
+      }
+      .split-view-right .ed-list .task-item.subtask .task-name {
+        font-size: 14px !important; font-weight: 400 !important;
+      }
+      .split-view-right .ed-list .v-list-item-subtitle {
+        color: var(--muted, #6b6b6b) !important; font-size: 12px !important;
+        opacity: 1 !important;
+      }
+      .split-view-right .ed-list .task-item {
+        padding-top: 14px !important; padding-bottom: 14px !important;
+      }
+
+      /* Plain hollow/filled circle instead of the Material checkbox */
+      .split-view-right .ed-list .task-checkbox .v-selection-control__wrapper,
+      .split-view-right .ed-list .task-checkbox .v-selection-control__input {
+        width: 20px !important; height: 20px !important;
+      }
+      .split-view-right .ed-list .task-checkbox .v-icon { display: none !important; }
+      .split-view-right .ed-list .task-checkbox .v-selection-control__input {
+        border: 1px solid #111 !important; border-radius: 50% !important;
+        background: transparent !important;
+      }
+      .split-view-right .ed-list .task-checkbox .v-selection-control--dirty .v-selection-control__input {
+        background: #111 !important;
+      }
+      .split-view-right .ed-list .task-checkbox .v-selection-control__input::before { display: none !important; }
 
       /* ===== Editorial theme for EVERY Vuetify overlay (dialogs, menus, selects, sheets) ===== */
       .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-card,
