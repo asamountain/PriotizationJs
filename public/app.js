@@ -226,14 +226,14 @@ window.addEventListener('DOMContentLoaded', () => {
     computed: {
       taskSortOptions() {
         return [
-          { value: 'priority-high', icon: '🔥', label: 'Priority (High → Low)' },
-          { value: 'priority-low', icon: '🔥', label: 'Priority (Low → High)' },
-          { value: 'importance-high', icon: '⭐', label: 'Importance (High → Low)' },
-          { value: 'importance-low', icon: '⭐', label: 'Importance (Low → High)' },
-          { value: 'newest', icon: '🆕', label: 'Newest First' },
-          { value: 'oldest', icon: '📅', label: 'Oldest First' },
-          { value: 'due-date', icon: '⏰', label: 'Due Date (Closest)' },
-          { value: 'name-az', icon: '🔤', label: 'Name (A → Z)' }
+          { value: 'priority-high', label: 'Priority (High → Low)' },
+          { value: 'priority-low', label: 'Priority (Low → High)' },
+          { value: 'importance-high', label: 'Importance (High → Low)' },
+          { value: 'importance-low', label: 'Importance (Low → High)' },
+          { value: 'newest', label: 'Newest First' },
+          { value: 'oldest', label: 'Oldest First' },
+          { value: 'due-date', label: 'Due Date (Closest)' },
+          { value: 'name-az', label: 'Name (A → Z)' }
         ];
       },
       hoveredTaskAncestors() {
@@ -2138,7 +2138,6 @@ window.addEventListener('DOMContentLoaded', () => {
           <div class="d-flex flex-column flex-grow-1 py-1 ms-1">
             <div class="d-flex align-center gap-golden">
               <v-list-item-title :class="{'text-decoration-line-through opacity-50': task.done}" class="text-wrap font-weight-bold task-name flex-grow-1">
-                <span v-if="(task.kind || 'action') !== 'action'" class="task-kind-mark" :title="task.kind === 'outcome' ? 'Outcome — a goal, not a one-off task' : 'Identity — a stance or vision'">{{ task.kind === 'outcome' ? '◆' : '❖' }}</span>
                 {{ task.name }}
               </v-list-item-title>
               

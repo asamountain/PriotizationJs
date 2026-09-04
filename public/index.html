@@ -442,7 +442,6 @@
         font-weight: 400 !important;
         font-size: 14px !important;
       }
-      .task-kind-mark { display: inline-block; margin-right: 5px; opacity: .5; font-weight: 400; }
       .split-view-right .ed-list .v-list-item__overlay,
       .split-view-right .ed-list .v-ripple__container { display: none !important; }
       .split-view-right .ed-list .v-chip {
@@ -538,10 +537,8 @@
         color: #111 !important; font-weight: 700 !important;
       }
 
-      /* Sort dropdown: icon + label as a real flex row instead of one long
-         emoji+text string, so it stops truncating mid-word on narrow panels. */
-      .sort-select__row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-      .sort-select__icon { flex-shrink: 0; }
+      /* Sort dropdown label — plain text, no emoji icon (kept off the
+         editorial black/white/gray palette). */
       .sort-select__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
       /* ===== Editorial theme for EVERY Vuetify overlay (dialogs, menus, selects, sheets) ===== */
@@ -1381,18 +1378,10 @@
                                     class="minimal-select"
                                 >
                                     <template v-slot:selection="{ item }">
-                                        <span class="sort-select__row">
-                                            <span class="sort-select__icon">{{ item.raw.icon }}</span>
-                                            <span class="sort-select__label">{{ item.raw.label }}</span>
-                                        </span>
+                                        <span class="sort-select__label">{{ item.raw.label }}</span>
                                     </template>
                                     <template v-slot:item="{ props: itemProps, item }">
-                                        <v-list-item v-bind="itemProps" title="">
-                                            <span class="sort-select__row">
-                                                <span class="sort-select__icon">{{ item.raw.icon }}</span>
-                                                <span class="sort-select__label">{{ item.raw.label }}</span>
-                                            </span>
-                                        </v-list-item>
+                                        <v-list-item v-bind="itemProps" :title="item.raw.label"></v-list-item>
                                     </template>
                                 </v-select>
                             </div>
