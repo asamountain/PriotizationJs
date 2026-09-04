@@ -514,6 +514,15 @@
       .split-view-right .ed-list .toggle-junction .v-icon {
         color: #111 !important; opacity: .5;
       }
+      /* Drop the decorative bullet in front of each task's name — the
+         reference only shows one marker per row (the done checkbox). Use
+         the DIRECT-child combinator so this doesn't also hide the expand
+         chevron's own icon, which is nested one level deeper inside its
+         v-btn. The custom icon/color pickers stay functional elsewhere
+         (node card, 3D graph) — just not shown in this list. */
+      .split-view-right .ed-list .toggle-junction > .v-icon {
+        display: none !important;
+      }
       .split-view-right .ed-list .v-list-item-subtitle .v-chip {
         display: none !important;
       }
@@ -865,21 +874,22 @@
          placeholder div (also 24px) so the bullet always sits at the same
          offset whether or not a row has children. */
       .toggle-junction .expand-btn { width: 24px !important; height: 24px !important; }
-      /* Tree tick: connects each subtask's bullet back to the vertical trunk
-         line drawn by .subtasks-wrapper's border-left, the way the variant.com
+      /* Tree tick: connects each subtask row back to the vertical trunk line
+         drawn by .subtasks-wrapper's border-left, the way the variant.com
          reference does. Positioned at 50% of the ROW's own height (.task-item,
-         not the icon's sub-box) so it always lands on the bullet regardless of
+         not any inner sub-box) so it always lands correctly regardless of
          font size or padding changes — a percentage, not a guessed pixel
          offset. Left end lands exactly on the trunk (.task-item's own border-box
-         edge, which is also the trunk's x=0); right end reaches the bullet's
-         left edge, past the row's own left padding (--space-2) plus the 24px
-         expand/placeholder column and its 4px gap. */
+         edge, which is also the trunk's x=0); right end reaches where the
+         title text starts — the row's own left padding (--space-2) plus the
+         24px expand/placeholder column (no bullet icon anymore, so no extra
+         gap to account for). */
       .task-item.subtask::before {
         content: '';
         position: absolute;
         top: 50%;
         left: 0;
-        width: calc(var(--space-2) + 24px + 4px);
+        width: calc(var(--space-2) + 24px);
         height: 1px;
         background: #ddd;
       }
