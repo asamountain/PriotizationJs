@@ -516,7 +516,60 @@ window.addEventListener('DOMContentLoaded', () => {
         
         return subtasks;
       },
-      
+
+      // Flatten a task and its full subtask tree into an indented plain-text
+      // outline and copy it to the clipboard — meant for pasting into an AI
+      // chat to keep discussing the hierarchy there.
+      copyTaskHierarchy(rootTask) {
+        const lines = [];
+        const walk = (t, depth) => {
+          const meta = [];
+          if ((t.kind || 'action') !== 'action') meta.push(t.kind);
+          if (t.importance != null) meta.push(`importance ${t.importance}`);
+          if (t.cost_of_inaction != null) meta.push(`cost of inaction ${t.cost_of_inaction}`);
+          if (t.done) meta.push('done');
+          else if (t.status === 'Not Sure') meta.push('not sure');
+          else if (t.status === 'in_progress') meta.push('doing');
+          const suffix = meta.length ? ` (${meta.join(', ')})` : '';
+          lines.push(`${'  '.repeat(depth)}- ${t.name}${suffix}`);
+          if (t.notes) lines.push(`${'  '.repeat(depth + 1)}note: ${t.notes}`);
+          (this.tasks || [])
+            .filter((k) => Number(k.parent_id) === Number(t.id))
+            .forEach((k) => walk(k, depth + 1));
+        };
+        walk(rootTask, 0);
+        const subCount = lines.filter((l) => /^\s*- /.test(l)).length - 1;
+        const msg = subCount > 0
+          ? `Copied "${rootTask.name}" + ${subCount} sub-task(s) to clipboard`
+          : `Copied "${rootTask.name}" to clipboard`;
+        this.copyTextToClipboard(lines.join('\n'), msg);
+      },
+
+      copyTextToClipboard(text, successMsg) {
+        const onDone = () => this.showNotification(successMsg, 'success');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(onDone).catch(() => this._fallbackCopy(text, onDone));
+        } else {
+          this._fallbackCopy(text, onDone);
+        }
+      },
+      _fallbackCopy(text, onDone) {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          onDone();
+        } catch (e) {
+          this.showNotification('Copy failed — clipboard not available', 'error');
+        }
+      },
+
       showAddSubtaskForm(taskId) {
         this.parentId = taskId;
         const parentTask = this.tasks.find(t => t.id === taskId);
@@ -2210,6 +2263,7 @@ window.addEventListener('DOMContentLoaded', () => {
           { key: 'notes', icon: 'mdi-note-edit', label: 'Notes' },
           { key: 'timer', icon: t.active_timer_start ? 'mdi-stop-circle' : 'mdi-play-circle', label: t.active_timer_start ? 'Stop Timer' : 'Start Timer' },
           { key: 'notSure', icon: 'mdi-help-circle', label: 'Not Sure', active: t.status === 'Not Sure' },
+          { key: 'copyTree', icon: 'mdi-content-copy', label: 'Copy hierarchy (for AI)' },
           { key: 'delete', icon: 'mdi-delete', label: 'Delete' }
         ];
       }
@@ -2311,6 +2365,7 @@ window.addEventListener('DOMContentLoaded', () => {
           case 'addSubtask': root.showAddSubtaskForm(this.task.id); break;
           case 'edit': (this.depth === 0 ? root.editTask(this.task) : root.editSubtask(this.task)); break;
           case 'notes': root.editTaskNotes(this.task); break;
+          case 'copyTree': root.copyTaskHierarchy(this.task); break;
           case 'delete': root.deleteTask(this.task.id, this.task.name); break;
         }
         this.closeRadial();
