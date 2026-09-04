@@ -17,7 +17,11 @@ const BOX = 10; // world box is BOX x BOX x BOX
 // high-importance / high-cost-of-inaction far corner against the panel's
 // top edge on shorter (mobile) viewports.
 const TARGET = new THREE.Vector3(BOX / 2, 1.5, BOX / 2 + 1);
-const HOME_CAM = new THREE.Vector3(BOX / 2 + 2.6, 16.6, BOX / 2 + 20.7);
+// Camera sits directly on the +Z side of TARGET (no X offset) so the two
+// floor axes land on cardinal screen directions: cost of inaction (+X)
+// reads left-to-right (east), importance (+Z) recedes away from the
+// viewer toward the top of the panel (its near/high end reads south).
+const HOME_CAM = new THREE.Vector3(BOX / 2, 16.6, BOX / 2 + 20.7);
 // Radius of a sphere around TARGET that comfortably covers the floor's
 // corners (± icon size). Used to re-derive camera distance from the
 // viewport's actual aspect ratio — a portrait phone panel has a much
@@ -340,11 +344,6 @@ export class Graph3D {
     if (!this.renderer) this.init();
     if (!this.renderer) return;
 
-    // On narrow (mobile) panels the same icon footprint covers a much bigger
-    // share of the grid, so more nodes visually collide — shrink icons a bit
-    // below ~480px of panel width instead of rendering them full desktop size.
-    const sizeScale = Math.max(0.62, Math.min(1, (this.el.clientWidth || 480) / 480));
-
     for (const m of this.nodeMeshes) {
       if (m.userData.iconObj) { m.userData.iconObj.element.remove(); m.remove(m.userData.iconObj); }
       m.material.dispose();
@@ -365,6 +364,16 @@ export class Graph3D {
     const actions = list.filter((t) => kindOf(t) === 'action');
     const outcomes = list.filter((t) => kindOf(t) === 'outcome');
     const idents = list.filter((t) => kindOf(t) === 'identity');
+
+    // Icons need to shrink on two independent axes: a narrow (mobile) panel
+    // makes the same icon footprint cover a much bigger share of the grid,
+    // and a crowded board (many action nodes sharing the 10-unit floor) means
+    // less room per icon regardless of screen size. Combine both instead of
+    // just the panel-width factor, which wasn't enough on boards with 20+
+    // actions even at full desktop width.
+    const widthFactor = Math.min(1, (this.el.clientWidth || 480) / 480);
+    const densityFactor = Math.min(1, 12 / Math.max(1, actions.length));
+    const sizeScale = Math.max(0.4, widthFactor * densityFactor);
 
     // Floor plane: X = cost of inaction, Z = importance (percentile-ranked so
     // tie-heavy boards fan out). Action nodes sit flat on the floor.
@@ -443,6 +452,8 @@ export class Graph3D {
         // vision / stance: a faint serif name floating behind the field, no metrics
         el.classList.add('is-identity');
         el.textContent = t.name || `Task ${id}`;
+        el.style.fontSize = `${Math.round(13 * sizeScale)}px`;
+        el.style.maxWidth = `${Math.round(160 * sizeScale)}px`;
       } else if (k === 'outcome') {
         // goal: coloured ring on the horizon, sized/lit by roll-up progress
         el.classList.add('is-outcome');
