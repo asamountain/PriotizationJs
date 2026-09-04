@@ -82,32 +82,12 @@ class Database {
         meta JSONB
       );
 
-      CREATE TABLE IF NOT EXISTS income_pipelines (
-        id SERIAL PRIMARY KEY,
-        user_id TEXT REFERENCES users(id),
-        name TEXT NOT NULL,
-        status_note TEXT,
-        next_step_note TEXT,
-        leverage_note TEXT,
-        sort_order INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS income_checkins (
-        id SERIAL PRIMARY KEY,
-        pipeline_id INTEGER NOT NULL REFERENCES income_pipelines(id) ON DELETE CASCADE,
-        checkin_date DATE NOT NULL,
-        UNIQUE(pipeline_id, checkin_date)
-      );
-
       CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
       CREATE INDEX IF NOT EXISTS idx_task_relationships_user_id ON task_relationships(user_id);
       CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
       CREATE INDEX IF NOT EXISTS idx_events_event ON events(event);
-      CREATE INDEX IF NOT EXISTS idx_income_pipelines_user_id ON income_pipelines(user_id);
-      CREATE INDEX IF NOT EXISTS idx_income_checkins_pipeline_id ON income_checkins(pipeline_id);
     `;
     await this.pool.query(query);
     
@@ -349,85 +329,6 @@ class Database {
     await this.query("UPDATE task_relationships SET user_id = $1 WHERE user_id IS NULL", [userId]);
   }
 
-  // Same "first ever user" gate as claimLegacyDataIfFirstUser: only the
-  // founding account gets the starter pipelines seeded for them. Anyone who
-  // signs up later starts with an empty pipeline list of their own.
-  async seedDefaultPipelinesIfFirstUser(userId) {
-    const [{ count }] = await this.query("SELECT COUNT(*)::int AS count FROM users");
-    if (count > 1) return;
-    const existing = await this.query("SELECT id FROM income_pipelines WHERE user_id = $1 LIMIT 1", [userId]);
-    if (existing.length) return;
-    const defaults = [
-      '땅 농사 (올리브 syntropic 농장)',
-      '웹서비스 (prioritizationJS)',
-      '유튜브/콘텐츠',
-      '센서/IoT 제품 판매',
-      '배당금 (투자)',
-      '스톡영상 판매'
-    ];
-    for (let i = 0; i < defaults.length; i++) {
-      await this.query(
-        "INSERT INTO income_pipelines (user_id, name, sort_order) VALUES ($1, $2, $3)",
-        [userId, defaults[i], i]
-      );
-    }
-  }
-
-  async getPipelines(userId) {
-    const pipelines = await this.query(
-      "SELECT * FROM income_pipelines WHERE user_id = $1 ORDER BY sort_order, id",
-      [userId]
-    );
-    if (!pipelines.length) return [];
-    const ids = pipelines.map((p) => p.id);
-    const checkins = await this.query(
-      "SELECT pipeline_id, TO_CHAR(checkin_date, 'YYYY-MM-DD') AS d FROM income_checkins WHERE pipeline_id = ANY($1::int[])",
-      [ids]
-    );
-    const byPipeline = new Map();
-    for (const c of checkins) {
-      if (!byPipeline.has(c.pipeline_id)) byPipeline.set(c.pipeline_id, []);
-      byPipeline.get(c.pipeline_id).push(c.d);
-    }
-    return pipelines.map((p) => ({ ...p, checkin_dates: (byPipeline.get(p.id) || []).sort() }));
-  }
-
-  async addPipeline(name, userId) {
-    const rows = await this.query(
-      `INSERT INTO income_pipelines (user_id, name, sort_order)
-       VALUES ($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM income_pipelines WHERE user_id = $1))
-       RETURNING id`,
-      [userId, name]
-    );
-    return rows[0].id;
-  }
-
-  async updatePipeline(p) {
-    await this.query(
-      "UPDATE income_pipelines SET name = $2, status_note = $3, next_step_note = $4, leverage_note = $5 WHERE id = $1",
-      [p.id, p.name, p.status_note || null, p.next_step_note || null, p.leverage_note || null]
-    );
-  }
-
-  async deletePipeline(id) {
-    await this.query("DELETE FROM income_pipelines WHERE id = $1", [id]);
-  }
-
-  async togglePipelineCheckin(pipelineId, dateStr) {
-    const existing = await this.query(
-      "SELECT id FROM income_checkins WHERE pipeline_id = $1 AND checkin_date = $2",
-      [pipelineId, dateStr]
-    );
-    if (existing.length) {
-      await this.query("DELETE FROM income_checkins WHERE id = $1", [existing[0].id]);
-    } else {
-      await this.query(
-        "INSERT INTO income_checkins (pipeline_id, checkin_date) VALUES ($1, $2) ON CONFLICT (pipeline_id, checkin_date) DO NOTHING",
-        [pipelineId, dateStr]
-      );
-    }
-  }
-
   async removeTaskRelationship(enablerId, enabledId) {
     await this.query("DELETE FROM task_relationships WHERE enabler_task_id = $1 AND enabled_task_id = $2", [enablerId, enabledId]);
   }
@@ -549,12 +450,6 @@ export const updateTaskStatus = (id, s) => database.updateTaskStatus(id, s);
 export const updateTaskIcon = (id, i) => database.updateTaskIcon(id, i);
 export const upsertUser = (u) => database.upsertUser(u);
 export const claimLegacyDataIfFirstUser = (userId) => database.claimLegacyDataIfFirstUser(userId);
-export const seedDefaultPipelinesIfFirstUser = (userId) => database.seedDefaultPipelinesIfFirstUser(userId);
-export const getPipelines = (userId) => database.getPipelines(userId);
-export const addPipeline = (name, userId) => database.addPipeline(name, userId);
-export const updatePipeline = (p) => database.updatePipeline(p);
-export const deletePipeline = (id) => database.deletePipeline(id);
-export const togglePipelineCheckin = (pipelineId, dateStr) => database.togglePipelineCheckin(pipelineId, dateStr);
 export const addTaskRelationship = (e, d, u) => database.addTaskRelationship(e, d, u);
 export const removeTaskRelationship = (e, d) => database.removeTaskRelationship(e, d);
 export const getTasksEnabledBy = (id) => database.getTasksEnabledBy(id);

@@ -70,7 +70,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const app = Vue.createApp({
     data() {
       return {
-        navView: (typeof window !== 'undefined' && window.innerWidth <= 700) ? 'hierarchy' : 'graph', // left rail: 'graph' | 'hierarchy' | 'pipelines' | 'settings'; phones open to the list
+        navView: (typeof window !== 'undefined' && window.innerWidth <= 700) ? 'hierarchy' : 'graph', // left rail: 'graph' | 'hierarchy' | 'settings'; phones open to the list
         tasks: [],
         activeTasks: [],
         completedTasks: [],
@@ -218,11 +218,6 @@ window.addEventListener('DOMContentLoaded', () => {
         },
         showLoginGate: false,
         isSigningIn: false,
-        // Income pipelines
-        pipelines: [],
-        newPipelineName: '',
-        editingPipelineId: null,
-        pipelineDraft: { name: '', status_note: '', next_step_note: '', leverage_note: '' },
         hoveredTaskId: null,
         heartbeatInterval: null,
         isSessionExpired: false
@@ -334,9 +329,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         
         return this.sortTasks(filteredTasks);
-      },
-      checkedInTodayCount() {
-        return this.pipelines.filter(p => this.pipelineCheckedToday(p)).length;
       },
       todayLabel() {
         return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
@@ -1646,7 +1638,6 @@ window.addEventListener('DOMContentLoaded', () => {
         if (this.socket && this.user && this.user.id) {
           console.log('Authenticating socket for user:', this.user.id);
           this.socket.emit('authenticate', this.user.id);
-          this.socket.emit('requestPipelines');
         }
       },
 
@@ -1690,60 +1681,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
       logout() {
         window.location.href = '/auth/logout';
-      },
-
-      // Income pipelines — daily check-in date is computed client-side so
-      // "today" follows the user's own timezone, not the server's.
-      localDateStr(d) {
-        const date = d || new Date();
-        const tz = date.getTimezoneOffset() * 60000;
-        return new Date(date - tz).toISOString().slice(0, 10);
-      },
-      pipelineCheckedToday(p) {
-        return (p.checkin_dates || []).includes(this.localDateStr());
-      },
-      pipelineStreak(p) {
-        const set = new Set(p.checkin_dates || []);
-        let cursor = new Date();
-        if (!set.has(this.localDateStr(cursor))) cursor.setDate(cursor.getDate() - 1);
-        let streak = 0;
-        while (set.has(this.localDateStr(cursor))) {
-          streak++;
-          cursor.setDate(cursor.getDate() - 1);
-        }
-        return streak;
-      },
-      addPipeline() {
-        const name = (this.newPipelineName || '').trim();
-        if (!name || !this.socket) return;
-        this.socket.emit('addPipeline', name);
-        this.newPipelineName = '';
-      },
-      openPipelineEdit(p) {
-        this.editingPipelineId = p.id;
-        this.pipelineDraft = {
-          name: p.name,
-          status_note: p.status_note || '',
-          next_step_note: p.next_step_note || '',
-          leverage_note: p.leverage_note || ''
-        };
-      },
-      closePipelineEdit() {
-        this.editingPipelineId = null;
-      },
-      savePipelineEdit(id) {
-        if (!this.socket) return;
-        this.socket.emit('updatePipeline', { id, ...this.pipelineDraft });
-        this.editingPipelineId = null;
-      },
-      deletePipeline(id) {
-        if (!this.socket) return;
-        if (!confirm('Delete this pipeline?')) return;
-        this.socket.emit('deletePipeline', id);
-      },
-      togglePipelineCheckin(p) {
-        if (!this.socket) return;
-        this.socket.emit('togglePipelineCheckin', { pipelineId: p.id, date: this.localDateStr() });
       },
 
       updateTaskIcon(task, icon) {
@@ -1944,10 +1881,6 @@ window.addEventListener('DOMContentLoaded', () => {
       // required (it won't hand out task data over the socket either way).
       this.socket.on('authRequired', () => {
         this.showLoginGate = true;
-      });
-
-      this.socket.on('pipelines', (payload) => {
-        this.pipelines = (payload && payload.data) || [];
       });
 
       // All enabler->enabled relationships, for the 3D impact graph

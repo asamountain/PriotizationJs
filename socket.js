@@ -517,59 +517,6 @@ const setupSocket = (io) => {
       }
     });
 
-    // Income pipelines: a per-user feature added after multi-user support,
-    // so unlike tasks there's no anonymous fallback pool — requires a real
-    // authenticated socket.userId for every operation.
-    socket.on("requestPipelines", async () => {
-      if (!socket.userId) { socket.emit("pipelines", { data: [] }); return; }
-      try {
-        socket.emit("pipelines", { data: await database.getPipelines(socket.userId) });
-      } catch (error) {
-        console.error("Failed to fetch pipelines:", error);
-        socket.emit("pipelines", { data: [] });
-      }
-    });
-
-    socket.on("addPipeline", async (name) => {
-      if (!socket.userId || !name) return;
-      try {
-        await database.addPipeline(name, socket.userId);
-        socket.emit("pipelines", { data: await database.getPipelines(socket.userId) });
-      } catch (error) {
-        console.error("Failed to add pipeline:", error);
-      }
-    });
-
-    socket.on("updatePipeline", async (pipeline) => {
-      if (!socket.userId) return;
-      try {
-        await database.updatePipeline(pipeline);
-        socket.emit("pipelines", { data: await database.getPipelines(socket.userId) });
-      } catch (error) {
-        console.error("Failed to update pipeline:", error);
-      }
-    });
-
-    socket.on("deletePipeline", async (id) => {
-      if (!socket.userId) return;
-      try {
-        await database.deletePipeline(id);
-        socket.emit("pipelines", { data: await database.getPipelines(socket.userId) });
-      } catch (error) {
-        console.error("Failed to delete pipeline:", error);
-      }
-    });
-
-    socket.on("togglePipelineCheckin", async ({ pipelineId, date }) => {
-      if (!socket.userId) return;
-      try {
-        await database.togglePipelineCheckin(pipelineId, date);
-        socket.emit("pipelines", { data: await database.getPipelines(socket.userId) });
-      } catch (error) {
-        console.error("Failed to toggle pipeline checkin:", error);
-      }
-    });
-
     socket.on("disconnect", () => {
       console.log("Client disconnected");
     });

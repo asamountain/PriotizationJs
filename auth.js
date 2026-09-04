@@ -2,7 +2,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
-import { upsertUser, claimLegacyDataIfFirstUser, seedDefaultPipelinesIfFirstUser } from './db.js';
+import { upsertUser, claimLegacyDataIfFirstUser } from './db.js';
 
 const PgSession = connectPgSimple(session);
 
@@ -82,7 +82,6 @@ export function setupAuth(app) {
                 // steps must never block or fail the actual login.
                 try {
                     await claimLegacyDataIfFirstUser(userData.id);
-                    await seedDefaultPipelinesIfFirstUser(userData.id);
                 } catch (secondaryError) {
                     console.error('Auth Debug: non-critical post-login step failed (login still proceeds):', secondaryError);
                 }
