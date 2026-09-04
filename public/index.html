@@ -912,6 +912,48 @@
         outline: 2px dashed #111;
         outline-offset: -2px;
       }
+      /* "눈금" — a ruler-style tick on every valid move destination while a
+         move (drag or tap-to-pick) is in progress; solid once it's the
+         current drop target. */
+      .task-item.is-move-candidate { position: relative; }
+      .task-item.is-move-candidate::before {
+        content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px;
+        background: repeating-linear-gradient(to bottom, #bbb 0, #bbb 3px, transparent 3px, transparent 7px);
+      }
+      .task-item.is-drop-target::before { background: #111; width: 4px; }
+
+      /* Radial command popup */
+      .radial-backdrop {
+        position: fixed; inset: 0; z-index: 300;
+        background: rgba(255, 255, 255, .45);
+      }
+      .radial-menu { position: fixed; width: 0; height: 0; }
+      .radial-menu__btn {
+        position: absolute; left: 0; top: 0; margin-left: -22px; margin-top: -22px;
+        width: 44px; height: 44px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #fff; border: 1px solid #111; color: #111;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, .15); cursor: pointer;
+      }
+      .radial-menu__btn.is-danger { color: #e5484d; border-color: #e5484d; }
+      .radial-menu__btn.is-on { background: #111; color: #fff; }
+      .radial-menu__center {
+        position: absolute; left: 0; top: 0; margin-left: -16px; margin-top: -16px;
+        width: 32px; height: 32px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f4f4f4; border: 1px solid #ccc; color: #666; cursor: pointer;
+      }
+      .radial-subpanel {
+        position: fixed; transform: translate(-50%, 28px);
+        display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+        max-width: 220px; padding: 10px; border: 1px solid #111; background: #fff;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .18); z-index: 301;
+      }
+      .radial-subpanel__item, .radial-subpanel__swatch {
+        width: 32px; height: 32px; border-radius: 50%; border: 1px solid #ccc;
+        background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;
+      }
+      .radial-subpanel__item.is-on { border-color: #111; background: #111; color: #fff; }
 
       .task-metrics-group {
         display: flex;

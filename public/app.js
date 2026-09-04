@@ -598,6 +598,19 @@ window.addEventListener('DOMContentLoaded', () => {
           graph3d.focusOnTask(task.id);
         }
       },
+      // Normal row tap, unless a "Move to another task" is pending — then
+      // the tap picks the destination (or cancels, if you tap the task
+      // that's being moved).
+      onTaskRowClick(task) {
+        if (this.touchDrag && this.touchDrag.mode === 'pending') {
+          const dragTaskId = this.touchDrag.taskId;
+          this.touchDrag = null;
+          if (task.id === dragTaskId) return;
+          this.touchReparentTask(dragTaskId, task);
+          return;
+        }
+        this.selectTask(task);
+      },
 
       // inline <svg> for a Lucide icon name (old mdi-* values fall back to a dot)
       iconSvg(name) {
@@ -1803,39 +1816,6 @@ window.addEventListener('DOMContentLoaded', () => {
         return 'success';
       },
 
-      indentTask(task) {
-        // Find siblings at the same level, in the order actually shown on
-        // screen (whatever sort is active) — not raw array/creation order,
-        // which "the task above it" silently ignored before.
-        const siblings = this.sortTasks(this.tasks.filter(t => t.parent_id === task.parent_id));
-        const currentIndex = siblings.findIndex(t => t.id === task.id);
-        
-        if (currentIndex > 0) {
-          const previousSibling = siblings[currentIndex - 1];
-          this.socket.emit('setTaskParent', {
-            taskId: task.id,
-            parentId: previousSibling.id
-          });
-          this.expandedTasks.add(previousSibling.id);
-          this.expandedTasks = new Set(this.expandedTasks);
-          this.showNotification(`Moved "${task.name}" inside "${previousSibling.name}"`, 'success');
-        } else {
-          this.showNotification('No task above to indent under', 'warning');
-        }
-      },
-
-      outdentTask(task) {
-        if (!task.parent_id) return;
-
-        const parentTask = this.tasks.find(t => t.id === task.parent_id);
-        const grandParentId = parentTask ? parentTask.parent_id : null;
-
-        this.socket.emit('setTaskParent', {
-          taskId: task.id,
-          parentId: grandParentId
-        });
-        this.showNotification(`Moved "${task.name}" to parent level`, 'info');
-      },
 
       checkFirstVisit() {
         const hasVisited = localStorage.getItem('hasVisitedPriorityManager');
@@ -2437,6 +2417,7 @@ window.addEventListener('DOMContentLoaded', () => {
       return {
         longPressTimer: null,
         longPressMenu: false,
+        radialSubPanel: null,
         menuX: 0,
         menuY: 0,
         isPressing: false
@@ -2450,12 +2431,13 @@ window.addEventListener('DOMContentLoaded', () => {
       >
         <v-list-item
           :value="task.id"
-          @click="$root.selectTask(task)"
+          @click="$root.onTaskRowClick(task)"
           @dblclick="$root.showAddSubtaskForm(task.id)"
           :data-task-id="task.id"
           :class="['task-item', depth > 0 ? 'subtask' : '', task.active_timer_start ? 'timer-active' : '',
                    $root.touchDrag && $root.touchDrag.taskId === task.id ? 'is-dragging' : '',
-                   $root.touchDrag && $root.touchDrag.overTaskId === task.id ? 'is-drop-target' : '']"
+                   $root.touchDrag && $root.touchDrag.overTaskId === task.id ? 'is-drop-target' : '',
+                   $root.touchDrag && $root.touchDrag.taskId !== task.id ? 'is-move-candidate' : '']"
           :style="rowStyle"
           draggable="true"
           @dragstart="$root.handleDragStart(task, $event)"
@@ -2468,152 +2450,59 @@ window.addEventListener('DOMContentLoaded', () => {
           @pointerup="onPressEnd"
           @pointercancel="onPressEnd"
         >
-          <!-- Hidden anchor for the menu positioning -->
-          <div 
-            ref="menuAnchor" 
-            :style="{ position: 'fixed', left: menuX + 'px', top: menuY + 'px', width: '1px', height: '1px', pointerEvents: 'none' }"
-          ></div>
+          <!-- Radial command popup: replaces the old scrolling list-menu.
+               Appears centred on the press point; "Move" starts a pending
+               reparent that's completed by tapping the destination task. -->
+          <teleport to="body">
+            <div v-if="longPressMenu" class="radial-backdrop" @click="closeRadial">
+              <div class="radial-menu" :style="{ left: menuX + 'px', top: menuY + 'px' }" @click.stop>
+                <button
+                  v-for="(item, i) in radialItems"
+                  :key="item.key"
+                  type="button"
+                  class="radial-menu__btn"
+                  :class="{ 'is-danger': item.key === 'delete', 'is-on': item.active }"
+                  :style="radialBtnStyle(i, radialItems.length)"
+                  :title="item.label"
+                  @click="onRadialAction(item.key)"
+                >
+                  <v-icon size="20">{{ item.icon }}</v-icon>
+                </button>
+                <button type="button" class="radial-menu__center" title="Close" @click="closeRadial">
+                  <v-icon size="16">mdi-close</v-icon>
+                </button>
+              </div>
 
-          <!-- Mode Selection Menu (Comprehensive Command Menu) -->
-          <v-menu
-            v-model="longPressMenu"
-            :activator="$refs.menuAnchor"
-            offset="10"
-            transition="scale-transition"
-          >
-            <v-list density="compact" elevation="15" rounded="xl" min-width="220" class="py-2">
-              <v-list-subheader class="text-uppercase font-weight-bold text-xxs px-4">Mode / Status</v-list-subheader>
-              
-              <!-- Icon Picker Sub-menu -->
-              <v-menu location="end top" open-on-hover offset="5">
-                <template v-slot:activator="{ props }">
-                  <v-list-item v-bind="props" class="pe-2">
-                    <template v-slot:prepend>
-                      <v-icon :color="getPriorityColor(task.importance)" size="small">
-                        {{ task.icon || 'mdi-circle-outline' }}
-                      </v-icon>
-                    </template>
-                    <v-list-item-title>Change Icon</v-list-item-title>
-                    <template v-slot:append><v-icon size="x-small">mdi-chevron-right</v-icon></template>
-                  </v-list-item>
-                </template>
-                <v-card max-width="240" class="pa-2" elevation="10" rounded="lg">
-                  <div class="d-flex flex-wrap gap-1 justify-center">
-                    <v-btn
-                      v-for="icon in $root.availableIcons"
-                      :key="icon"
-                      icon
-                      size="x-small"
-                      variant="text"
-                      @click.stop="$root.updateTaskIcon(task, icon)"
-                      :color="task.icon === icon ? 'primary' : ''"
-                      :title="icon.replace('mdi-', '')"
-                    >
-                      <v-icon size="18">{{ icon }}</v-icon>
-                    </v-btn>
-                  </div>
-                </v-card>
-              </v-menu>
+              <div v-if="radialSubPanel === 'icon'" class="radial-subpanel" :style="{ left: menuX + 'px', top: menuY + 'px' }" @click.stop>
+                <button
+                  v-for="icon in $root.availableIcons"
+                  :key="icon"
+                  type="button"
+                  class="radial-subpanel__item"
+                  :class="{ 'is-on': task.icon === icon }"
+                  :title="icon.replace('mdi-', '')"
+                  @click="$root.updateTaskIcon(task, icon); closeRadial()"
+                >
+                  <v-icon size="18">{{ icon }}</v-icon>
+                </button>
+              </div>
 
-              <!-- Color Picker Sub-menu -->
-              <v-menu location="end top" open-on-hover offset="5">
-                <template v-slot:activator="{ props }">
-                  <v-list-item v-bind="props" class="pe-2">
-                    <template v-slot:prepend>
-                      <v-icon :color="task.color || 'grey'" size="small">
-                        mdi-palette
-                      </v-icon>
-                    </template>
-                    <v-list-item-title>Change Color</v-list-item-title>
-                    <template v-slot:append><v-icon size="x-small">mdi-chevron-right</v-icon></template>
-                  </v-list-item>
-                </template>
-                <v-card max-width="240" class="pa-2" elevation="10" rounded="lg">
-                  <div class="d-flex flex-wrap gap-1 justify-center">
-                    <v-btn
-                      v-for="color in $root.availableColors"
-                      :key="color.value"
-                      icon
-                      size="x-small"
-                      @click.stop="$root.updateTaskColor(task, color.value)"
-                      :color="color.value"
-                      :title="color.name"
-                      variant="flat"
-                    >
-                    </v-btn>
-                    <v-btn
-                      icon
-                      size="x-small"
-                      @click.stop="$root.updateTaskColor(task, null)"
-                      title="Clear Color"
-                      variant="outlined"
-                    >
-                      <v-icon size="14">mdi-close</v-icon>
-                    </v-btn>
-                  </div>
-                </v-card>
-              </v-menu>
-
-              <v-list-item @click="$root.toggleNotSure(task)" :active="task.status === 'Not Sure'" :color="task.status === 'Not Sure' ? 'warning' : ''">
-                <template v-slot:prepend><v-icon :color="task.status === 'Not Sure' ? 'warning' : 'grey'" size="small">mdi-help-circle</v-icon></template>
-                <v-list-item-title>Not Sure Mode</v-list-item-title>
-              </v-list-item>
-
-              <v-divider class="my-1"></v-divider>
-              <v-list-subheader class="text-uppercase font-weight-bold text-xxs px-4">Actions</v-list-subheader>
-              
-              <v-list-item @click="$root.toggleTimer(task)">
-                <template v-slot:prepend>
-                  <v-icon :color="task.active_timer_start ? 'error' : 'success'" size="small">
-                    {{ task.active_timer_start ? 'mdi-stop-circle' : 'mdi-play-circle' }}
-                  </v-icon>
-                </template>
-                <v-list-item-title>{{ task.active_timer_start ? 'Stop Timer' : 'Start Timer' }}</v-list-item-title>
-              </v-list-item>
-
-              <v-list-item @click="$root.showAddSubtaskForm(task.id)">
-                <template v-slot:prepend><v-icon size="small">mdi-plus</v-icon></template>
-                <v-list-item-title>Add Subtask</v-list-item-title>
-              </v-list-item>
-
-              <v-list-item @click="depth === 0 ? $root.editTask(task) : $root.editSubtask(task)">
-                <template v-slot:prepend><v-icon size="small">mdi-pencil</v-icon></template>
-                <v-list-item-title>Edit Details</v-list-item-title>
-              </v-list-item>
-
-              <v-list-item @click="$root.editTaskNotes(task)">
-                <template v-slot:prepend><v-icon size="small">mdi-note-edit</v-icon></template>
-                <v-list-item-title>Notes</v-list-item-title>
-              </v-list-item>
-
-              <v-divider class="my-1"></v-divider>
-              <v-list-subheader class="text-uppercase font-weight-bold text-xxs px-4">Hierarchy</v-list-subheader>
-              
-              <v-list-item @click="$root.indentTask(task)">
-                <template v-slot:prepend><v-icon size="small">mdi-format-indent-increase</v-icon></template>
-                <v-list-item-title>Move In (Indent)</v-list-item-title>
-              </v-list-item>
-
-              <v-list-item v-if="task.parent_id" @click="$root.outdentTask(task)">
-                <template v-slot:prepend><v-icon size="small">mdi-format-indent-decrease</v-icon></template>
-                <v-list-item-title>Move Out (Outdent)</v-list-item-title>
-              </v-list-item>
-
-              <v-divider class="my-1"></v-divider>
-              <v-list-subheader class="text-uppercase font-weight-bold text-xxs px-4">Relationships</v-list-subheader>
-              
-              <v-list-item @click="$root.editTask(task)">
-                <template v-slot:prepend><v-icon color="purple" size="small">mdi-chart-network</v-icon></template>
-                <v-list-item-title>Edit Influences</v-list-item-title>
-              </v-list-item>
-
-              <v-divider class="my-1"></v-divider>
-              <v-list-item @click="$root.deleteTask(task.id, task.name)" class="text-error">
-                <template v-slot:prepend><v-icon color="error" size="small">mdi-delete</v-icon></template>
-                <v-list-item-title class="font-weight-bold">Delete Task</v-list-item-title>
-              </v-list-item>
-            </v-list>
-          </v-menu>
+              <div v-if="radialSubPanel === 'color'" class="radial-subpanel" :style="{ left: menuX + 'px', top: menuY + 'px' }" @click.stop>
+                <button
+                  v-for="color in $root.availableColors"
+                  :key="color.value"
+                  type="button"
+                  class="radial-subpanel__swatch"
+                  :style="{ background: color.value }"
+                  :title="color.name"
+                  @click="$root.updateTaskColor(task, color.value); closeRadial()"
+                ></button>
+                <button type="button" class="radial-subpanel__item" title="Clear color" @click="$root.updateTaskColor(task, null); closeRadial()">
+                  <v-icon size="14">mdi-close</v-icon>
+                </button>
+              </div>
+            </div>
+          </teleport>
 
           <template v-slot:prepend>
             <div class="d-flex align-center toggle-junction gap-2 me-3">
@@ -2734,22 +2623,40 @@ window.addEventListener('DOMContentLoaded', () => {
         return this.$root.hoveredTaskId === this.task.id || this.$root.hoveredTaskAncestors.has(this.task.id);
       },
       rowStyle() {
-        const style = { cursor: 'grab' };
+        const style = { cursor: 'grab', position: 'relative' };
         if (this.task.color) {
           style.backgroundColor = this.task.color + '15';
           style.borderLeft = '4px solid ' + this.task.color;
         }
         const drag = this.$root.touchDrag;
         if (drag && drag.taskId === this.task.id) {
-          style.transform = `translate(${drag.curX - drag.startX}px, ${drag.curY - drag.startY}px) scale(1.02)`;
-          style.zIndex = 50;
-          style.boxShadow = '0 8px 24px rgba(0,0,0,.18)';
-          style.position = 'relative';
-          style.opacity = 0.92;
-        } else {
-          style.position = 'relative';
+          // Being moved: fade it, don't darken it — no shadow/scale, just
+          // low opacity so it still reads as itself.
+          style.opacity = 0.45;
+          if (drag.mode === 'drag') {
+            style.transform = `translate(${drag.curX - drag.startX}px, ${drag.curY - drag.startY}px)`;
+            style.zIndex = 50;
+          }
         }
         return style;
+      },
+      // Icon-only radial popup, replacing the old scrolling list-menu.
+      // "Move" starts a pending reparent (see beginPendingMove) instead of
+      // the old positional Move In/Out — pick the exact destination task by
+      // tapping it, no ambiguity about what's "above" it in the sort order.
+      radialItems() {
+        const t = this.task;
+        return [
+          { key: 'icon', icon: t.icon || 'mdi-circle-outline', label: 'Icon' },
+          { key: 'color', icon: 'mdi-palette', label: 'Color' },
+          { key: 'move', icon: 'mdi-cursor-move', label: 'Move to another task' },
+          { key: 'addSubtask', icon: 'mdi-plus', label: 'Add Subtask' },
+          { key: 'edit', icon: 'mdi-pencil', label: 'Edit Details' },
+          { key: 'notes', icon: 'mdi-note-edit', label: 'Notes' },
+          { key: 'timer', icon: t.active_timer_start ? 'mdi-stop-circle' : 'mdi-play-circle', label: t.active_timer_start ? 'Stop Timer' : 'Start Timer' },
+          { key: 'notSure', icon: 'mdi-help-circle', label: 'Not Sure', active: t.status === 'Not Sure' },
+          { key: 'delete', icon: 'mdi-delete', label: 'Delete' }
+        ];
       }
     },
     methods: {
@@ -2789,7 +2696,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (this._gestureStartX == null) return;
         const root = this.$root;
 
-        if (root.touchDrag && root.touchDrag.taskId === this.task.id) {
+        if (root.touchDrag && root.touchDrag.mode === 'drag' && root.touchDrag.taskId === this.task.id) {
           e.preventDefault();
           root.touchDrag.curX = e.clientX;
           root.touchDrag.curY = e.clientY;
@@ -2800,13 +2707,14 @@ window.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        if (this._gesturePointerType !== 'touch' || this._dragStarted) return;
+        if (this._gesturePointerType !== 'touch' || this._dragStarted || root.touchDrag) return;
         const dx = e.clientX - this._gestureStartX;
         const dy = e.clientY - this._gestureStartY;
         if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.3) {
           this._dragStarted = true;
           this.endPress();
           root.touchDrag = {
+            mode: 'drag',
             taskId: this.task.id,
             taskName: this.task.name,
             startX: this._gestureStartX,
@@ -2821,7 +2729,7 @@ window.addEventListener('DOMContentLoaded', () => {
       onPressEnd(e) {
         this.endPress();
         const root = this.$root;
-        if (root.touchDrag && root.touchDrag.taskId === this.task.id) {
+        if (root.touchDrag && root.touchDrag.mode === 'drag' && root.touchDrag.taskId === this.task.id) {
           const overId = root.touchDrag.overTaskId;
           root.touchDrag = null;
           if (overId) {
@@ -2831,6 +2739,45 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         this._gestureStartX = null;
         this._dragStarted = false;
+      },
+      radialBtnStyle(i, n) {
+        const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+        const radius = 84;
+        return { transform: `translate(${Math.cos(angle) * radius}px, ${Math.sin(angle) * radius}px)` };
+      },
+      onRadialAction(key) {
+        const root = this.$root;
+        switch (key) {
+          case 'icon': this.radialSubPanel = 'icon'; return;
+          case 'color': this.radialSubPanel = 'color'; return;
+          case 'move': this.beginPendingMove(); return;
+          case 'notSure': root.toggleNotSure(this.task); break;
+          case 'timer': root.toggleTimer(this.task); break;
+          case 'addSubtask': root.showAddSubtaskForm(this.task.id); break;
+          case 'edit': (this.depth === 0 ? root.editTask(this.task) : root.editSubtask(this.task)); break;
+          case 'notes': root.editTaskNotes(this.task); break;
+          case 'delete': root.deleteTask(this.task.id, this.task.name); break;
+        }
+        this.closeRadial();
+      },
+      closeRadial() {
+        this.longPressMenu = false;
+        this.radialSubPanel = null;
+      },
+      // "Move" from the radial menu is a tap-to-select destination, not a
+      // live drag — the press that opened the menu is already over by the
+      // time you tap this button, so there's no finger left to track. Every
+      // other task row becomes a tap target (see $root.onTaskRowClick) until
+      // you tap one, or tap this task again to cancel.
+      beginPendingMove() {
+        this.closeRadial();
+        this.$root.touchDrag = {
+          mode: 'pending',
+          taskId: this.task.id,
+          taskName: this.task.name,
+          overTaskId: null
+        };
+        this.$root.showNotification(`Tap a task to move "${this.task.name}" under it (tap it again to cancel)`, 'info');
       },
       showModeMenu(e) {
         this.isPressing = false;
