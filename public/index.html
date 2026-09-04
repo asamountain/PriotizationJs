@@ -482,18 +482,15 @@
         color: var(--muted, #6b6b6b) !important; font-size: 12px !important;
         opacity: 1 !important;
       }
+      /* Tight rows: padding barely more than the text needs, and prepend/
+         append centred on the row (not top-aligned) so the bullet always
+         sits at exactly 50% of the row's own height — the same point the
+         tree tick below targets, as a percentage rather than a guessed
+         pixel offset, so it stays correct at any font size or zoom level. */
       .split-view-right .ed-list .task-item {
-        padding-top: 14px !important; padding-bottom: 14px !important;
-        align-items: flex-start !important;
-      }
-      /* Vuetify centers prepend/append on the item's full (possibly
-         2-line-wrapped) height by default, so the status circles floated in
-         the middle of the block instead of lining up with the title's first
-         line. Top-align them, then nudge down to the text's optical centre. */
-      .split-view-right .ed-list .task-item .v-list-item__prepend,
-      .split-view-right .ed-list .task-item .v-list-item__append {
-        align-self: flex-start !important;
-        padding-top: 3px !important;
+        padding-top: 4px !important; padding-bottom: 4px !important;
+        align-items: center !important;
+        position: relative !important;
       }
 
       /* Plain hollow/filled circle instead of the Material checkbox */
@@ -863,7 +860,6 @@
         align-items: center;
         justify-content: flex-start; /* predictable left edge, so the tree tick below lands exactly */
         gap: 4px; /* Tight gap for toggle group */
-        position: relative;
       }
       /* Force the expand chevron to the same footprint as the no-children
          placeholder div (also 24px) so the bullet always sits at the same
@@ -871,15 +867,18 @@
       .toggle-junction .expand-btn { width: 24px !important; height: 24px !important; }
       /* Tree tick: connects each subtask's bullet back to the vertical trunk
          line drawn by .subtasks-wrapper's border-left, the way the variant.com
-         reference does — the tick's left end lands exactly on the trunk
-         (task-item's own left padding, --space-2) and its right end lands
-         exactly on the bullet's left edge (past the 24px expand/placeholder
-         column + 4px gap), so there's no visible gap on either side. */
-      .task-item.subtask .toggle-junction::before {
+         reference does. Positioned at 50% of the ROW's own height (.task-item,
+         not the icon's sub-box) so it always lands on the bullet regardless of
+         font size or padding changes — a percentage, not a guessed pixel
+         offset. Left end lands exactly on the trunk (.task-item's own border-box
+         edge, which is also the trunk's x=0); right end reaches the bullet's
+         left edge, past the row's own left padding (--space-2) plus the 24px
+         expand/placeholder column and its 4px gap. */
+      .task-item.subtask::before {
         content: '';
         position: absolute;
         top: 50%;
-        left: calc(var(--space-2) * -1);
+        left: 0;
         width: calc(var(--space-2) + 24px + 4px);
         height: 1px;
         background: #ddd;
