@@ -214,6 +214,7 @@ window.addEventListener('DOMContentLoaded', () => {
         },
         showLoginGate: false,
         expandedQueueTaskId: null,
+        newSubtaskDraft: '',
         // Income pipelines
         pipelines: [],
         newPipelineName: '',
@@ -1420,6 +1421,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
       toggleQueueExpand(task) {
         this.expandedQueueTaskId = (this.expandedQueueTaskId === task.id) ? null : task.id;
+        this.newSubtaskDraft = '';
+      },
+      quickAddSubtask(parentTask) {
+        const name = (this.newSubtaskDraft || '').trim();
+        if (!name || !parentTask) return;
+        taskOperations.addSubtask({
+          name,
+          importance: 5,
+          cost_of_inaction: 5,
+          category: parentTask.category || null
+        }, parentTask.id);
+        this.newSubtaskDraft = '';
       },
       // Tasks this one directly ENABLES — read straight from the already-loaded
       // relationship graph, no extra round trip needed just to preview them.
