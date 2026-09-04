@@ -550,6 +550,12 @@
       }
       .split-view-right .ed-list .task-checkbox .v-selection-control__input::before { display: none !important; }
 
+      /* Sort dropdown: icon + label as a real flex row instead of one long
+         emoji+text string, so it stops truncating mid-word on narrow panels. */
+      .sort-select__row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+      .sort-select__icon { flex-shrink: 0; }
+      .sort-select__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
       /* ===== Editorial theme for EVERY Vuetify overlay (dialogs, menus, selects, sheets) ===== */
       .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-card,
       .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-list,
@@ -1481,13 +1487,30 @@
                                 <v-select
                                     v-model="taskSortBy"
                                     :items="taskSortOptions"
+                                    item-title="label"
+                                    item-value="value"
                                     label="Sort by"
                                     variant="underlined"
                                     density="compact"
                                     prepend-inner-icon="mdi-sort"
                                     hide-details
                                     class="minimal-select"
-                                ></v-select>
+                                >
+                                    <template v-slot:selection="{ item }">
+                                        <span class="sort-select__row">
+                                            <span class="sort-select__icon">{{ item.raw.icon }}</span>
+                                            <span class="sort-select__label">{{ item.raw.label }}</span>
+                                        </span>
+                                    </template>
+                                    <template v-slot:item="{ props: itemProps, item }">
+                                        <v-list-item v-bind="itemProps" title="">
+                                            <span class="sort-select__row">
+                                                <span class="sort-select__icon">{{ item.raw.icon }}</span>
+                                                <span class="sort-select__label">{{ item.raw.label }}</span>
+                                            </span>
+                                        </v-list-item>
+                                    </template>
+                                </v-select>
                             </div>
                             
                             <template v-if="activeTasks.length > 0">

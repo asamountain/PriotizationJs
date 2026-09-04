@@ -245,14 +245,14 @@ window.addEventListener('DOMContentLoaded', () => {
     computed: {
       taskSortOptions() {
         return [
-          { value: 'priority-high', title: '🔥 Priority — importance × inaction cost (High → Low)' },
-          { value: 'priority-low', title: '🔥 Priority — importance × inaction cost (Low → High)' },
-          { value: 'importance-high', title: '⭐ Importance (High → Low)' },
-          { value: 'importance-low', title: '⭐ Importance (Low → High)' },
-          { value: 'newest', title: '🆕 Newest First' },
-          { value: 'oldest', title: '📅 Oldest First' },
-          { value: 'due-date', title: '⏰ Due Date (Closest)' },
-          { value: 'name-az', title: '🔤 Name (A → Z)' }
+          { value: 'priority-high', icon: '🔥', label: 'Priority (High → Low)' },
+          { value: 'priority-low', icon: '🔥', label: 'Priority (Low → High)' },
+          { value: 'importance-high', icon: '⭐', label: 'Importance (High → Low)' },
+          { value: 'importance-low', icon: '⭐', label: 'Importance (Low → High)' },
+          { value: 'newest', icon: '🆕', label: 'Newest First' },
+          { value: 'oldest', icon: '📅', label: 'Oldest First' },
+          { value: 'due-date', icon: '⏰', label: 'Due Date (Closest)' },
+          { value: 'name-az', icon: '🔤', label: 'Name (A → Z)' }
         ];
       },
       hoveredTaskAncestors() {
@@ -595,14 +595,13 @@ window.addEventListener('DOMContentLoaded', () => {
         const n = (!name || String(name).startsWith('mdi-')) ? 'circle-dot' : name;
         return lucideSvg(n) || lucideSvg('circle-dot');
       },
-      // Priority rank: cost of inaction is the spine (it carries the "why now"
-      // signal); importance only modulates it by roughly +/- 50%. Unset COI is
-      // treated as a neutral 5. Scale is ~5..100 so the display bars and
-      // numbers stay calibrated.
+      // Priority = cost of inaction x importance, plain and simple. Both are
+      // 0..10 fields so the product tops out at 100 — same scale the display
+      // bars already assume. Unset COI defaults to a neutral 5.
       queueScore(task) {
         const coi = task.cost_of_inaction == null ? 5 : Number(task.cost_of_inaction);
         const imp = Number(task.importance || 0);
-        return coi * (5 + imp / 2);
+        return coi * imp;
       },
       resetGraphView() {
         if (graph3d) graph3d.resetView();
