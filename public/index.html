@@ -39,19 +39,23 @@
     <!-- Material Design Icons (still used internally by Vuetify components) -->
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
     <!-- Lucide icons (per-task icons + nav) -->
-    <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
     <!-- Roboto Font -->
     <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
     <!-- Pretendard (editorial + Hangul) -->
     <link href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" rel="stylesheet">
-    <!-- Socket.IO, D3, and ECharts Libraries -->
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
+    <!-- Socket.IO, D3, and ECharts Libraries. defer: these only run inside
+         app.js (a module, itself deferred) or DOMContentLoaded handlers, so
+         nothing needs them synchronously at parse time — defer lets the
+         browser fetch them in parallel and keep parsing the page instead of
+         blocking on each one in turn. Execution order is preserved. -->
+    <script defer src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script defer src="https://d3js.org/d3.v7.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
     <!-- Vue and Vuetify -->
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.css" rel="stylesheet">
     <style>
       :root {
