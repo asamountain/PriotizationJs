@@ -213,8 +213,6 @@ window.addEventListener('DOMContentLoaded', () => {
           googleEnabled: false
         },
         showLoginGate: false,
-        expandedQueueTaskId: null,
-        newSubtaskDraft: '',
         // Income pipelines
         pipelines: [],
         newPipelineName: '',
@@ -358,10 +356,6 @@ window.addEventListener('DOMContentLoaded', () => {
         
         return this.sortTasks(filteredTasks);
       },
-      priorityQueue() {
-        const list = (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure' && (t.kind || 'action') === 'action');
-        return [...list].sort((a, b) => this.queueScore(b) - this.queueScore(a)).slice(0, 12);
-      },
       horizonList() {
         const list = (this.activeTasks || []).filter(t => {
           const k = t.kind || 'action';
@@ -371,24 +365,8 @@ window.addEventListener('DOMContentLoaded', () => {
         return [...list].sort((a, b) =>
           rank(a.kind) - rank(b.kind) || Number(b.importance || 0) - Number(a.importance || 0));
       },
-      queueCount() {
-        return (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure' && (t.kind || 'action') === 'action').length;
-      },
       checkedInTodayCount() {
         return this.pipelines.filter(p => this.pipelineCheckedToday(p)).length;
-      },
-      // Finishing the #1 queue item is what's actually next; tasks it directly
-      // enables are what becomes doable right after — flag them persistently
-      // in the queue instead of only surfacing that at completion time.
-      nextUnlockedIds() {
-        const top = this.priorityQueue[0];
-        if (!top) return new Set();
-        const rels = this.allRelationships || [];
-        return new Set(
-          rels
-            .filter(r => Number(r.enabler_task_id) === Number(top.id))
-            .map(r => Number(r.enabled_task_id))
-        );
       },
       todayLabel() {
         return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
@@ -1422,31 +1400,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 300);
       },
 
-      toggleQueueExpand(task) {
-        this.expandedQueueTaskId = (this.expandedQueueTaskId === task.id) ? null : task.id;
-        this.newSubtaskDraft = '';
-      },
-      quickAddSubtask(parentTask) {
-        const name = (this.newSubtaskDraft || '').trim();
-        if (!name || !parentTask) return;
-        taskOperations.addSubtask({
-          name,
-          importance: 5,
-          cost_of_inaction: 5,
-          category: parentTask.category || null
-        }, parentTask.id);
-        this.newSubtaskDraft = '';
-      },
-      // Tasks this one directly ENABLES — read straight from the already-loaded
-      // relationship graph, no extra round trip needed just to preview them.
-      enabledSubtasks(task) {
-        const rels = this.allRelationships || [];
-        const byId = new Map((this.tasks || []).map(t => [Number(t.id), t]));
-        return rels
-          .filter(r => Number(r.enabler_task_id) === Number(task.id))
-          .map(r => byId.get(Number(r.enabled_task_id)))
-          .filter(Boolean);
-      },
       selectQueueTask(task, ev) {
         if (!task) return;
         track('queue_click', task.kind || 'action');
