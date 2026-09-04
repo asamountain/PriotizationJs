@@ -2053,6 +2053,16 @@
                                 class="mb-3"
                             ></v-select>
 
+                            <v-select
+                                v-model="editingTask.parent_id"
+                                :items="possibleParents"
+                                item-title="name"
+                                item-value="id"
+                                label="Parent Task"
+                                variant="outlined"
+                                class="mb-3"
+                            ></v-select>
+
                             <div class="d-flex align-center justify-space-between mb-1 mt-2">
                                 <span class="text-subtitle-2">Importance: {{ Number(editingTask.importance).toFixed(1) }}</span>
                                 <v-chip :color="getPriorityColor(editingTask.importance)" size="x-small" variant="flat">

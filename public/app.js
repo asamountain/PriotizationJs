@@ -728,6 +728,12 @@ window.addEventListener('DOMContentLoaded', () => {
       
       editTask(task) {
         this.editingTask = { ...task, enables: [] };
+        // Exclude the task itself and anything already under it — picking
+        // one of your own descendants as your new parent would loop.
+        this.possibleParents = [
+          { id: null, name: 'No Parent (Root Task)' },
+          ...this.activeTasks.filter(t => t.id !== task.id && !this.isDescendant(t.id, task.id))
+        ];
         this.showTaskEditForm = true;
 
         // Load current relationships for this task
@@ -744,6 +750,15 @@ window.addEventListener('DOMContentLoaded', () => {
         track('task_edit_save');
 
         taskOperations.editTask(this.editingTask);
+
+        // Update parent relationship if changed (including to/from root)
+        const originalTask = this.tasks.find(t => t.id === this.editingTask.id);
+        if (originalTask && originalTask.parent_id !== this.editingTask.parent_id) {
+          this.socket.emit('setTaskParent', {
+            taskId: this.editingTask.id,
+            parentId: this.editingTask.parent_id
+          });
+        }
 
         // Update relationships - emit event to update enables
         if (this.editingTask.enables && this.editingTask.enables.length >= 0) {
@@ -1789,8 +1804,10 @@ window.addEventListener('DOMContentLoaded', () => {
       },
 
       indentTask(task) {
-        // Find siblings at the same level
-        const siblings = this.tasks.filter(t => t.parent_id === task.parent_id);
+        // Find siblings at the same level, in the order actually shown on
+        // screen (whatever sort is active) — not raw array/creation order,
+        // which "the task above it" silently ignored before.
+        const siblings = this.sortTasks(this.tasks.filter(t => t.parent_id === task.parent_id));
         const currentIndex = siblings.findIndex(t => t.id === task.id);
         
         if (currentIndex > 0) {
