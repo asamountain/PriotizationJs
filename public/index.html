@@ -524,7 +524,7 @@
          subtasks — matches an editorial "heading + description" row
          instead of a dense Material list item. */
       .split-view-right .ed-list .task-item:not(.subtask) .task-name {
-        font-size: 17px !important; font-weight: 700 !important; line-height: 1.3;
+        font-size: 17px !important; font-weight: 600 !important; line-height: 1.3;
       }
       .split-view-right .ed-list .task-item.subtask .task-name {
         font-size: 14px !important; font-weight: 400 !important;
@@ -535,6 +535,16 @@
       }
       .split-view-right .ed-list .task-item {
         padding-top: 14px !important; padding-bottom: 14px !important;
+        align-items: flex-start !important;
+      }
+      /* Vuetify centers prepend/append on the item's full (possibly
+         2-line-wrapped) height by default, so the status circles floated in
+         the middle of the block instead of lining up with the title's first
+         line. Top-align them, then nudge down to the text's optical centre. */
+      .split-view-right .ed-list .task-item .v-list-item__prepend,
+      .split-view-right .ed-list .task-item .v-list-item__append {
+        align-self: flex-start !important;
+        padding-top: 3px !important;
       }
 
       /* Plain hollow/filled circle instead of the Material checkbox */
