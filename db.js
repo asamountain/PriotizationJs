@@ -318,6 +318,17 @@ class Database {
     await this.query("INSERT INTO task_relationships (enabler_task_id, enabled_task_id, user_id) VALUES ($1, $2, $3) ON CONFLICT (enabler_task_id, enabled_task_id) DO NOTHING", [enablerId, enabledId, userId]);
   }
 
+  // The app started single-user, so its existing tasks have user_id IS NULL.
+  // Hand that legacy data to whoever is the very first person to sign in
+  // (the original owner), so a stranger who registers second gets a blank
+  // slate instead of inheriting it via the "OR user_id IS NULL" fallback.
+  async claimLegacyDataIfFirstUser(userId) {
+    const [{ count }] = await this.query("SELECT COUNT(*)::int AS count FROM users");
+    if (count > 1) return;
+    await this.query("UPDATE tasks SET user_id = $1 WHERE user_id IS NULL", [userId]);
+    await this.query("UPDATE task_relationships SET user_id = $1 WHERE user_id IS NULL", [userId]);
+  }
+
   async removeTaskRelationship(enablerId, enabledId) {
     await this.query("DELETE FROM task_relationships WHERE enabler_task_id = $1 AND enabled_task_id = $2", [enablerId, enabledId]);
   }
@@ -438,6 +449,7 @@ export const setTaskParent = (id, p) => database.setTaskParent(id, p);
 export const updateTaskStatus = (id, s) => database.updateTaskStatus(id, s);
 export const updateTaskIcon = (id, i) => database.updateTaskIcon(id, i);
 export const upsertUser = (u) => database.upsertUser(u);
+export const claimLegacyDataIfFirstUser = (userId) => database.claimLegacyDataIfFirstUser(userId);
 export const addTaskRelationship = (e, d, u) => database.addTaskRelationship(e, d, u);
 export const removeTaskRelationship = (e, d) => database.removeTaskRelationship(e, d);
 export const getTasksEnabledBy = (id) => database.getTasksEnabledBy(id);

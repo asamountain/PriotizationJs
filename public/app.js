@@ -212,6 +212,7 @@ window.addEventListener('DOMContentLoaded', () => {
         authConfig: {
           googleEnabled: false
         },
+        showLoginGate: false,
         hoveredTaskId: null,
         heartbeatInterval: null,
         isSessionExpired: false,
@@ -1619,8 +1620,9 @@ window.addEventListener('DOMContentLoaded', () => {
             const userData = await response.json();
             this.user = userData;
             this.isSessionExpired = false;
+            this.showLoginGate = false;
             console.log('User authenticated:', this.user);
-            
+
             // Authenticate socket connection
             this.authenticateSocket();
           } else {
@@ -2240,6 +2242,12 @@ window.addEventListener('DOMContentLoaded', () => {
           this.socket.emit('requestInitialData');
         }
         this.fetchRelationships();
+      });
+
+      // Server says this connection is anonymous and Google sign-in is
+      // required (it won't hand out task data over the socket either way).
+      this.socket.on('authRequired', () => {
+        this.showLoginGate = true;
       });
 
       // All enabler->enabled relationships, for the 3D impact graph

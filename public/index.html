@@ -363,6 +363,28 @@
       }
       .ed-queue__arrow { text-align: right; color: var(--ink); }
       .ed-queue__empty { padding: 16px; font-family: var(--ed-font); color: var(--muted); }
+      .ed-login-gate {
+        position: fixed; inset: 0; z-index: 9998;
+        display: flex; align-items: center; justify-content: center;
+        background: #111; padding: 24px;
+      }
+      .ed-login-gate__card {
+        max-width: 360px; width: 100%; text-align: center;
+        font-family: var(--ed-font); color: #eee;
+      }
+      .ed-login-gate__title {
+        font-family: var(--ed-display); font-style: italic; font-weight: 400;
+        font-size: 26px; margin: 0 0 8px;
+      }
+      .ed-login-gate__sub { font-size: 14px; color: #aaa; margin: 0 0 24px; line-height: 1.5; }
+      .ed-login-gate__btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        width: 100%; padding: 13px 16px;
+        font-family: var(--ed-font); font-size: 15px; font-weight: 600;
+        color: #111; background: #d9c494; border: 0; border-radius: 8px;
+        cursor: pointer;
+      }
+      .ed-login-gate__btn:hover { background: #e8d8ab; }
       .ed-goalnote {
         margin: 0; padding: 12px 16px; border-bottom: 1px solid #e4e4e4;
         font-family: var(--ed-font); font-size: 12px; line-height: 1.5; color: var(--muted);
@@ -904,6 +926,13 @@
     
     <div id="app" v-cloak>
         <v-app :theme="theme">
+            <div v-if="showLoginGate" class="ed-login-gate">
+                <div class="ed-login-gate__card">
+                    <h1 class="ed-login-gate__title">Priority Task Manager</h1>
+                    <p class="ed-login-gate__sub">Sign in with Google to see and manage your own tasks. Each account gets its own private list.</p>
+                    <button class="ed-login-gate__btn" @click="loginWithGoogle">Sign in with Google</button>
+                </div>
+            </div>
             <!-- app bar removed: editorial layout. Actions relocated:
                  Analytics -> currentView toggle (see .ed-tools); CSV import/export, theme, login
                  available via .ed-tools strip in the table section. -->

@@ -2,6 +2,12 @@ import { getTaskData, addTask, modifyTask, deleteTask, toggleTaskDone, editTask,
 import database from "./db.js";
 
 const setupSocket = (io) => {
+  // Once Google sign-in is actually configured, anonymous sockets must not
+  // see the shared/legacy task pool — that's someone's real data. Before
+  // it's configured (local/demo use with no accounts yet) keep the old
+  // single-user behavior so the owner isn't locked out of their own app.
+  const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
   // Process tasks to ensure numeric values
   const processTaskData = (tasks) => {
     // Only log first 2 tasks and total count to avoid log bloat
@@ -85,6 +91,10 @@ const setupSocket = (io) => {
     // Explicit request for initial data
     socket.on("requestInitialData", async () => {
       console.log(`SOCKET: requestInitialData from user: ${socket.userId || 'anonymous'}`);
+      if (!socket.userId && googleConfigured) {
+        socket.emit("authRequired");
+        return;
+      }
       try {
         const data = await getTasksWithLeverage(socket.userId);
         const processed = processTaskData(data);
