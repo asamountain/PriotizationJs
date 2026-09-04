@@ -590,7 +590,12 @@ export class Graph3D {
   resetView() {
     this._easeTarget = TARGET.clone();
     const dir = HOME_CAM.clone().sub(TARGET).normalize();
-    const distance = this._contentFitDistance();
+    // Never snap in tighter than the designed default framing (HOME_CAM's
+    // own distance) — only push further out when a narrower aspect ratio
+    // needs the extra room. Fit View previously always recomputed the
+    // tightest fit for the current aspect, which could zoom in noticeably
+    // closer than the initial view; this keeps the two consistent.
+    const distance = Math.max(HOME_CAM.distanceTo(TARGET), this._contentFitDistance());
     this._easeCamPos = TARGET.clone().add(dir.multiplyScalar(distance));
   }
 
