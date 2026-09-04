@@ -367,6 +367,19 @@ window.addEventListener('DOMContentLoaded', () => {
       queueCount() {
         return (this.activeTasks || []).filter(t => !t.done && t.status !== 'Not Sure' && (t.kind || 'action') === 'action').length;
       },
+      // Finishing the #1 queue item is what's actually next; tasks it directly
+      // enables are what becomes doable right after — flag them persistently
+      // in the queue instead of only surfacing that at completion time.
+      nextUnlockedIds() {
+        const top = this.priorityQueue[0];
+        if (!top) return new Set();
+        const rels = this.allRelationships || [];
+        return new Set(
+          rels
+            .filter(r => Number(r.enabler_task_id) === Number(top.id))
+            .map(r => Number(r.enabled_task_id))
+        );
+      },
       todayLabel() {
         return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
       },
