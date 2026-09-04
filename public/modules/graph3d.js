@@ -18,6 +18,13 @@ const BOX = 10; // world box is BOX x BOX x BOX
 // top edge on shorter (mobile) viewports.
 const TARGET = new THREE.Vector3(BOX / 2, 1.5, BOX / 2 + 1);
 const HOME_CAM = new THREE.Vector3(BOX / 2 + 2.6, 16.6, BOX / 2 + 20.7);
+// Radius of a sphere around TARGET that comfortably covers the floor's
+// corners (± icon size). Used to re-derive camera distance from the
+// viewport's actual aspect ratio — a portrait phone panel has a much
+// narrower horizontal FOV than a wide desktop one at the same vertical
+// FOV, so a fixed camera position clips the grid's left/right edges on
+// narrow screens even though it fits fine on wide ones.
+const CONTENT_RADIUS = 10;
 // English axis captions keep the editorial serif; task-name labels (often Hangul) use Pretendard
 const DISPLAY = 'Georgia,"Times New Roman",Times,serif';
 const BODY = '"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif';
@@ -49,7 +56,7 @@ const GOLD = '#c9a227';
 // importance) don't stack into one unclickable blob
 function jitter(id) {
   const h = (Number(id) * 2654435761) >>> 0;
-  return { x: ((h & 255) / 255 - 0.5) * 0.9, z: (((h >> 8) & 255) / 255 - 0.5) * 0.9 };
+  return { x: ((h & 255) / 255 - 0.5) * 1.6, z: (((h >> 8) & 255) / 255 - 0.5) * 1.6 };
 }
 
 
@@ -189,10 +196,11 @@ export class Graph3D {
     this.controls.dampingFactor = 0.08;
     this.controls.enablePan = false;
     this.controls.minDistance = 10;
-    this.controls.maxDistance = 44;
+    this.controls.maxDistance = 60;
     this.controls.minPolarAngle = 0.35;            // keep some top-down tilt
     this.controls.maxPolarAngle = Math.PI / 2 - 0.12; // never look edge-on along the ridge
     this.controls.target.copy(TARGET);
+    this._fitCameraDistance();
 
     this._buildStage();
 
@@ -332,6 +340,11 @@ export class Graph3D {
     if (!this.renderer) this.init();
     if (!this.renderer) return;
 
+    // On narrow (mobile) panels the same icon footprint covers a much bigger
+    // share of the grid, so more nodes visually collide — shrink icons a bit
+    // below ~480px of panel width instead of rendering them full desktop size.
+    const sizeScale = Math.max(0.62, Math.min(1, (this.el.clientWidth || 480) / 480));
+
     for (const m of this.nodeMeshes) {
       if (m.userData.iconObj) { m.userData.iconObj.element.remove(); m.remove(m.userData.iconObj); }
       m.material.dispose();
@@ -436,12 +449,12 @@ export class Graph3D {
         const prog = Math.max(0, Math.min(1, num(t._progress)));
         el.innerHTML = lucideSvg(iconFor(t)) || '&bull;';
         el.style.color = outcomeColor.get(id) || GOLD;
-        el.style.fontSize = `${Math.round(16 + prog * 16)}px`;
+        el.style.fontSize = `${Math.round((16 + prog * 16) * sizeScale)}px`;
         el.style.opacity = `${0.45 + prog * 0.55}`;
       } else {
         el.innerHTML = lucideSvg(iconFor(t)) || '&bull;';
         el.style.color = actionColor.get(id) || UNROUTED;
-        el.style.fontSize = `${Math.round(14 + mag * 12)}px`;
+        el.style.fontSize = `${Math.round((14 + mag * 12) * sizeScale)}px`;
         if (t.status === 'in_progress') el.classList.add('is-doing');
       }
       const iconObj = new CSS2DObject(el);
@@ -539,7 +552,33 @@ export class Graph3D {
   // user drag. Same viewing direction as the initial camera, just backed off.
   resetView() {
     this._easeTarget = TARGET.clone();
-    this._easeCamPos = HOME_CAM.clone();
+    const dir = HOME_CAM.clone().sub(TARGET).normalize();
+    const distance = this._contentFitDistance();
+    this._easeCamPos = TARGET.clone().add(dir.multiplyScalar(distance));
+  }
+
+  _contentFitDistance() {
+    const vFov = THREE.MathUtils.degToRad(this.camera.fov);
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect);
+    const minHalfFov = Math.min(vFov, hFov) / 2;
+    const raw = CONTENT_RADIUS / Math.sin(minHalfFov);
+    return Math.min(Math.max(raw, this.controls.minDistance), this.controls.maxDistance);
+  }
+
+  // Re-derive the minimum camera distance from the current aspect ratio so
+  // the floor's corners stay inside frame on any panel shape. Only pushes
+  // the camera OUT when it's currently too close for this aspect (which
+  // would clip); never yanks in a user's deliberate zoom-out on an
+  // incidental resize.
+  _fitCameraDistance() {
+    if (!this.camera || !this.controls) return;
+    const dir = this.camera.position.clone().sub(this.controls.target);
+    const current = dir.length();
+    if (dir.lengthSq() < 1e-6) dir.copy(HOME_CAM).sub(TARGET);
+    const required = this._contentFitDistance();
+    if (current >= required) return;
+    dir.normalize().multiplyScalar(required);
+    this.camera.position.copy(this.controls.target).add(dir);
   }
 
   _applyFocus() {
@@ -629,6 +668,7 @@ export class Graph3D {
     const w = this.el.clientWidth || 1;
     const h = this.el.clientHeight || 1;
     this.camera.aspect = w / h;
+    this._fitCameraDistance();
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.labelRenderer.setSize(w, h);

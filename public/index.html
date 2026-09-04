@@ -751,6 +751,11 @@
         .ed-topbar__v, .ed-topbar__date { display: none; }
         .ed-topbar__title { font-size: 13px; }
 
+        /* On phones, graph/hierarchy are separate tabs (never shown side by
+           side), so the 900px breakpoint's 60vh cap — meant for the two
+           panels stacking together — just wastes space below the graph. */
+        .split-view-left { height: 100%; flex: 1 1 auto; }
+
         /* Priority Queue rows: rank/score/arrow were eating most of the width,
            squeezing task titles into a cramped 3-line wrap. Give the title
            the room back and size text for touch, not print. */
