@@ -293,6 +293,10 @@ window.addEventListener('DOMContentLoaded', () => {
         const byId = new Map((this.tasks || []).map(t => [Number(t.id), t]));
         return this.nodeCard.enables.map(id => byId.get(Number(id))).filter(Boolean);
       },
+      nodeCardSubtasks() {
+        const task = this.nodeCard.task;
+        return task ? this.getSubtasksForTask(task.id) : [];
+      },
       enableCandidates() {
         const selfId = this.nodeCard.task ? Number(this.nodeCard.task.id) : null;
         const taken = new Set(this.nodeCard.enables.map(Number));
@@ -2274,11 +2278,11 @@ window.addEventListener('DOMContentLoaded', () => {
         this._onKeyEsc = (e) => {
           if (e.key !== 'Escape') return;
           if (this.enableOpen) { this.enableOpen = false; return; }
-          if (this.nodeCard.open) { this.closeNodeCard(); return; }
           if (this.showQuickAddModal) { this.showQuickAddModal = false; return; }
           if (this.showTaskEditForm) { this.showTaskEditForm = false; return; }
           if (this.showSubtaskModal) { this.showSubtaskModal = false; return; }
           if (this.showCsvImportDialog) { this.showCsvImportDialog = false; return; }
+          if (this.nodeCard.open) { this.closeNodeCard(); return; }
         };
         window.addEventListener('keydown', this._onKeyEsc);
 

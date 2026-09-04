@@ -707,6 +707,22 @@
         text-transform: uppercase; color: #6b6b6b; margin-bottom: 5px;
       }
       .node-card__enables-hint { font-size: 9px; letter-spacing: .04em; text-transform: none; font-style: italic; }
+      .node-card__chips--subtasks { display: block; }
+      .node-card__chips--subtasks li {
+        display: flex; align-items: center; gap: 6px;
+        border: 0; border-bottom: 1px solid #eee; padding: 4px 0;
+      }
+      .node-card__chips--subtasks li:last-child { border-bottom: 0; }
+      .node-card__chips--subtasks li input[type="checkbox"] { flex: none; margin: 0; accent-color: #111; }
+      .node-card__subtask-name { flex: 1; cursor: pointer; }
+      .node-card__chips--subtasks li.is-done .node-card__subtask-name { text-decoration: line-through; color: #9a9a9a; }
+      .node-card__add-subtask {
+        width: 100%; box-sizing: border-box;
+        font-family: var(--ed-font); font-size: 11px; color: #6b6b6b;
+        border: 1px dashed #d9d9d9; background: transparent; cursor: pointer;
+        padding: 5px 6px; text-align: center;
+      }
+      .node-card__add-subtask:hover { border-color: #111; color: #111; }
       .node-card__chips { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
       .node-card__chips li {
         display: inline-flex; align-items: center; gap: 4px;
@@ -1415,6 +1431,20 @@
                                 placeholder="Notes…"
                                 rows="2"
                             ></textarea>
+
+                            <div class="node-card__enables">
+                                <div class="node-card__enables-head">
+                                    <span>Subtasks</span>
+                                    <span class="node-card__enables-hint" v-if="nodeCardSubtasks.length">{{ nodeCardSubtasks.filter(s => s.done).length }}/{{ nodeCardSubtasks.length }} done</span>
+                                </div>
+                                <ul v-if="nodeCardSubtasks.length" class="node-card__chips node-card__chips--subtasks">
+                                    <li v-for="s in nodeCardSubtasks" :key="s.id" :class="{ 'is-done': s.done }">
+                                        <input type="checkbox" :checked="!!s.done" @click.stop="toggleTaskDone(s)" />
+                                        <span class="node-card__subtask-name" @click="selectQueueTask(s, $event)">{{ s.name }}</span>
+                                    </li>
+                                </ul>
+                                <button type="button" class="node-card__add-subtask" @click="showAddSubtaskForm(nodeCard.task.id)">+ Add Subtask</button>
+                            </div>
 
                             <div class="node-card__enables">
                                 <div class="node-card__enables-head">
