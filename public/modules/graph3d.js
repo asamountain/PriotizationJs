@@ -349,7 +349,12 @@ export class Graph3D {
     const rels = Array.isArray(relationships) ? relationships : [];
     const kindById = new Map(list.map((t) => [Number(t.id), kindOf(t)]));
 
-    const actions = list.filter((t) => kindOf(t) === 'action');
+    // Subtasks sit out of the ranked floor entirely — they're revealed as a
+    // small cluster around their parent on focus instead of independently
+    // scored, so a board with a lot of subtasks doesn't crowd the floor.
+    const rootActions = list.filter((t) => kindOf(t) === 'action' && !t.parent_id);
+    const subActions = list.filter((t) => kindOf(t) === 'action' && t.parent_id && kindById.get(Number(t.parent_id)) !== undefined);
+    const actions = rootActions;
     const outcomes = list.filter((t) => kindOf(t) === 'outcome');
     const idents = list.filter((t) => kindOf(t) === 'identity');
 
@@ -358,7 +363,8 @@ export class Graph3D {
     // and a crowded board (many action nodes sharing the 10-unit floor) means
     // less room per icon regardless of screen size. Combine both instead of
     // just the panel-width factor, which wasn't enough on boards with 20+
-    // actions even at full desktop width.
+    // actions even at full desktop width. Subtasks are hidden by default so
+    // they don't count toward the density that matters here.
     const widthFactor = Math.min(1, (this.el.clientWidth || 480) / 480);
     const densityFactor = Math.min(1, 12 / Math.max(1, actions.length));
     const sizeScale = Math.max(0.4, widthFactor * densityFactor);
@@ -376,6 +382,28 @@ export class Graph3D {
       const iz = rankI ? rankI(iKey(t)) : clamp10(num(t.importance));
       return [Number(t.id), new THREE.Vector3(clamp10(cx + j.x), 0, clamp10(iz + j.z))];
     }));
+    // Subtasks orbit their parent's floor position in a small fixed-radius
+    // ring instead of being independently ranked — kept out of frame
+    // (display:none, see .g3d-node.is-subtask) until the parent is focused.
+    const byParent = new Map();
+    for (const t of subActions) {
+      const pid = Number(t.parent_id);
+      if (!byParent.has(pid)) byParent.set(pid, []);
+      byParent.get(pid).push(t);
+    }
+    for (const [pid, kids] of byParent) {
+      const parentPos = pos.get(pid);
+      if (!parentPos) continue;
+      kids.forEach((t, i) => {
+        const angle = (i / kids.length) * Math.PI * 2;
+        const r = 0.85;
+        pos.set(Number(t.id), new THREE.Vector3(
+          clamp10(parentPos.x + Math.cos(angle) * r),
+          0,
+          clamp10(parentPos.z + Math.sin(angle) * r)
+        ));
+      });
+    }
     outcomes.forEach((t, i) => {
       const x = outcomes.length < 2 ? BOX / 2 : 1 + (i / (outcomes.length - 1)) * (BOX - 2);
       pos.set(Number(t.id), new THREE.Vector3(x, HORIZON_Y, HORIZON_Z));
@@ -411,6 +439,11 @@ export class Graph3D {
       return UNROUTED;
     };
     const actionColor = new Map(actions.map((t) => [Number(t.id), routeColor(Number(t.id))]));
+    // Subtasks inherit their parent's route colour rather than routing
+    // independently — they read as "part of" the parent, not their own node.
+    for (const t of subActions) {
+      actionColor.set(Number(t.id), actionColor.get(Number(t.parent_id)) || UNROUTED);
+    }
 
     // horizon rule the outcome nodes rest on
     if (outcomes.length) {
@@ -453,13 +486,18 @@ export class Graph3D {
       } else {
         el.innerHTML = lucideSvg(iconFor(t)) || '&bull;';
         el.style.color = actionColor.get(id) || UNROUTED;
-        el.style.fontSize = `${Math.round((14 + mag * 12) * sizeScale)}px`;
+        const subMag = t.parent_id ? mag * 0.72 : mag;
+        el.style.fontSize = `${Math.round((14 + subMag * 12) * sizeScale)}px`;
         if (t.status === 'in_progress') el.classList.add('is-doing');
+        if (t.parent_id) el.classList.add('is-subtask'); // hidden by default; revealed when its parent is focused
       }
       const iconObj = new CSS2DObject(el);
       mesh.add(iconObj);
 
-      mesh.userData = { task: t, id, base: mag, inProgress: t.status === 'in_progress', iconObj, iconEl: el };
+      mesh.userData = {
+        task: t, id, base: mag, inProgress: t.status === 'in_progress', iconObj, iconEl: el,
+        parentId: t.parent_id ? Number(t.parent_id) : null
+      };
       this.nodeGroup.add(mesh);
       this.nodeMeshes.push(mesh);
     }
@@ -585,9 +623,14 @@ export class Graph3D {
     for (const m of this.nodeMeshes) {
       const el = m.userData.iconEl;
       if (!el) continue;
-      const f = dim && m.userData.id === this.focusId;
-      el.classList.toggle('is-focus', f);
-      el.classList.toggle('is-dim', dim && !f);
+      const isFocused = dim && m.userData.id === this.focusId;
+      // Subtasks are hidden (display:none via .is-subtask) until their
+      // parent is focused, at which point .is-focus-child reveals them
+      // clustered around it and exempts them from the dim treatment.
+      const isFocusChild = dim && m.userData.parentId === this.focusId;
+      el.classList.toggle('is-focus', isFocused);
+      el.classList.toggle('is-focus-child', isFocusChild);
+      el.classList.toggle('is-dim', dim && !isFocused && !isFocusChild);
     }
   }
 
@@ -603,6 +646,11 @@ export class Graph3D {
     let best = null;
     let bestD = 18; // px hit radius (~ icon half-size)
     for (const m of this.nodeMeshes) {
+      // Hidden (unrevealed) subtasks still occupy a screen position around
+      // their parent — skip them as pick targets so tapping near the
+      // cluster always lands on the parent, not an invisible sibling.
+      const el = m.userData.iconEl;
+      if (el && el.classList.contains('is-subtask') && !el.classList.contains('is-focus-child')) continue;
       v.copy(m.position).project(this.camera);
       if (v.z > 1) continue; // behind the camera
       const sx = (v.x * 0.5 + 0.5) * r.width;

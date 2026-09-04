@@ -202,6 +202,10 @@
         50% { transform: scale(1.22); }
       }
       .g3d-node.is-doing.is-focus { animation: none; transform: scale(1.55); }
+      /* Subtasks stay out of the floor entirely until you tap their parent,
+         at which point they appear clustered around it. */
+      .g3d-node.is-subtask { display: none; }
+      .g3d-node.is-subtask.is-focus-child { display: block; opacity: .85; }
 
       /* Hover annotation on the 3D graph: ring + drawn leader line + label */
       .g3d-anno {
