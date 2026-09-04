@@ -727,24 +727,6 @@
       .node-card__seg--4 button { padding: 7px 2px; font-size: 10px; letter-spacing: 0; }
       .node-card__seg--kind button { font-size: 10px; letter-spacing: .02em; }
 
-      /* 3D graph: outcome nodes (goals on the horizon) + identity nodes (vision behind the field) */
-      .g3d-node.is-outcome i {
-        border: 2px solid currentColor;
-        border-radius: 999px;
-        padding: 4px;
-        background: rgba(255, 250, 235, .55);
-      }
-      .g3d-node.is-identity {
-        font-family: Georgia, "Times New Roman", Times, serif;
-        font-style: italic;
-        font-size: 13px;
-        color: #9a9a9a;
-        letter-spacing: .04em;
-        white-space: normal;
-        text-align: center;
-        line-height: 1.25;
-        opacity: .8;
-      }
       .node-card__row { display: flex; gap: 8px; }
       .node-card__row button {
         flex: 1;
@@ -809,7 +791,21 @@
         .ed-rail button.is-active { background: #e5484d; }
         .ed-body { padding-bottom: 52px; }
         .ed-topbar__v, .ed-topbar__date { display: none; }
-        .ed-topbar__title { font-size: 13px; }
+        /* Centering via left:50% ignores how wide the auth badge next to it
+           is, so on a narrow phone the two can end up touching with no gap.
+           In-flow instead, right after the auth badge, with a guaranteed
+           margin and ellipsis if there's still no room. */
+        .ed-topbar__title {
+          position: static;
+          transform: none;
+          font-size: 13px;
+          margin-left: 14px;
+          flex: 1 1 auto;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
 
         /* On phones, graph/hierarchy are separate tabs (never shown side by
            side), so the 900px breakpoint's 60vh cap — meant for the two

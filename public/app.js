@@ -668,23 +668,7 @@ window.addEventListener('DOMContentLoaded', () => {
         try {
           graph3d.showRelationships = this.showRelationships;
           graph3d.showSubtasks = this.showChartSubtasks;
-          const tasks = this.filteredTasksForChart;
-          const rels = this.allRelationships || [];
-          const allById = new Map((this.tasks || []).map(t => [Number(t.id), t]));
-          for (const t of tasks) {
-            // outcome nodes are sized by roll-up progress: share of their
-            // enabling actions (weighted by importance) that are done
-            if ((t.kind || 'action') === 'outcome') {
-              const feeders = rels
-                .filter(r => Number(r.enabled_task_id) === Number(t.id))
-                .map(r => allById.get(Number(r.enabler_task_id)))
-                .filter(Boolean);
-              const total = feeders.reduce((s, f) => s + (Number(f.importance) || 1), 0);
-              const done = feeders.reduce((s, f) => s + (f.done ? (Number(f.importance) || 1) : 0), 0);
-              t._progress = total > 0 ? done / total : 0;
-            }
-          }
-          graph3d.render(tasks, rels);
+          graph3d.render(this.filteredTasksForChart, this.allRelationships || []);
         } catch (e) {
           console.error('3D graph render failed:', e);
         }

@@ -2,7 +2,9 @@
 // Action nodes sit flat on the floor; node size = importance x cost of inaction.
 // Each action is tinted by the outcome it leads to (follow enable edges downstream
 // to the nearest outcome); actions that reach no outcome stay grey.
-// Outcomes ride the horizon band, identity floats behind as vision text.
+// Outcome/identity tasks aren't scored actions, so they get no floor position
+// and no node here at all — they stay visible in Active Tasks and the node
+// card instead.
 // Rendered with Three.js (loaded via importmap: "three" + "three/addons/").
 
 import * as THREE from 'three';
@@ -49,18 +51,9 @@ function kindOf(t) { return t.kind || 'action'; }
 const OUTCOME_PALETTE = ['#c9a227', '#b5651d', '#5f7d5f', '#4f6d7a', '#a15c5c', '#6b5b95', '#8a7d3f', '#7a5c8a'];
 const UNROUTED = '#9aa0a0';
 
-// goals ("outcome") and vision ("identity") are parked BEHIND the Eisenhower
-// floor on their own bands, not scored on it. "Behind" means past the FAR
-// edge (low importance, Z=0 side) so they recede into the distance like an
-// actual horizon — the camera sits on the opposite (+Z / high-importance)
-// side, so a positive offset here would instead float them toward the
-// viewer, past the near edge, which reads as adrift beside the floor
-// rather than beyond it.
-const HORIZON_Z = -3;   // outcome band, just past the far edge
-const HORIZON_Y = 6.5;
-const VISION_Z = -5;     // identity band, further back and higher
-const VISION_Y = 9.4;
-const GOLD = '#c9a227';
+// goals ("outcome") and vision ("identity") are never placed on the floor
+// or drawn as their own nodes — see the render() comment where their
+// position assignment used to be for why.
 
 // deterministic per-task offset so tasks sharing the same (cost of inaction,
 // importance) don't stack into one unclickable blob
@@ -361,7 +354,6 @@ export class Graph3D {
     const subActions = list.filter((t) => kindOf(t) === 'action' && t.parent_id && kindById.get(Number(t.parent_id)) !== undefined);
     const actions = rootActions;
     const outcomes = list.filter((t) => kindOf(t) === 'outcome');
-    const idents = list.filter((t) => kindOf(t) === 'identity');
 
     // Icons need to shrink on two independent axes: a narrow (mobile) panel
     // makes the same icon footprint cover a much bigger share of the grid,
@@ -409,14 +401,11 @@ export class Graph3D {
         ));
       });
     }
-    outcomes.forEach((t, i) => {
-      const x = outcomes.length < 2 ? BOX / 2 : 1 + (i / (outcomes.length - 1)) * (BOX - 2);
-      pos.set(Number(t.id), new THREE.Vector3(x, HORIZON_Y, HORIZON_Z));
-    });
-    idents.forEach((t, i) => {
-      const x = idents.length < 2 ? BOX / 2 : 1.5 + (i / (idents.length - 1)) * (BOX - 3);
-      pos.set(Number(t.id), new THREE.Vector3(x, VISION_Y, VISION_Z));
-    });
+    // Outcome/identity tasks are never placed on the floor and get no mesh —
+    // they're goals/vision, not scored actions, and drawing them here (past
+    // the grid edge, on their own bands) kept ending up as an illegible
+    // cluster of overlapping labels. They stay fully visible everywhere else
+    // (Active Tasks, node card, "Copy hierarchy") — just not in this view.
 
     // colour per outcome; each action inherits the colour of the nearest outcome
     // it leads to via enable edges (BFS downstream), else grey.
@@ -450,20 +439,11 @@ export class Graph3D {
       actionColor.set(Number(t.id), actionColor.get(Number(t.parent_id)) || UNROUTED);
     }
 
-    // horizon rule the outcome nodes rest on
-    if (outcomes.length) {
-      const hz = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, HORIZON_Y, HORIZON_Z), new THREE.Vector3(BOX, HORIZON_Y, HORIZON_Z),
-      ]);
-      this.edgeGroup.add(new THREE.LineSegments(hz, new THREE.LineBasicMaterial({
-        color: 0xd9c494, transparent: true, opacity: 0.7,
-      })));
-    }
-
     // Each node = a topic glyph (MDI) via CSS2D; an invisible mesh is the click target.
+    // Only actions ever get a floor position (see pos, above), so list here
+    // is implicitly action-only once the `!p` guard runs.
     for (const t of list) {
       const id = Number(t.id);
-      const k = kindOf(t);
       const mag = 0.55 + priority(t) / 100 * 0.85; // node size = importance x cost of inaction
       const p = pos.get(id);
       if (!p) continue;
@@ -474,28 +454,12 @@ export class Graph3D {
 
       const el = document.createElement('div');
       el.className = 'g3d-node';
-      if (k === 'identity') {
-        // vision / stance: a faint serif name floating behind the field, no metrics
-        el.classList.add('is-identity');
-        el.textContent = t.name || `Task ${id}`;
-        el.style.fontSize = `${Math.round(13 * sizeScale)}px`;
-        el.style.maxWidth = `${Math.round(160 * sizeScale)}px`;
-      } else if (k === 'outcome') {
-        // goal: coloured ring on the horizon, sized/lit by roll-up progress
-        el.classList.add('is-outcome');
-        const prog = Math.max(0, Math.min(1, num(t._progress)));
-        el.innerHTML = lucideSvg(iconFor(t)) || '&bull;';
-        el.style.color = outcomeColor.get(id) || GOLD;
-        el.style.fontSize = `${Math.round((16 + prog * 16) * sizeScale)}px`;
-        el.style.opacity = `${0.45 + prog * 0.55}`;
-      } else {
-        el.innerHTML = lucideSvg(iconFor(t)) || '&bull;';
-        el.style.color = actionColor.get(id) || UNROUTED;
-        const subMag = t.parent_id ? mag * 0.72 : mag;
-        el.style.fontSize = `${Math.round((14 + subMag * 12) * sizeScale)}px`;
-        if (t.status === 'in_progress') el.classList.add('is-doing');
-        if (t.parent_id) el.classList.add('is-subtask'); // hidden by default; revealed when its parent is focused
-      }
+      el.innerHTML = lucideSvg(iconFor(t)) || '&bull;';
+      el.style.color = actionColor.get(id) || UNROUTED;
+      const subMag = t.parent_id ? mag * 0.72 : mag;
+      el.style.fontSize = `${Math.round((14 + subMag * 12) * sizeScale)}px`;
+      if (t.status === 'in_progress') el.classList.add('is-doing');
+      if (t.parent_id) el.classList.add('is-subtask'); // hidden by default; revealed when its parent is focused
       const iconObj = new CSS2DObject(el);
       mesh.add(iconObj);
 
@@ -544,16 +508,15 @@ export class Graph3D {
 
     let n = 0;
     if (this.showRelationships) {
+      // Both ends are always actions now — outcomes/identities never get a
+      // floor position, so an edge into one has no `b` and is skipped below.
       for (const r of rels) {
         if (n >= 220) break;
         const a = pos.get(Number(r.enabler_task_id));
         const b = pos.get(Number(r.enabled_task_id));
         if (!a || !b) continue;
-        const toGoal = kindById.get(Number(r.enabled_task_id)) === 'outcome';
-        const hex = toGoal
-          ? (outcomeColor.get(Number(r.enabled_task_id)) || GOLD)
-          : (actionColor.get(Number(r.enabler_task_id)) || '#e0654b');
-        curve(a, b, hex, toGoal ? 0.06 : 0.16);
+        const hex = actionColor.get(Number(r.enabler_task_id)) || '#e0654b';
+        curve(a, b, hex, 0.16);
         n++;
       }
     }
