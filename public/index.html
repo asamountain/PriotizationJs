@@ -39,14 +39,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
     <!-- Pretendard (editorial + Hangul) -->
     <link href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" rel="stylesheet">
-    <!-- Socket.IO and ECharts (2D line/bar charts only — no D3, no echarts-gl:
-         neither is referenced anywhere in this codebase). defer: these only
-         run inside app.js (a module, itself deferred) or DOMContentLoaded
-         handlers, so nothing needs them synchronously at parse time — defer
-         lets the browser fetch them in parallel and keep parsing the page
-         instead of blocking on each one in turn. Execution order preserved. -->
+    <!-- Socket.IO — defer: only runs inside app.js (a module, itself
+         deferred) or DOMContentLoaded handlers, so nothing needs it
+         synchronously at parse time. -->
     <script defer src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
     <!-- Vue and Vuetify -->
     <script defer src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.js"></script>
@@ -132,7 +128,6 @@
       .ed-rail button.is-active { background: #e5484d; border-color: #e5484d; color: #fff; }
 
       .ed-body { flex: 1; min-width: 0; height: 100%; position: relative; overflow: hidden; }
-      .ed-body > .analytics-view,
       .ed-body > .ed-settings { height: 100%; overflow-y: auto; }
 
       .split-view-container {
@@ -1108,15 +1103,6 @@
       .subtask-link-chip .v-chip__content .v-icon {
         color: #651fff !important;
       }
-
-      /* Analytics View Styles */
-      .analytics-view {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
-      }
-
-      .v-theme--dark .analytics-view {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      }
     </style>
     <link href="style.css" rel="stylesheet">
     <script>
@@ -1158,8 +1144,8 @@
                 </div>
             </div>
             <!-- app bar removed: editorial layout. Actions relocated:
-                 Analytics -> currentView toggle (see .ed-tools); CSV import/export, theme, login
-                 available via .ed-tools strip in the table section. -->
+                 CSV import/export, theme, login available via .ed-tools
+                 strip in the table section. -->
 
             <v-main class="split-view-main">
                 <!-- Editorial top bar -->
@@ -1191,182 +1177,12 @@
                         <button type="button" :class="{ 'is-active': navView === 'pipelines' }" @click="navView = 'pipelines'" title="Income Pipelines">
                             <span class="rail-ico" v-html="iconSvg('banknote')"></span>
                         </button>
-                        <button type="button" :class="{ 'is-active': navView === 'analytics' }" @click="navView = 'analytics'" title="Analytics">
-                            <span class="rail-ico" v-html="iconSvg('bar-chart-3')"></span>
-                        </button>
                         <button type="button" :class="{ 'is-active': navView === 'settings' }" @click="navView = 'settings'" title="Settings">
                             <span class="rail-ico" v-html="iconSvg('settings')"></span>
                         </button>
                     </nav>
 
                     <div class="ed-body">
-                <!-- Analytics View (ECharts) -->
-                <div v-show="navView === 'analytics'" class="analytics-view" style="height: 100%; overflow-y: auto;" :style="$vuetify.display.xs ? 'padding: 8px;' : 'padding: 16px;'">
-                    <v-container fluid :class="$vuetify.display.xs ? 'pa-0' : ''">
-                        <!-- Header -->
-                        <v-row class="mb-4">
-                            <v-col cols="12">
-                                <h1 :class="$vuetify.display.xs ? 'text-h5' : 'text-h4'" class="text-primary d-flex align-center">
-                                    <v-icon class="me-2" :size="$vuetify.display.xs ? 24 : 32">mdi-chart-areaspline</v-icon>
-                                    <span class="d-none d-sm-inline">Productivity Analytics</span>
-                                    <span class="d-sm-none">Analytics</span>
-                                </h1>
-                                <p class="text-subtitle-2 text-grey mt-1 d-none d-sm-block">Track your focus time, streaks, and productivity insights</p>
-                            </v-col>
-                        </v-row>
-
-                        <!-- Top Stats Row - 2 columns on mobile -->
-                        <v-row class="mb-4">
-                            <v-col cols="6" sm="6" md="3">
-                                <v-card elevation="4" :class="$vuetify.display.xs ? 'pa-2' : 'pa-4'" class="text-center" color="primary" variant="tonal">
-                                    <v-icon :size="$vuetify.display.xs ? 28 : 40" color="primary" class="mb-1">mdi-target</v-icon>
-                                    <div :class="$vuetify.display.xs ? 'text-h5' : 'text-h3'" class="font-weight-bold text-primary">{{ analytics.productivityScore }}%</div>
-                                    <div class="text-caption text-grey">Productivity</div>
-                                    <div class="text-caption text-grey-darken-1 d-none d-sm-block">Time on high-importance tasks</div>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="6" sm="6" md="3">
-                                <v-card elevation="4" :class="$vuetify.display.xs ? 'pa-2' : 'pa-4'" class="text-center" color="success" variant="tonal">
-                                    <v-icon :size="$vuetify.display.xs ? 28 : 40" color="success" class="mb-1">mdi-fire</v-icon>
-                                    <div :class="$vuetify.display.xs ? 'text-h5' : 'text-h3'" class="font-weight-bold text-success">{{ analytics.currentStreak }}</div>
-                                    <div class="text-caption text-grey">Day Streak</div>
-                                    <div class="text-caption text-grey-darken-1 d-none d-sm-block">Consecutive focus days</div>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="6" sm="6" md="3">
-                                <v-card elevation="4" :class="$vuetify.display.xs ? 'pa-2' : 'pa-4'" class="text-center" color="info" variant="tonal">
-                                    <v-icon :size="$vuetify.display.xs ? 28 : 40" color="info" class="mb-1">mdi-clock-outline</v-icon>
-                                    <div :class="$vuetify.display.xs ? 'text-h5' : 'text-h3'" class="font-weight-bold text-info">{{ analytics.thisWeekHours }}h</div>
-                                    <div class="text-caption text-grey">This Week</div>
-                                    <v-chip
-                                        :color="analytics.weekChange >= 0 ? 'success' : 'error'"
-                                        size="x-small"
-                                        class="mt-1 d-none d-sm-inline-flex"
-                                    >
-                                        <v-icon size="12" start>{{ analytics.weekChange >= 0 ? 'mdi-arrow-up' : 'mdi-arrow-down' }}</v-icon>
-                                        {{ Math.abs(analytics.weekChange) }}%
-                                    </v-chip>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="6" sm="6" md="3">
-                                <v-card elevation="4" :class="$vuetify.display.xs ? 'pa-2' : 'pa-4'" class="text-center" color="warning" variant="tonal">
-                                    <v-icon :size="$vuetify.display.xs ? 28 : 40" color="warning" class="mb-1">mdi-timer</v-icon>
-                                    <div :class="$vuetify.display.xs ? 'text-h5' : 'text-h3'" class="font-weight-bold text-warning">{{ analytics.totalPomodoros }}</div>
-                                    <div class="text-caption text-grey">Pomodoros</div>
-                                    <div class="text-caption text-grey-darken-1 d-none d-sm-block">25+ min sessions</div>
-                                </v-card>
-                            </v-col>
-                        </v-row>
-
-                        <!-- Secondary Stats -->
-                        <v-row class="mb-4">
-                            <v-col cols="6" sm="4" md="2">
-                                <v-card elevation="2" class="pa-3 text-center">
-                                    <div class="text-h5 font-weight-bold">{{ analytics.totalHours }}h</div>
-                                    <div class="text-caption text-grey">Total Focus</div>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="6" sm="4" md="2">
-                                <v-card elevation="2" class="pa-3 text-center">
-                                    <div class="text-h5 font-weight-bold">{{ analytics.totalSessions }}</div>
-                                    <div class="text-caption text-grey">Sessions</div>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="6" sm="4" md="2">
-                                <v-card elevation="2" class="pa-3 text-center">
-                                    <div class="text-h5 font-weight-bold">{{ analytics.avgSessionMins }}m</div>
-                                    <div class="text-caption text-grey">Avg Session</div>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="6" sm="4" md="2">
-                                <v-card elevation="2" class="pa-3 text-center">
-                                    <div class="text-h5 font-weight-bold">{{ analytics.tasksCompleted }}</div>
-                                    <div class="text-caption text-grey">Completed</div>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="6" sm="4" md="2">
-                                <v-card elevation="2" class="pa-3 text-center">
-                                    <div class="text-h5 font-weight-bold">{{ analytics.tasksActive }}</div>
-                                    <div class="text-caption text-grey">Active</div>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="6" sm="4" md="2">
-                                <v-card elevation="2" class="pa-3 text-center">
-                                    <div class="text-h5 font-weight-bold">{{ analytics.completionRate }}%</div>
-                                    <div class="text-caption text-grey">Completion</div>
-                                </v-card>
-                            </v-col>
-                        </v-row>
-
-                        <!-- Charts Row 1 -->
-                        <v-row class="mb-4">
-                            <v-col cols="12" md="8">
-                                <v-card elevation="3">
-                                    <v-card-title class="d-flex align-center">
-                                        <v-icon class="me-2" color="primary">mdi-chart-timeline-variant</v-icon>
-                                        Daily Focus Time (Last 30 Days)
-                                    </v-card-title>
-                                    <v-card-text>
-                                        <div id="dailyFocusChart" style="height: 300px;"></div>
-                                    </v-card-text>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="12" md="4">
-                                <v-card elevation="3">
-                                    <v-card-title class="d-flex align-center">
-                                        <v-icon class="me-2" color="success">mdi-chart-donut</v-icon>
-                                        Session Distribution
-                                    </v-card-title>
-                                    <v-card-text>
-                                        <div id="sessionDistChart" style="height: 300px;"></div>
-                                    </v-card-text>
-                                </v-card>
-                            </v-col>
-                        </v-row>
-
-                        <!-- Charts Row 2 -->
-                        <v-row class="mb-4">
-                            <v-col cols="12" md="6">
-                                <v-card elevation="3">
-                                    <v-card-title class="d-flex align-center">
-                                        <v-icon class="me-2" color="info">mdi-clock-time-eight</v-icon>
-                                        Focus by Hour of Day
-                                    </v-card-title>
-                                    <v-card-text>
-                                        <div id="hourlyChart" style="height: 280px;"></div>
-                                    </v-card-text>
-                                </v-card>
-                            </v-col>
-                            <v-col cols="12" md="6">
-                                <v-card elevation="3">
-                                    <v-card-title class="d-flex align-center">
-                                        <v-icon class="me-2" color="warning">mdi-timer-outline</v-icon>
-                                        Pomodoros Over Time
-                                    </v-card-title>
-                                    <v-card-text>
-                                        <div id="pomodoroChart" style="height: 280px;"></div>
-                                    </v-card-text>
-                                </v-card>
-                            </v-col>
-                        </v-row>
-
-                        <!-- Charts Row 3 -->
-                        <v-row>
-                            <v-col cols="12">
-                                <v-card elevation="3">
-                                    <v-card-title class="d-flex align-center">
-                                        <v-icon class="me-2" color="primary">mdi-format-list-numbered</v-icon>
-                                        Top Tasks by Time Spent
-                                    </v-card-title>
-                                    <v-card-text>
-                                        <div id="topTasksChart" style="height: 300px;"></div>
-                                    </v-card-text>
-                                </v-card>
-                            </v-col>
-                        </v-row>
-                    </v-container>
-                </div>
-
                 <!-- Split View Container (Graph + Hierarchy views) -->
                 <div v-show="navView === 'graph' || navView === 'hierarchy'" class="split-view-container" ref="splitContainer">
                     <!-- GRAPH: 3D chart -->

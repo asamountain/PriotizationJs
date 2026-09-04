@@ -80,11 +80,6 @@ app.get("/", (req, res) => {
     res.sendFile(join(__dirname, "public", "index.html"));
 });
 
-// Serve the analytics page
-app.get("/analytics", (req, res) => {
-    res.sendFile(join(__dirname, "public", "analytics.html"));
-});
-
 // CSV Import endpoint
 app.post("/api/import-csv", requireAuth, upload.single("csvFile"), async (req, res) => {
     try {
@@ -295,34 +290,6 @@ app.get("/api/debug/db-status", async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
-    }
-});
-
-// Analytics API endpoint (works for both authenticated and anonymous users)
-app.get("/api/analytics", async (req, res) => {
-    try {
-        const { getTaskData, getTimeLogs } = await import("./db.js");
-
-        // Get user ID if authenticated, otherwise null for anonymous
-        const userId = req.user ? req.user.id : null;
-
-        // Get all tasks with time data for this user
-        const tasks = await getTaskData(userId);
-
-        // Get all time logs for all tasks
-        const allLogs = [];
-        for (const task of tasks) {
-            const logs = await getTimeLogs(task.id);
-            allLogs.push(...logs.map(log => ({ ...log, task_name: task.name })));
-        }
-
-        res.json({
-            tasks,
-            timeLogs: allLogs
-        });
-    } catch (error) {
-        console.error("Error fetching analytics:", error);
-        res.status(500).json({ error: "Failed to fetch analytics data" });
     }
 });
 
