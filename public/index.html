@@ -326,6 +326,28 @@
       }
       .hero-add .plus { font-size: 16px; line-height: 1; }
       .hero-add:hover { color: #fff; background: #111; }
+      .hero-reset-view {
+        position: absolute;
+        top: 64px;
+        right: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 14px;
+        font-family: var(--ed-font);
+        font-size: 11px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: #111;
+        background: #fff;
+        border: 1px solid #111;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 20;
+        transition: color .15s, background .15s;
+      }
+      .hero-reset-view .rail-ico svg { width: 14px; height: 14px; }
+      .hero-reset-view:hover { color: #fff; background: #111; }
 
       /* ============ Editorial table view ============ */
       .split-view-right { --ink: #111; --paper: #fff; --muted: #6b6b6b; --rule: #111; --urgent: #e5484d; --impact: #f5a623; font-family: var(--ed-font); }
@@ -1253,6 +1275,10 @@
 
                         <button type="button" class="hero-add" @click="openQuickAddModal(5, 5)" title="Add a new task">
                             <span class="plus">&#43;</span> New Task
+                        </button>
+
+                        <button type="button" class="hero-reset-view" @click="resetGraphView" title="Snap back to the priority overview angle">
+                            <span class="rail-ico" v-html="iconSvg('crosshair')"></span> Fit View
                         </button>
 
                         <div class="ed-legend">

@@ -643,6 +643,9 @@ window.addEventListener('DOMContentLoaded', () => {
         const imp = Number(task.importance || 0);
         return coi * (5 + imp / 2) + this.weightFor(task) * 12;
       },
+      resetGraphView() {
+        if (graph3d) graph3d.resetView();
+      },
       setCategoryWeight(cat, val) {
         const w = Math.max(0, Math.min(5, Math.round(Number(val) || 0)));
         this.categoryWeights = { ...this.categoryWeights, [cat]: w };

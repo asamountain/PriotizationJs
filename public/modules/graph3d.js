@@ -12,8 +12,12 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 const INK = '#111111';
 const BOX = 10; // world box is BOX x BOX x BOX
 // orbit centre: nudged up and toward the viewer so the floor plus the horizon
-// bands behind it frame roughly centred instead of hugging the left
-const TARGET = new THREE.Vector3(BOX / 2, 2.4, BOX / 2 + 2);
+// bands behind it frame roughly centred instead of hugging the left.
+// Backed off from an earlier, tighter framing that could clip the
+// high-importance / high-cost-of-inaction far corner against the panel's
+// top edge on shorter (mobile) viewports.
+const TARGET = new THREE.Vector3(BOX / 2, 1.5, BOX / 2 + 1);
+const HOME_CAM = new THREE.Vector3(BOX / 2 + 2.6, 16.6, BOX / 2 + 20.7);
 // English axis captions keep the editorial serif; task-name labels (often Hangul) use Pretendard
 const DISPLAY = 'Georgia,"Times New Roman",Times,serif';
 const BODY = '"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif';
@@ -163,7 +167,7 @@ export class Graph3D {
     this.scene = new THREE.Scene();
 
     this.camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 1000);
-    this.camera.position.set(BOX / 2 + 2, 14, BOX / 2 + 21);
+    this.camera.position.copy(HOME_CAM);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -528,6 +532,16 @@ export class Graph3D {
     }
   }
 
+  // Snap back to a pulled-back overview angle that keeps the whole floor
+  // (including the high-importance / high-cost-of-inaction far corner) inside
+  // the frame — the default framing is tight enough that those top-edge nodes
+  // can clip against the panel's own top border after a viewport resize or a
+  // user drag. Same viewing direction as the initial camera, just backed off.
+  resetView() {
+    this._easeTarget = TARGET.clone();
+    this._easeCamPos = HOME_CAM.clone();
+  }
+
   _applyFocus() {
     const dim = this.focusId != null;
     for (const m of this.nodeMeshes) {
@@ -597,6 +611,10 @@ export class Graph3D {
     if (this._easeTarget) {
       this.controls.target.lerp(this._easeTarget, 0.08);
       if (this.controls.target.distanceTo(this._easeTarget) < 0.02) this._easeTarget = null;
+    }
+    if (this._easeCamPos) {
+      this.camera.position.lerp(this._easeCamPos, 0.08);
+      if (this.camera.position.distanceTo(this._easeCamPos) < 0.05) this._easeCamPos = null;
     }
 
     if (this._annoObj) this._positionAnno();
