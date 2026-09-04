@@ -1,12 +1,16 @@
 import { TaskManager } from './taskManager.js';
 import { ChartVisualization } from './modules/chartVisualization.js';
-import { Graph3D, lucideSvg } from './modules/graph3d.js';
+import { lucideSvg } from './modules/lucideIcon.js';
 import { TaskOperations } from './modules/taskOperations.js';
 import { TaskListManager } from './modules/taskListManager.js';
 import { track } from './services/telemetry.js';
 
 // Define these variables at the top level so they can be exported
 let chartVisualization = null;
+// graph3d.js pulls in the full three.js + addons bundle, so it's loaded on
+// demand (see ensureGraph3D) the first time the Graph tab is actually
+// opened, instead of on every page load regardless of which tab you land on.
+let Graph3D = null;
 let graph3d = null;
 let taskOperations = null;
 let taskListManager = null;
@@ -59,7 +63,6 @@ window.addEventListener('DOMContentLoaded', () => {
   
   // Initialize modules - assign to the global variables we defined earlier
   chartVisualization = new ChartVisualization();
-  graph3d = new Graph3D();
   taskOperations = new TaskOperations();
   taskListManager = new TaskListManager();
   
@@ -605,6 +608,23 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       resetGraphView() {
         if (graph3d) graph3d.resetView();
+      },
+      // Loads three.js + graph3d.js on first actual need (opening the Graph
+      // tab) instead of on every page load. Safe to call repeatedly —
+      // resolves immediately once already loaded.
+      async ensureGraph3D() {
+        if (graph3d) return graph3d;
+        try {
+          if (!Graph3D) {
+            const mod = await import('./modules/graph3d.js');
+            Graph3D = mod.Graph3D;
+          }
+          graph3d = new Graph3D();
+          graph3d.init();
+        } catch (e) {
+          console.error('Failed to load 3D graph module:', e);
+        }
+        return graph3d;
       },
 
       renderGraph() {
@@ -2167,9 +2187,14 @@ window.addEventListener('DOMContentLoaded', () => {
         track('view', v);
         this.currentView = v === 'analytics' ? 'analytics' : 'tasks';
         const onGraph = v === 'graph';
-        if (graph3d) graph3d.setActive(onGraph);
         if (onGraph) {
-          this.$nextTick(() => { if (graph3d) { graph3d.resize(); this.renderGraph(); } });
+          this.ensureGraph3D().then((g3d) => {
+            if (!g3d) return;
+            g3d.setActive(true);
+            this.$nextTick(() => { g3d.resize(); this.renderGraph(); });
+          });
+        } else if (graph3d) {
+          graph3d.setActive(false);
         }
       },
       selectedCategories: {
@@ -2206,16 +2231,13 @@ window.addEventListener('DOMContentLoaded', () => {
       // Check authentication
       this.checkAuth();
       
-      // Initialize the 3D impact graph BEFORE socket connection to avoid race condition
-      this.$nextTick(() => {
-        if (graph3d) {
-          try {
-            console.log('Initializing 3D impact graph before socket connection');
-            graph3d.init();
-            this.renderGraph();
-          } catch (e) {
-            console.error('3D graph init failed:', e);
-          }
+      // Only load the 3D graph (three.js + addons) up front when it's
+      // actually the tab you land on (desktop default) — otherwise it loads
+      // lazily the first time you open the Graph tab (see the navView watcher).
+      this.$nextTick(async () => {
+        if (this.navView === 'graph') {
+          const g3d = await this.ensureGraph3D();
+          if (g3d) this.renderGraph();
         }
 
         // Hide splash screen after initialization

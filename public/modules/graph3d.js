@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { lucideSvg } from './lucideIcon.js';
 
 const INK = '#111111';
 const BOX = 10; // world box is BOX x BOX x BOX
@@ -91,19 +92,6 @@ function iconFor(t) {
     if (keys.some((k) => hay.includes(k))) return icon;
   }
   return 'circle-dot';
-}
-
-// render a Lucide icon name to an inline <svg> string (empty if the lib/name is missing)
-export function lucideSvg(name) {
-  const L = typeof window !== 'undefined' && window.lucide;
-  if (!L || !L.icons || !name) return '';
-  const pascal = String(name).split(/[-_]/).map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-  const data = L.icons[pascal];
-  if (!data) return '';
-  const el = L.createElement(data);
-  el.setAttribute('width', '1em');
-  el.setAttribute('height', '1em');
-  return el.outerHTML;
 }
 
 // floor placement: X = cost of inaction, Z = importance. Spread tie-heavy boards

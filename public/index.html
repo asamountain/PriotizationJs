@@ -15,10 +15,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <!-- Warm up connections to third-party origins the page depends on -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdn.socket.io" crossorigin>
-    <link rel="preconnect" href="https://d3js.org" crossorigin>
     <link rel="dns-prefetch" href="https://www.googletagmanager.com">
     <script>
       if ('serviceWorker' in navigator) {
@@ -40,19 +37,16 @@
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
     <!-- Lucide icons (per-task icons + nav) -->
     <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
-    <!-- Roboto Font -->
-    <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
     <!-- Pretendard (editorial + Hangul) -->
     <link href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" rel="stylesheet">
-    <!-- Socket.IO, D3, and ECharts Libraries. defer: these only run inside
-         app.js (a module, itself deferred) or DOMContentLoaded handlers, so
-         nothing needs them synchronously at parse time — defer lets the
-         browser fetch them in parallel and keep parsing the page instead of
-         blocking on each one in turn. Execution order is preserved. -->
+    <!-- Socket.IO and ECharts (2D line/bar charts only — no D3, no echarts-gl:
+         neither is referenced anywhere in this codebase). defer: these only
+         run inside app.js (a module, itself deferred) or DOMContentLoaded
+         handlers, so nothing needs them synchronously at parse time — defer
+         lets the browser fetch them in parallel and keep parsing the page
+         instead of blocking on each one in turn. Execution order preserved. -->
     <script defer src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <script defer src="https://d3js.org/d3.v7.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
     <!-- Vue and Vuetify -->
     <script defer src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/vuetify@3.3.15/dist/vuetify.min.js"></script>
