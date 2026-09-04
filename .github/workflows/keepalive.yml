@@ -1,13 +1,16 @@
 name: keep-alive
 
-# Pings the Render free instance so it does not cold-start during waking hours.
-# ~06:00-01:00 KST (window in UTC below). GitHub's scheduler is best-effort and
-# can lag 10-30 min under load; cron-job.org / UptimeRobot are more reliable if
-# the cold starts still bite.
+# Pings the Render free instance around the clock so it never idles long
+# enough to spin down (Render free web services sleep after ~15 min of
+# inactivity, which otherwise costs a 30-50s cold start on the next visit).
+# GitHub's scheduler is best-effort and can lag 10-30 min under load, and
+# a repo with zero commits for 60 days has its scheduled workflows disabled
+# by GitHub — a commit (or a manual "Run workflow") re-enables it.
+# cron-job.org / UptimeRobot are a good free backup if cold starts still bite.
 
 on:
   schedule:
-    - cron: '*/12 21-23,0-16 * * *'
+    - cron: '*/12 * * * *'
   workflow_dispatch:
 
 jobs:
