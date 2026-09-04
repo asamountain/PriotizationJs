@@ -2,7 +2,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
-import { upsertUser, claimLegacyDataIfFirstUser } from './db.js';
+import { upsertUser, claimLegacyDataIfFirstUser, seedDefaultPipelinesIfFirstUser } from './db.js';
 
 const PgSession = connectPgSimple(session);
 
@@ -77,6 +77,7 @@ export function setupAuth(app) {
                 
                 await upsertUser(userData);
                 await claimLegacyDataIfFirstUser(userData.id);
+                await seedDefaultPipelinesIfFirstUser(userData.id);
                 return done(null, userData);
             } catch (error) {
                 console.error('Auth Debug: Error in verify callback:', error);
