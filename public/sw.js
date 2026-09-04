@@ -2,7 +2,7 @@
 // (possibly still-waking) server catches up in the background over
 // socket.io/API calls. Bump CACHE_NAME whenever this file changes so old
 // clients purge their cache instead of serving a stale skeleton forever.
-const CACHE_NAME = 'ptm-shell-v2';
+const CACHE_NAME = 'ptm-shell-v3';
 const SHELL_ASSETS = [
   '/',
   '/app.js',
@@ -14,11 +14,17 @@ const SHELL_ASSETS = [
   '/icon.svg'
 ];
 
-// The app is under active development — the HTML shell and its main
-// scripts change constantly, so they must always reflect the live
-// deploy rather than a cached snapshot. Only fall back to cache when
-// the network is actually unreachable (offline / mid cold-start).
-const NETWORK_FIRST_PATHS = new Set(['/', '/app.js', '/taskManager.js', '/js/app-init.js']);
+// The app is under active development — the HTML shell and ANY JS module
+// (including lazy-loaded ones under /modules/, /services/, etc.) change
+// constantly, so they must always reflect the live deploy rather than a
+// cached snapshot. Only fall back to cache when the network is actually
+// unreachable (offline / mid cold-start). A fixed path list previously
+// missed dynamically-imported modules like graph3d.js, which could then
+// keep running stale logic after a deploy even though app.js itself had
+// already updated.
+function isCodeAsset(pathname) {
+  return pathname === '/' || pathname.endsWith('.js') || pathname.endsWith('.html');
+}
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -43,7 +49,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // let CDN scripts/fonts pass through untouched
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/') || url.pathname.startsWith('/socket.io/')) return;
 
-  if (NETWORK_FIRST_PATHS.has(url.pathname)) {
+  if (isCodeAsset(url.pathname)) {
     event.respondWith(
       fetch(req)
         .then((res) => {
