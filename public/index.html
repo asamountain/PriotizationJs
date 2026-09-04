@@ -388,14 +388,19 @@
         color: var(--muted); margin: 12px 0 2px;
       }
       .ed-queue__sub-heading:first-child { margin-top: 0; }
-      .ed-queue__sub-add { padding: 4px 0 6px; }
+      .ed-queue__sub-add { display: flex; gap: 6px; padding: 4px 0 6px; }
       .ed-queue__sub-add input {
-        width: 100%; box-sizing: border-box; padding: 5px 7px;
+        flex: 1; min-width: 0; box-sizing: border-box; padding: 5px 7px;
         font-family: var(--ed-font); font-size: 13px; color: #111;
         background: transparent; border: 1px solid #d9d9d9; outline: none;
       }
       .ed-queue__sub-add input:focus { border-color: #111; }
       .ed-queue__sub-add input::placeholder { color: #9a9a9a; }
+      .ed-queue__sub-add button {
+        flex-shrink: 0; border: 1px solid #111; background: #fff; padding: 0 12px;
+        font-family: var(--ed-font); font-size: 11px; letter-spacing: .04em; cursor: pointer;
+      }
+      .ed-queue__sub-add button:hover { background: #111; color: #fff; }
       .ed-queue__sub-empty {
         font-family: var(--ed-font); font-size: 12px; font-style: italic; color: var(--muted); padding: 6px 0;
       }
@@ -1396,6 +1401,7 @@
                                                     @keydown.enter="quickAddSubtask(t)"
                                                     placeholder="+ add a subtask&hellip;"
                                                 >
+                                                <button type="button" @click="quickAddSubtask(t)">Add</button>
                                             </li>
 
                                             <li class="ed-queue__sub-heading">Enables &mdash; makes these easier once done</li>
