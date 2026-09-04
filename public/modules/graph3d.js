@@ -50,10 +50,15 @@ const OUTCOME_PALETTE = ['#c9a227', '#b5651d', '#5f7d5f', '#4f6d7a', '#a15c5c', 
 const UNROUTED = '#9aa0a0';
 
 // goals ("outcome") and vision ("identity") are parked BEHIND the Eisenhower
-// floor on their own bands, not scored on it
-const HORIZON_Z = BOX + 3;   // outcome band, just past the grid
+// floor on their own bands, not scored on it. "Behind" means past the FAR
+// edge (low importance, Z=0 side) so they recede into the distance like an
+// actual horizon — the camera sits on the opposite (+Z / high-importance)
+// side, so a positive offset here would instead float them toward the
+// viewer, past the near edge, which reads as adrift beside the floor
+// rather than beyond it.
+const HORIZON_Z = -3;   // outcome band, just past the far edge
 const HORIZON_Y = 6.5;
-const VISION_Z = BOX + 5;     // identity band, further back and higher
+const VISION_Z = -5;     // identity band, further back and higher
 const VISION_Y = 9.4;
 const GOLD = '#c9a227';
 
