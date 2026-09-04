@@ -352,31 +352,6 @@ window.addEventListener('DOMContentLoaded', () => {
           return this.selectedCategories.includes(taskCategory);
         });
       },
-      categorizedActiveTasks() {
-        const groups = {
-          'Active Projects': [],
-          'Strategic Goals': [],
-          'Life/Vision': [],
-          'Other Tasks': []
-        };
-        
-        this.sortedActiveTasks.forEach(task => {
-          const cat = (task.category || '').toLowerCase();
-          const name = task.name.toLowerCase();
-          
-          if (cat.includes('project') || cat.includes('work') || name.includes('iocrops') || name.includes('milliman') || name.includes('autocrypt') || name.includes('hyundai')) {
-            groups['Active Projects'].push(task);
-          } else if (cat.includes('goal') || cat.includes('strategic') || cat.includes('hunt') || name.includes('job') || name.includes('apply')) {
-            groups['Strategic Goals'].push(task);
-          } else if (cat.includes('life') || cat.includes('vision') || name.includes('mountain') || name.includes('life') || name.includes('financial')) {
-            groups['Life/Vision'].push(task);
-          } else {
-            groups['Other Tasks'].push(task);
-          }
-        });
-        
-        return groups;
-      },
       allExpanded() {
         const rootTasksWithSubtasks = this.activeTasks.filter(t => this.tasks.some(sub => sub.parent_id === t.id));
         if (rootTasksWithSubtasks.length === 0) return false;
