@@ -213,6 +213,7 @@ window.addEventListener('DOMContentLoaded', () => {
           googleEnabled: false
         },
         showLoginGate: false,
+        expandedQueueTaskId: null,
         // Income pipelines
         pipelines: [],
         newPipelineName: '',
@@ -1417,6 +1418,19 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 300);
       },
 
+      toggleQueueExpand(task) {
+        this.expandedQueueTaskId = (this.expandedQueueTaskId === task.id) ? null : task.id;
+      },
+      // Tasks this one directly ENABLES — read straight from the already-loaded
+      // relationship graph, no extra round trip needed just to preview them.
+      enabledSubtasks(task) {
+        const rels = this.allRelationships || [];
+        const byId = new Map((this.tasks || []).map(t => [Number(t.id), t]));
+        return rels
+          .filter(r => Number(r.enabler_task_id) === Number(task.id))
+          .map(r => byId.get(Number(r.enabled_task_id)))
+          .filter(Boolean);
+      },
       selectQueueTask(task, ev) {
         if (!task) return;
         track('queue_click', task.kind || 'action');
