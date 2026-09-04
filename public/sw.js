@@ -1,8 +1,8 @@
 // App-shell cache so the UI paints instantly on repeat visits while the
 // (possibly still-waking) server catches up in the background over
-// socket.io/API calls. Bump CACHE_NAME when the shell markup changes shape
-// so old clients don't get served a stale skeleton indefinitely.
-const CACHE_NAME = 'ptm-shell-v1';
+// socket.io/API calls. Bump CACHE_NAME whenever this file changes so old
+// clients purge their cache instead of serving a stale skeleton forever.
+const CACHE_NAME = 'ptm-shell-v2';
 const SHELL_ASSETS = [
   '/',
   '/app.js',
@@ -13,6 +13,12 @@ const SHELL_ASSETS = [
   '/manifest.json',
   '/icon.svg'
 ];
+
+// The app is under active development — the HTML shell and its main
+// scripts change constantly, so they must always reflect the live
+// deploy rather than a cached snapshot. Only fall back to cache when
+// the network is actually unreachable (offline / mid cold-start).
+const NETWORK_FIRST_PATHS = new Set(['/', '/app.js', '/taskManager.js', '/js/app-init.js']);
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -37,7 +43,22 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // let CDN scripts/fonts pass through untouched
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/') || url.pathname.startsWith('/socket.io/')) return;
 
-  // Stale-while-revalidate: serve cached shell immediately, refresh in the background.
+  if (NETWORK_FIRST_PATHS.has(url.pathname)) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, res.clone()));
+          }
+          return res;
+        })
+        .catch(() => caches.open(CACHE_NAME).then((cache) => cache.match(req, { ignoreSearch: true })))
+    );
+    return;
+  }
+
+  // Everything else (icons, manifest, css): stale-while-revalidate is fine
+  // since it rarely changes and instant paint matters more there.
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
       const cached = await cache.match(req, { ignoreSearch: true });
