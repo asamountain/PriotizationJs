@@ -358,15 +358,6 @@ window.addEventListener('DOMContentLoaded', () => {
         
         return this.sortTasks(filteredTasks);
       },
-      horizonList() {
-        const list = (this.activeTasks || []).filter(t => {
-          const k = t.kind || 'action';
-          return !t.done && (k === 'outcome' || k === 'identity');
-        });
-        const rank = (k) => (k === 'outcome' ? 0 : 1);
-        return [...list].sort((a, b) =>
-          rank(a.kind) - rank(b.kind) || Number(b.importance || 0) - Number(a.importance || 0));
-      },
       checkedInTodayCount() {
         return this.pipelines.filter(p => this.pipelineCheckedToday(p)).length;
       },
@@ -2546,6 +2537,7 @@ window.addEventListener('DOMContentLoaded', () => {
           <div class="d-flex flex-column flex-grow-1 py-1 ms-1">
             <div class="d-flex align-center gap-golden">
               <v-list-item-title :class="{'text-decoration-line-through opacity-50': task.done}" class="text-wrap font-weight-bold task-name flex-grow-1">
+                <span v-if="(task.kind || 'action') !== 'action'" class="task-kind-mark" :title="task.kind === 'outcome' ? 'Outcome — a goal, not a one-off task' : 'Identity — a stance or vision'">{{ task.kind === 'outcome' ? '◆' : '❖' }}</span>
                 {{ task.name }}
               </v-list-item-title>
               

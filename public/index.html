@@ -494,6 +494,7 @@
         font-weight: 400 !important;
         font-size: 14px !important;
       }
+      .task-kind-mark { display: inline-block; margin-right: 5px; opacity: .5; font-weight: 400; }
       .split-view-right .ed-list .v-list-item__overlay,
       .split-view-right .ed-list .v-ripple__container { display: none !important; }
       .split-view-right .ed-list .v-chip {
@@ -1500,30 +1501,6 @@
 
                     <!-- HIERARCHY view: full task list -->
                     <div class="split-view-right" ref="rightPanel" v-show="navView === 'hierarchy'">
-
-                        <!-- Editorial: Horizon (goals & vision — Active Tasks below is now the
-                             single ranked list; this stays separate since goals aren't scored) -->
-                        <div class="ed-wrap">
-                            <section class="ed-panel" v-if="horizonList.length">
-                                <div class="ed-panel__head">
-                                    <span>Horizon</span>
-                                    <span class="ed-count">Goals &amp; vision ({{ horizonList.length }})</span>
-                                </div>
-                                <ul class="ed-queue ed-queue--horizon">
-                                    <li
-                                        v-for="t in horizonList"
-                                        :key="t.id"
-                                        class="ed-queue__item"
-                                        @click="selectQueueTask(t, $event)"
-                                    >
-                                        <span class="ed-queue__rank">{{ (t.kind || 'action') === 'outcome' ? '◆' : '❖' }}</span>
-                                        <span class="ed-queue__title">{{ t.name }}</span>
-                                        <span class="ed-queue__score" v-if="(t.kind || 'action') === 'outcome' && t._progress != null">{{ Math.round(t._progress * 100) }}%</span>
-                                        <span class="ed-queue__arrow">&rarr;</span>
-                                    </li>
-                                </ul>
-                            </section>
-                        </div>
 
                         <!-- Active Tasks Section -->
                         <v-card class="mb-4 ed-list" elevation="3">
