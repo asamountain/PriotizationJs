@@ -507,6 +507,31 @@
          editorial black/white/gray palette). */
       .sort-select__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+      /* Mission search / jump-to-task */
+      .task-search-row { position: relative; }
+      .task-search-field { font-family: var(--ed-font); }
+      .task-search-field .v-field__input { padding-top: 6px !important; padding-bottom: 6px !important; min-height: unset !important; }
+      .task-search-results {
+        position: absolute; left: 8px; right: 8px; top: 100%; z-index: 30;
+        background: #fff; border: 1px solid #111; border-top: none;
+        max-height: 260px; overflow-y: auto;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+      }
+      .task-search-result {
+        padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee;
+        display: flex; flex-direction: column; gap: 2px;
+      }
+      .task-search-result:last-child { border-bottom: none; }
+      .task-search-result:hover, .task-search-result:active { background: #f5f5f5; }
+      .task-search-result__name { font-family: var(--ed-font); font-size: 0.9rem; color: #111; }
+      .task-search-result__breadcrumb { font-size: 0.72rem; color: #6b6b6b; }
+      .task-search-empty { padding: 10px 12px; font-size: 0.85rem; color: #6b6b6b; }
+      .task-jump-highlight { animation: task-jump-flash 1.5s ease-out; }
+      @keyframes task-jump-flash {
+        0% { background: #fff4c2; }
+        100% { background: transparent; }
+      }
+
       /* ===== Editorial theme for EVERY Vuetify overlay (dialogs, menus, selects, sheets) ===== */
       .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-card,
       .v-overlay-container .v-overlay:not(.v-tooltip) .v-overlay__content > .v-list,
@@ -1307,6 +1332,32 @@
                             </v-btn>
                         </v-card-title>
                         <v-card-text>
+                            <!-- Search / jump-to-mission -->
+                            <div class="task-search-row px-2 mb-2" v-if="tasks.length > 0">
+                                <v-text-field
+                                    v-model="taskSearchQuery"
+                                    placeholder="Search missions…"
+                                    density="compact"
+                                    variant="plain"
+                                    hide-details
+                                    clearable
+                                    prepend-inner-icon="mdi-magnify"
+                                    class="task-search-field"
+                                ></v-text-field>
+                                <div v-if="taskSearchQuery" class="task-search-results">
+                                    <div
+                                        v-for="r in taskSearchResults"
+                                        :key="r.id"
+                                        class="task-search-result"
+                                        @click="jumpToTask(r.id)"
+                                    >
+                                        <span class="task-search-result__name">{{ r.name }}</span>
+                                        <span v-if="r.breadcrumb" class="task-search-result__breadcrumb">{{ r.breadcrumb }}</span>
+                                    </div>
+                                    <div v-if="taskSearchResults.length === 0" class="task-search-empty">No matches</div>
+                                </div>
+                            </div>
+
                             <!-- Sort Dropdown -->
                             <div class="mb-2 px-2">
                                 <v-select

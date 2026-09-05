@@ -134,6 +134,7 @@ window.addEventListener('DOMContentLoaded', () => {
         csvImporting: false,
         csvImportResult: null,
         taskSortBy: localStorage.getItem('taskSortBy') || 'priority-high', // Default sort
+        taskSearchQuery: '',
         leftPanelWidth: parseFloat(localStorage.getItem('leftPanelWidth')) || 55,
         isResizing: false,
         nodeCard: { open: false, x: 0, y: 0, task: null, enables: [] },
@@ -318,6 +319,14 @@ window.addEventListener('DOMContentLoaded', () => {
         
         return this.sortTasks(filteredTasks);
       },
+      taskSearchResults() {
+        const q = this.taskSearchQuery.trim().toLowerCase();
+        if (!q) return [];
+        return this.tasks
+          .filter(t => t.name && t.name.toLowerCase().includes(q))
+          .slice(0, 20)
+          .map(t => ({ id: t.id, name: t.name, breadcrumb: this.taskBreadcrumb(t) }));
+      },
       todayLabel() {
         return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
       },
@@ -339,6 +348,31 @@ window.addEventListener('DOMContentLoaded', () => {
           });
         }
         this.expandedTasks = new Set(this.expandedTasks);
+      },
+      taskBreadcrumb(task) {
+        const trail = [];
+        let cur = task;
+        while (cur && cur.parent_id) {
+          cur = this.tasks.find(t => t.id === cur.parent_id);
+          if (cur) trail.unshift(cur.name);
+        }
+        return trail.join(' › ');
+      },
+      jumpToTask(taskId) {
+        let cur = this.tasks.find(t => t.id === taskId);
+        while (cur && cur.parent_id) {
+          this.expandedTasks.add(cur.parent_id);
+          cur = this.tasks.find(t => t.id === cur.parent_id);
+        }
+        this.expandedTasks = new Set(this.expandedTasks);
+        this.taskSearchQuery = '';
+        this.$nextTick(() => {
+          const el = document.querySelector(`[data-task-id="${taskId}"]`);
+          if (!el) return;
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('task-jump-highlight');
+          setTimeout(() => el.classList.remove('task-jump-highlight'), 1500);
+        });
       },
       sortTasks(tasks) {
         if (!tasks || !Array.isArray(tasks)) return [];
