@@ -2082,9 +2082,21 @@ window.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        if (this._gesturePointerType !== 'touch' || this._dragStarted || root.touchDrag) return;
+        if (this._dragStarted || root.touchDrag) return;
         const dx = e.clientX - this._gestureStartX;
         const dy = e.clientY - this._gestureStartY;
+
+        // Any real movement means this press is turning into a scroll (or
+        // some other gesture), not a hold-in-place — cancel the pending
+        // long-press timer so it can't pop the radial menu open mid-scroll.
+        // A native touch-scroll leaves the pointer "down" for its whole
+        // duration, so waiting for pointerup/pointercancel alone isn't
+        // reliable enough to stop the timer in time.
+        if (this.longPressTimer && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+          this.endPress();
+        }
+
+        if (this._gesturePointerType !== 'touch') return;
         if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.3) {
           this._dragStarted = true;
           this.endPress();
