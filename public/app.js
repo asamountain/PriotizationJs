@@ -68,7 +68,6 @@ window.addEventListener('DOMContentLoaded', () => {
         navView: 'hierarchy', // left rail: 'hierarchy' | 'settings'
         tasks: [],
         activeTasks: [],
-        completedTasks: [],
         taskName: '',
         taskImportance: 5,
         taskLink: '',
@@ -90,10 +89,6 @@ window.addEventListener('DOMContentLoaded', () => {
         parentId: null,
         showCompletedSubtasks: false,
         showNotSureTasks: localStorage.getItem('showNotSureTasks') === 'true',
-        taskSectionOpen: {
-          active: true,
-          completed: false
-        },
         showEditForm: false,
         editingSubtask: {
           id: null,
@@ -142,7 +137,6 @@ window.addEventListener('DOMContentLoaded', () => {
         enableActive: 0,
         showCsvImportDialog: false,
         showQuickAddModal: false,
-        barStyle: localStorage.getItem('barStyle') || 'chips', // 'chips' | 'segmented' | 'score'
         quickAddTask: {
           name: '',
           importance: 5,
@@ -240,9 +234,6 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       currentTheme() {
         return this.isDarkTheme ? 'dark' : 'light';
-      },
-      hasCompletedTasks() {
-        return this.completedTasks && this.completedTasks.length > 0;
       },
       enabledTasks() {
         const byId = new Map((this.tasks || []).map(t => [Number(t.id), t]));
@@ -720,34 +711,14 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showTaskEditForm = false;
       },
       
-      toggleTaskSection(section) {
-        this.taskSectionOpen[section] = !this.taskSectionOpen[section];
-      },
-      
-      toggleCompletedSubtasks() {
-        this.showCompletedSubtasks = !this.showCompletedSubtasks;
-      },
-      
       toggleNotSureTasks() {
         this.showNotSureTasks = !this.showNotSureTasks;
         localStorage.setItem('showNotSureTasks', this.showNotSureTasks);
-        
-        // Synchronize with graph
-        this.renderGraph();
 
         const msg = this.showNotSureTasks ? 'Showing "Not Sure" tasks' : 'Hiding "Not Sure" tasks';
         this.showNotification(msg, 'info');
       },
 
-      toggleBarStyle() {
-        const styles = ['chips', 'segmented', 'score'];
-        const next = styles[(styles.indexOf(this.barStyle) + 1) % styles.length];
-        this.barStyle = next;
-        localStorage.setItem('barStyle', next);
-        const labels = { chips: 'Chips', segmented: 'Segmented Bar', score: 'Score Bar' };
-        this.showNotification(`Priority display: ${labels[next]}`, 'info');
-      },
-      
       updateTasks(tasks) {
         console.log('updateTasks received:', tasks.length, 'tasks');
         this.tasks = tasks;
@@ -771,16 +742,8 @@ window.addEventListener('DOMContentLoaded', () => {
           const isNotSureHidden = !this.showNotSureTasks && task.status === 'Not Sure';
           return !task.done && isRoot && !isNotSureHidden;
         });
-        const rawCompleted = tasks.filter(task => task.done && (!task.parent_id || !parentExists(task.parent_id)));
-        
-        console.log('Filtered Active (root/orphaned):', rawActive.length);
-        console.log('Filtered Completed (root/orphaned):', rawCompleted.length);
 
         this.activeTasks = rawActive;
-        this.completedTasks = rawCompleted;
-
-        // Re-render the 3D impact graph FIRST so a downstream error can't skip it
-        this.renderGraph();
       },
 
       formatDate(dateString) {
@@ -1983,37 +1946,7 @@ window.addEventListener('DOMContentLoaded', () => {
             <v-list-item-subtitle v-if="task.due_date || task.link || task.notes || task.importance || task.urgency || task.leverage_score > 0">
               <div class="d-flex align-center flex-wrap gap-2 mt-1">
 
-                <!-- STYLE: chips (original) -->
-                <template v-if="$root.barStyle === 'chips'">
-                  <v-chip v-if="task.leverage_score > 0" size="x-small" color="purple" variant="flat">
-                    <v-icon start size="10">mdi-arrow-up-bold</v-icon>{{ Number(task.leverage_score).toFixed(1) }}
-                  </v-chip>
-                </template>
-
-                <!-- STYLE: segmented bar (I | U | L) -->
-                <template v-else-if="$root.barStyle === 'segmented'">
-                  <div style="display:flex; align-items:center; gap:2px; height:14px; border-radius:6px; overflow:hidden; min-width:80px;">
-                    <div :style="{ width: (task.importance/10)*38 + 'px', background: '#3B82F6', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
-                      <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">I</span>
-                    </div>
-                    <div :style="{ width: ((task.cost_of_inaction == null ? 5 : task.cost_of_inaction)/10)*38 + 'px', background: '#8B5CF6', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
-                      <span style="font-size:8px; color:white; font-weight:bold; padding:0 2px;">C</span>
-                    </div>
-                  </div>
-                  <span style="font-size:9px; color:#888;">{{ task.importance }}·{{ task.cost_of_inaction == null ? '—' : task.cost_of_inaction }}</span>
-                </template>
-
-                <!-- STYLE: score bar (single priority %) -->
-                <template v-else-if="$root.barStyle === 'score'">
-                  <div style="display:flex; align-items:center; gap:4px;">
-                    <div style="width:80px; height:6px; background:#e5e7eb; border-radius:99px; overflow:hidden;">
-                      <div :style="{ width: Math.min($root.queueScore(task)/100,1)*100 + '%', height: '100%', borderRadius: '99px', background: 'linear-gradient(90deg, #22c55e, #f59e0b, #ef4444)' }"></div>
-                    </div>
-                    <span style="font-size:9px; color:#888; font-weight:600;">{{ Math.round($root.queueScore(task)) }}</span>
-                  </div>
-                </template>
-
-                <!-- shared metadata (all styles) -->
+                <!-- metadata badges/icons -->
                 <v-chip v-if="task.category" size="x-small" color="grey" variant="outlined">{{ task.category }}</v-chip>
                 <span v-if="task.due_date" class="text-xxs text-orange">
                   <v-icon size="10">mdi-calendar</v-icon> {{ task.due_date }}

@@ -1079,30 +1079,6 @@
                             </v-btn>
                             <v-chip color="primary" size="small" class="me-2">{{ activeTasks.length }}</v-chip>
                             <v-btn
-                                variant="text"
-                                icon
-                                @click="toggleBarStyle"
-                                class="ms-2"
-                                :title="`Priority display: ${barStyle}`"
-                                color="primary"
-                            >
-                                <v-icon>
-                                    {{ barStyle === 'chips' ? 'mdi-label' : barStyle === 'segmented' ? 'mdi-chart-bar' : 'mdi-gauge' }}
-                                </v-icon>
-                            </v-btn>
-                            <v-btn
-                                variant="text"
-                                icon
-                                @click="toggleCompletedSubtasks"
-                                class="ms-2"
-                                title="Toggle completed subtasks"
-                                color="primary"
-                            >
-                                <v-icon>
-                                    {{ showCompletedSubtasks ? 'mdi-eye-off' : 'mdi-eye' }}
-                                </v-icon>
-                            </v-btn>
-                            <v-btn 
                                 variant="text" 
                                 icon 
                                 @click="toggleNotSureTasks"
@@ -1160,86 +1136,6 @@
                         </v-card-text>
                     </v-card>
 
-                        <!-- Completed Tasks Section -->
-                        <v-card v-if="hasCompletedTasks" class="mb-4" elevation="3">
-                        <v-card-title 
-                            class="text-h5 d-flex align-center" 
-                            @click="toggleTaskSection('completed')"
-                            style="cursor: pointer;"
-                        >
-                            <v-icon color="success" class="me-2">mdi-check-circle</v-icon>
-                            Completed Tasks
-                            <v-spacer></v-spacer>
-                            <v-chip color="success" size="small">{{ completedTasks.length }}</v-chip>
-                            <v-icon>{{ taskSectionOpen.completed ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-                        </v-card-title>
-                        
-                        <v-expand-transition>
-                            <div v-show="taskSectionOpen.completed">
-                                <v-list>
-                            <template v-for="task in completedTasks" :key="task.id">
-                                        <!-- Completed Parent Task -->
-                                        <v-list-item
-                                            :value="task.id"
-                                            @click="selectTask(task)"
-                                            @dblclick="showAddSubtaskForm(task.id)"
-                                    :data-task-id="task.id"
-                                            style="cursor: pointer;" 
-                                            class="task completed-task"
-                                        >
-                                            <template v-slot:prepend>
-                                                <v-checkbox 
-                                                    :model-value="true" 
-                                                    @change="toggleTaskDone(task)"
-                                                    color="success"
-                                                    hide-details
-                                                    @click.stop
-                                                ></v-checkbox>
-                                            </template>
-
-                                            <v-list-item-title class="text-decoration-line-through">
-                                                {{ task.name }}
-                                            </v-list-item-title>
-
-                                            <v-list-item-subtitle>
-                                                <div class="d-flex align-center">
-                                                    <span class="text-caption text-medium-emphasis me-2" v-if="task.completed_at">
-                                                        Completed: {{ formatDate(task.completed_at) }}
-                                                    </span>
-                                                    <v-btn
-                                                        v-if="task.link"
-                                                        size="x-small"
-                                                        :href="task.link" 
-                                                        target="_blank"
-                                                        color="primary"
-                                                        variant="text"
-                                                        class="px-0 min-width-0 me-2"
-                                                        @click.stop
-                                                    >
-                                                        <v-icon start size="x-small">mdi-link</v-icon>
-                                                        Link
-                                                    </v-btn>
-                                                </div>
-                                            </v-list-item-subtitle>
-
-                                            <template v-slot:append>
-                                                <v-btn
-                                                    icon="mdi-delete"
-                                                    variant="text"
-                                                    size="small"
-                                                    @click.stop="deleteTask(task.id, task.name)"
-                                                    color="error"
-                                                    title="Delete task"
-                                                ></v-btn>
-                                            </template>
-                                        </v-list-item>
-                                        
-                                        <v-divider></v-divider>
-                                    </template>
-                                </v-list>
-                                            </div>
-                        </v-expand-transition>
-                        </v-card>
                     </div>
                     <!-- End Right Side -->
                 </div>
