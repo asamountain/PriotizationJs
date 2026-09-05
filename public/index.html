@@ -387,22 +387,18 @@
         border: 2px solid rgba(17, 17, 17, 0.25); border-top-color: #111;
         border-radius: 50%; animation: spin 0.8s linear infinite;
       }
-      /* Flatten the Vuetify "Active Tasks" card into the editorial sheet */
-      .split-view-right .ed-list.v-card {
+      /* Active Tasks section: plain divs laid out as part of the page's
+         normal flow (.split-view-right is the one and only scroll
+         container) — not a Vuetify v-card/v-list, which used to give this
+         section its own nested scroll/selection surface on touch. */
+      .split-view-right .ed-list {
         max-width: 760px; margin: 0 auto 28px !important;
-        border: 1px solid #111; border-radius: 0 !important;
-        box-shadow: none !important; background: #fff;
-      }
-      .split-view-right .ed-list .v-card-title {
-        font-family: var(--ed-display) !important;
-        font-style: italic; font-size: 18px !important; letter-spacing: 0;
-        border-bottom: 1px solid #111; padding: 12px 16px !important;
+        border: 1px solid #111; background: #fff;
       }
       /* Active Tasks toolbar: no title text (the bottom nav's active tab
-         already says you're looking at the list), just compact buttons —
-         override the italic 18px title font-size that would otherwise
-         bleed into them. */
+         already says you're looking at the list), just compact buttons. */
       .split-view-right .ed-list .ed-tasks-toolbar {
+        border-bottom: 1px solid #111;
         padding: 8px 12px !important;
       }
       .split-view-right .ed-list .ed-tasks-toolbar .v-btn {
@@ -412,8 +408,7 @@
         height: 28px !important;
         letter-spacing: .02em !important;
       }
-      .split-view-right .ed-list .v-list,
-      .split-view-right .ed-list .v-card-text { padding: 0 !important; background: transparent !important; }
+      .split-view-right .ed-list .ed-list-body { padding: 0 !important; background: transparent !important; }
       .split-view-right .ed-list .task-item {
         border-bottom: 1px solid #e4e4e4 !important;
         border-radius: 0 !important;
@@ -1289,9 +1284,11 @@
                     <!-- HIERARCHY view: full task list -->
                     <div class="split-view-right" ref="rightPanel" v-show="navView === 'hierarchy'">
 
-                        <!-- Active Tasks Section -->
-                        <v-card class="mb-4 ed-list" elevation="3">
-                        <v-card-title
+                        <!-- Active Tasks Section: plain divs, not a Vuetify v-card/v-list —
+                             those wrappers were creating a nested scroll/selection surface that
+                             fought with the page's own vertical scroll on touch devices. -->
+                        <div class="mb-4 ed-list">
+                        <div
                             class="ed-tasks-toolbar d-flex align-center"
                             @dragover.prevent="handleDragOver"
                             @drop="handleDropOnRoot"
@@ -1319,8 +1316,8 @@
                             </v-btn>
                             <v-chip color="primary" size="small" class="me-2">{{ activeTasks.length }}</v-chip>
                             <v-btn
-                                variant="text" 
-                                icon 
+                                variant="text"
+                                icon
                                 @click="toggleNotSureTasks"
                                 class="ms-2"
                                 :color="showNotSureTasks ? 'warning' : 'primary'"
@@ -1330,8 +1327,8 @@
                                     {{ showNotSureTasks ? 'mdi-help-circle' : 'mdi-help-circle-outline' }}
                                 </v-icon>
                             </v-btn>
-                        </v-card-title>
-                        <v-card-text>
+                        </div>
+                        <div class="ed-list-body">
                             <!-- Search / jump-to-mission -->
                             <div class="task-search-row px-2 mb-2" v-if="tasks.length > 0">
                                 <v-text-field
@@ -1379,9 +1376,9 @@
                                     </template>
                                 </v-select>
                             </div>
-                            
+
                             <template v-if="activeTasks.length > 0">
-                                <v-list class="pa-0">
+                                <div class="task-list">
                                     <task-node
                                         v-for="task in sortedActiveTasks"
                                         :key="task.id"
@@ -1391,16 +1388,16 @@
                                         :expanded-tasks="$root.expandedTasks"
                                         :show-completed-subtasks="$root.showCompletedSubtasks"
                                     ></task-node>
-                                </v-list>
+                                </div>
                             </template>
-                            
+
                             <v-sheet v-else class="pa-4 text-center">
                                 <v-icon size="large" color="grey">mdi-playlist-check</v-icon>
                                 <div class="text-body-1 mt-2">No active tasks. Add a task to get started!</div>
                             </v-sheet>
-                            
-                        </v-card-text>
-                    </v-card>
+
+                        </div>
+                    </div>
 
                     </div>
                     <!-- End Right Side -->

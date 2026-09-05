@@ -2008,6 +2008,7 @@ window.addEventListener('DOMContentLoaded', () => {
       >
         <v-list-item
           :value="task.id"
+          :ripple="false"
           @click="$root.onTaskRowClick(task, $event)"
           @dblclick="$root.showAddSubtaskForm(task.id)"
           :data-task-id="task.id"
