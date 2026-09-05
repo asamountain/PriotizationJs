@@ -106,6 +106,7 @@ class Database {
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_worked_at TEXT",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT 'mdi-checkbox-blank-circle-outline'",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'action'",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_focus BOOLEAN DEFAULT FALSE",
       "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cost_of_inaction REAL",
       "UPDATE tasks SET cost_of_inaction = urgency WHERE cost_of_inaction IS NULL",
       "ALTER TABLE tasks ALTER COLUMN importance TYPE REAL",
@@ -302,6 +303,10 @@ class Database {
     await this.query("UPDATE tasks SET icon = $1 WHERE id = $2", [icon, taskId]);
   }
 
+  async setTaskFocus(taskId, isFocus) {
+    await this.query("UPDATE tasks SET is_focus = $1 WHERE id = $2", [!!isFocus, taskId]);
+  }
+
   async upsertUser(user) {
     const now = new Date().toISOString();
     await this.pool.query(
@@ -448,6 +453,7 @@ export const getActiveTimers = () => database.getActiveTimers();
 export const setTaskParent = (id, p) => database.setTaskParent(id, p);
 export const updateTaskStatus = (id, s) => database.updateTaskStatus(id, s);
 export const updateTaskIcon = (id, i) => database.updateTaskIcon(id, i);
+export const setTaskFocus = (id, isFocus) => database.setTaskFocus(id, isFocus);
 export const upsertUser = (u) => database.upsertUser(u);
 export const claimLegacyDataIfFirstUser = (userId) => database.claimLegacyDataIfFirstUser(userId);
 export const addTaskRelationship = (e, d, u) => database.addTaskRelationship(e, d, u);

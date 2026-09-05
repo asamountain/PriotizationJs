@@ -7,6 +7,11 @@ import { track } from './services/telemetry.js';
 
 // Define these variables at the top level so they can be exported
 let chartVisualization = null;
+// graph3d.js pulls in the full three.js + addons bundle, so it's loaded on
+// demand (see ensureGraph3D) the first time the Graph tab is actually
+// opened, instead of on every page load regardless of which tab you land on.
+let Graph3D = null;
+let graph3d = null;
 let taskOperations = null;
 let taskListManager = null;
 
@@ -234,6 +239,15 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       currentTheme() {
         return this.isDarkTheme ? 'dark' : 'light';
+      },
+      chartStyle() {
+        // In split view, chart always fills its container
+        return {
+          width: '100%',
+          height: '100%',
+          position: 'relative',
+          overflow: 'visible'
+        };
       },
       enabledTasks() {
         const byId = new Map((this.tasks || []).map(t => [Number(t.id), t]));
@@ -551,6 +565,7 @@ window.addEventListener('DOMContentLoaded', () => {
           screenY: r ? r.top : window.innerHeight / 2,
           task,
         });
+        if (graph3d) graph3d.focusOnTask(task.id);
       },
       // Normal row tap, unless a "Move to another task" is pending — then
       // the tap picks the destination (or cancels, if you tap the task
@@ -579,10 +594,37 @@ window.addEventListener('DOMContentLoaded', () => {
         const imp = Number(task.importance || 0);
         return coi * imp;
       },
-      // No-op: the 3D graph was removed, but many post-mutation handlers
-      // (edit/delete/toggle/drag) still call this — kept as a harmless sink
-      // rather than touching every one of those call sites.
-      renderGraph() {},
+      resetGraphView() {
+        if (graph3d) graph3d.resetView();
+      },
+      // Loads three.js + graph3d.js on first actual need (opening the Graph
+      // tab) instead of on every page load. Safe to call repeatedly —
+      // resolves immediately once already loaded.
+      async ensureGraph3D() {
+        if (graph3d) return graph3d;
+        try {
+          if (!Graph3D) {
+            const mod = await import('./modules/graph3d.js');
+            Graph3D = mod.Graph3D;
+          }
+          graph3d = new Graph3D();
+          graph3d.init();
+        } catch (e) {
+          console.error('Failed to load 3D graph module:', e);
+        }
+        return graph3d;
+      },
+
+      renderGraph() {
+        if (!graph3d) return;
+        try {
+          graph3d.showRelationships = true;
+          graph3d.showSubtasks = true;
+          graph3d.render(this.tasks, this.allRelationships || []);
+        } catch (e) {
+          console.error('3D graph render failed:', e);
+        }
+      },
 
       fetchRelationships() {
         if (this.socket) this.socket.emit('getTaskRelationships', null);
@@ -714,6 +756,7 @@ window.addEventListener('DOMContentLoaded', () => {
       toggleNotSureTasks() {
         this.showNotSureTasks = !this.showNotSureTasks;
         localStorage.setItem('showNotSureTasks', this.showNotSureTasks);
+        this.renderGraph();
 
         const msg = this.showNotSureTasks ? 'Showing "Not Sure" tasks' : 'Hiding "Not Sure" tasks';
         this.showNotification(msg, 'info');
@@ -744,6 +787,9 @@ window.addEventListener('DOMContentLoaded', () => {
         });
 
         this.activeTasks = rawActive;
+
+        // Re-render the 3D focus chart FIRST so a downstream error can't skip it
+        this.renderGraph();
       },
 
       formatDate(dateString) {
@@ -1217,6 +1263,7 @@ window.addEventListener('DOMContentLoaded', () => {
         this.enableQuery = '';
         this.enableOpen = false;
         this.enableActive = 0;
+        if (graph3d) graph3d.focusOnTask(null);
       },
 
       // Hangul chosung (leading consonant) extraction for fast fuzzy search
@@ -1286,6 +1333,7 @@ window.addEventListener('DOMContentLoaded', () => {
           screenY: r ? r.top : window.innerHeight / 2,
           task,
         });
+        if (graph3d) graph3d.focusOnTask(task.id);
       },
 
       bumpMetric(field, delta) {
@@ -1295,6 +1343,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (next === Number(task[field])) return;
         track('metric_bump', field, { delta });
         task[field] = next;
+        if (graph3d) this.renderGraph();
         this.commitNodeCard();
       },
 
@@ -1303,6 +1352,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!task || (task.kind || 'action') === kind) return;
         track('set_kind', kind);
         task.kind = kind;
+        if (graph3d) this.renderGraph();
         this.commitNodeCard();
       },
 
@@ -1327,6 +1377,7 @@ window.addEventListener('DOMContentLoaded', () => {
         task.status = status;
         const label = { todo: 'To Do', in_progress: 'Doing', done: 'Done', unsure: 'Unsure' }[state] || state;
         this.showNotification(`"${task.name}" → ${label}`, 'info');
+        if (graph3d) this.renderGraph(); // done / Not Sure tasks drop off the chart at once; server echo confirms
         this.closeNodeCard();
       },
 
@@ -1491,6 +1542,21 @@ window.addEventListener('DOMContentLoaded', () => {
         this.showNotification(`${statusMsg}: ${task.name}`, 'info');
       },
 
+      // "Focus" tasks are the deliberately curated few that get a spot on
+      // the 3D chart — see graph3d.js. Everything else stays off it.
+      toggleTaskFocus(task) {
+        if (!this.socket) return;
+        const next = !task.is_focus;
+        task.is_focus = next;
+        this.socket.emit('toggleTaskFocus', { taskId: task.id, isFocus: next });
+        this.showNotification(next ? `"${task.name}" added to focus chart` : `"${task.name}" removed from focus chart`, 'info');
+        this.renderGraph();
+      },
+      toggleNodeFocus() {
+        const task = this.nodeCard.task;
+        if (task) this.toggleTaskFocus(task);
+      },
+
       // Authentication methods
       async checkAuth() {
         try {
@@ -1648,6 +1714,16 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       navView(v) {
         track('view', v);
+        const onGraph = v === 'graph';
+        if (onGraph) {
+          this.ensureGraph3D().then((g3d) => {
+            if (!g3d) return;
+            g3d.setActive(true);
+            this.$nextTick(() => { g3d.resize(); this.renderGraph(); });
+          });
+        } else if (graph3d) {
+          graph3d.setActive(false);
+        }
       }
     },
     provide() {
@@ -1722,7 +1798,21 @@ window.addEventListener('DOMContentLoaded', () => {
       // Check authentication
       this.checkAuth();
 
+      // Only load the 3D graph (three.js + addons) up front when it's
+      // actually the tab you land on (desktop default) — otherwise it loads
+      // lazily the first time you open the Graph tab (see the navView watcher).
       this.$nextTick(async () => {
+        if (this.navView === 'graph') {
+          const g3d = await this.ensureGraph3D();
+          if (g3d) this.renderGraph();
+        }
+
+        // Floating node card: driven by clicks inside the 3D graph
+        this._onNodeSelect = (e) => this.openNodeCard(e.detail);
+        this._onNodeDeselect = () => { if (this.nodeCard.open) this.closeNodeCard(); };
+        window.addEventListener('node:select', this._onNodeSelect);
+        window.addEventListener('node:deselect', this._onNodeDeselect);
+
         // Esc closes the top-most open thing
         this._onKeyEsc = (e) => {
           if (e.key !== 'Escape') return;
@@ -1734,8 +1824,23 @@ window.addEventListener('DOMContentLoaded', () => {
           if (this.nodeCard.open) { this.closeNodeCard(); return; }
         };
         window.addEventListener('keydown', this._onKeyEsc);
+
+        // Pause the WebGL render loop when the graph panel scrolls out of
+        // view (or the tab switches away from it) — but note the node card
+        // is no longer graph-exclusive (Active Tasks rows open it too), so
+        // this must NOT auto-close it just because the graph panel is
+        // hidden.
+        const hero = this.$refs.leftPanel;
+        const scroller = this.$refs.splitContainer;
+        if (hero && 'IntersectionObserver' in window) {
+          this._heroObserver = new IntersectionObserver((entries) => {
+            const visible = entries.some(en => en.isIntersecting);
+            if (graph3d) { graph3d.setActive(visible); if (visible) graph3d.resize(); }
+          }, { root: scroller || null, threshold: 0.15 });
+          this._heroObserver.observe(hero);
+        }
       });
-      
+
       splashStep(35, '서버에 연결하는 중…');
       this.socket = io(window.location.origin, {
         reconnection: true,
@@ -1769,6 +1874,7 @@ window.addEventListener('DOMContentLoaded', () => {
       this.socket.on('taskRelationships', (data) => {
         if (data && data.taskId == null && Array.isArray(data.relationships)) {
           this.allRelationships = data.relationships;
+          this.renderGraph();
         }
       });
       this.socket.on('relationshipAdded', () => this.fetchRelationships());
@@ -1838,7 +1944,12 @@ window.addEventListener('DOMContentLoaded', () => {
     beforeUnmount() {
       // Clean up timer interval
       this.stopTimerUpdates();
+      // Clean up 3D graph wiring
+      if (this._onNodeSelect) window.removeEventListener('node:select', this._onNodeSelect);
+      if (this._onNodeDeselect) window.removeEventListener('node:deselect', this._onNodeDeselect);
       if (this._onKeyEsc) window.removeEventListener('keydown', this._onKeyEsc);
+      if (this._heroObserver) this._heroObserver.disconnect();
+      if (graph3d) graph3d.dispose();
     }
   });
   
@@ -1963,6 +2074,7 @@ window.addEventListener('DOMContentLoaded', () => {
           <div class="d-flex flex-column flex-grow-1 py-1 ms-1">
             <div class="d-flex align-center gap-golden">
               <v-list-item-title :class="{'text-decoration-line-through opacity-50': task.done}" class="text-wrap font-weight-bold task-name flex-grow-1">
+                <span v-if="task.is_focus" class="task-focus-mark" title="On the focus chart">★</span>
                 {{ task.name }}
               </v-list-item-title>
               
@@ -2057,6 +2169,7 @@ window.addEventListener('DOMContentLoaded', () => {
           { key: 'notes', icon: 'mdi-note-edit', label: 'Notes' },
           { key: 'timer', icon: t.active_timer_start ? 'mdi-stop-circle' : 'mdi-play-circle', label: t.active_timer_start ? 'Stop Timer' : 'Start Timer' },
           { key: 'notSure', icon: 'mdi-help-circle', label: 'Not Sure', active: t.status === 'Not Sure' },
+          { key: 'focus', icon: t.is_focus ? 'mdi-star' : 'mdi-star-outline', label: t.is_focus ? 'Remove from focus chart' : 'Add to focus chart', active: !!t.is_focus },
           { key: 'copyTree', icon: 'mdi-content-copy', label: 'Copy hierarchy (for AI)' },
           { key: 'delete', icon: 'mdi-delete', label: 'Delete' }
         ];
@@ -2167,6 +2280,7 @@ window.addEventListener('DOMContentLoaded', () => {
           case 'color': this.radialSubPanel = 'color'; return;
           case 'move': this.beginPendingMove(); return;
           case 'notSure': root.toggleNotSure(this.task); break;
+          case 'focus': root.toggleTaskFocus(this.task); break;
           case 'timer': root.toggleTimer(this.task); break;
           case 'addSubtask': root.showAddSubtaskForm(this.task.id); break;
           case 'edit': (this.depth === 0 ? root.editTask(this.task) : root.editSubtask(this.task)); break;

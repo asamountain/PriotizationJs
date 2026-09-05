@@ -140,6 +140,16 @@
         overflow: hidden;
       }
 
+      /* GRAPH: 3D focus chart fills the middle */
+      .split-view-left {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+        overflow: hidden;
+        border-right: 1px solid #111;
+      }
+
       /* HIERARCHY: full task list */
       .split-view-right {
         flex: 1;
@@ -149,6 +159,160 @@
         padding: 28px clamp(16px, 5vw, 72px) 64px;
         background: #fff;
       }
+
+      /* legend, bottom-left of the graph */
+      .ed-legend {
+        position: absolute;
+        left: 20px;
+        bottom: 18px;
+        display: flex;
+        gap: 18px;
+        font-family: var(--ed-display);
+        font-size: 11px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: #111;
+        z-index: 4;
+      }
+      .ed-legend .dot { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: middle; border-radius: 50%; }
+      .ed-legend__note { color: #6b6b6b; letter-spacing: .04em; text-transform: none; font-style: italic; }
+
+      /* 3D graph nodes: topic glyphs (MDI) rendered via CSS2D */
+      .g3d-node {
+        line-height: 1;
+        pointer-events: none;
+        transition: transform .18s cubic-bezier(.34, 1.2, .5, 1), opacity .18s ease-in-out;
+        will-change: transform, opacity;
+      }
+      .g3d-node i { display: block; }
+      .g3d-node.is-dim { opacity: .28; }
+      .g3d-node.is-focus { transform: scale(1.55); }
+      .g3d-node.is-doing { animation: g3d-doing 1.6s ease-in-out infinite; }
+      @keyframes g3d-doing {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.22); }
+      }
+      .g3d-node.is-doing.is-focus { animation: none; transform: scale(1.55); }
+      /* Subtasks stay out of the floor entirely until you tap their parent,
+         at which point they appear clustered around it. */
+      .g3d-node.is-subtask { display: none; }
+      .g3d-node.is-subtask.is-focus-child { display: block; opacity: .85; }
+
+      /* Hover annotation on the 3D graph: ring + drawn leader line + label */
+      .g3d-anno {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: visible;
+        z-index: 20;
+      }
+      .g3d-anno__svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .g3d-anno__line {
+        stroke: #e0654b;
+        stroke-width: 1.25;
+        fill: none;
+        stroke-dasharray: 360;
+        stroke-dashoffset: 360;
+        opacity: 0;
+        transition: stroke-dashoffset .34s cubic-bezier(.4, 0, .2, 1) .06s, opacity .2s ease-in-out .06s;
+      }
+      .g3d-anno__ring {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border: 1.5px solid #e0654b;
+        border-radius: 50%;
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(.35);
+        transition: transform .28s cubic-bezier(.34, 1.3, .5, 1), opacity .22s ease-in-out;
+      }
+      .g3d-anno__label {
+        position: absolute;
+        z-index: 21;
+        max-width: 220px;
+        padding: 8px 12px;
+        background: #fff;
+        border: 1px solid #2f5d63;
+        color: #2f5d63;
+        font-family: var(--ed-font);
+        font-size: 13px;
+        line-height: 1.35;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity .26s ease-in-out .16s, transform .26s cubic-bezier(.4, 0, .2, 1) .16s;
+      }
+      .g3d-anno.is-on .g3d-anno__line { stroke-dashoffset: 0; opacity: 1; }
+      .g3d-anno.is-on .g3d-anno__ring { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      .g3d-anno.is-on .g3d-anno__label { opacity: 1; transform: translateY(0); }
+
+      .chart-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+      }
+
+      .chart-content {
+        flex: 1;
+        overflow: visible;
+        padding: 0 !important;
+        position: relative;
+        min-height: 0;
+      }
+
+      #taskChart {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* editorial "new task" affordance on the hero */
+      .hero-add {
+        position: absolute;
+        top: 18px;
+        right: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 16px;
+        font-family: var(--ed-font);
+        font-size: 12px;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: #111;
+        background: #fff;
+        border: 1px solid #111;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 20;
+        transition: color .15s, background .15s;
+      }
+      .hero-add .plus { font-size: 16px; line-height: 1; }
+      .hero-add:hover { color: #fff; background: #111; }
+      .hero-reset-view {
+        position: absolute;
+        top: 64px;
+        right: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 14px;
+        font-family: var(--ed-font);
+        font-size: 11px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: #111;
+        background: #fff;
+        border: 1px solid #111;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 20;
+        transition: color .15s, background .15s;
+      }
+      .hero-reset-view .rail-ico svg { width: 14px; height: 14px; }
+      .hero-reset-view:hover { color: #fff; background: #111; }
 
       /* ============ Editorial table view ============ */
       .split-view-right { --ink: #111; --paper: #fff; --muted: #6b6b6b; --rule: #111; --urgent: #e5484d; --impact: #f5a623; font-family: var(--ed-font); }
@@ -260,6 +424,7 @@
         font-weight: 400 !important;
         font-size: 14px !important;
       }
+      .task-focus-mark { display: inline-block; margin-right: 5px; color: #c9a227; }
       .split-view-right .ed-list .v-list-item__overlay,
       .split-view-right .ed-list .v-ripple__container { display: none !important; }
       .split-view-right .ed-list .v-chip {
@@ -528,6 +693,14 @@
       .node-card__seg--4 button { padding: 7px 2px; font-size: 10px; letter-spacing: 0; }
       .node-card__seg--kind button { font-size: 10px; letter-spacing: .02em; }
 
+      .node-card__focus-toggle {
+        display: block; width: 100%; box-sizing: border-box; margin-bottom: 10px;
+        border: 1px solid #c9a227; background: #fff; color: #8a6d1f;
+        padding: 7px 8px; font-family: var(--ed-font); font-size: 11px;
+        letter-spacing: .04em; cursor: pointer;
+      }
+      .node-card__focus-toggle.is-on { background: #c9a227; color: #fff; }
+
       .node-card__row { display: flex; gap: 8px; }
       .node-card__row button {
         flex: 1;
@@ -554,11 +727,12 @@
         color: #6b6b6b;
       }
 
-      /* Responsive: narrow screens — rail slims */
+      /* Responsive: narrow screens — rail slims, queue rail drops under the graph */
       @media (max-width: 900px) {
         .ed-rail { width: 60px; }
         .ed-rail button { width: 40px; height: 40px; }
-        .split-view-container { overflow-y: auto; }
+        .split-view-container { flex-wrap: wrap; overflow-y: auto; }
+        .split-view-left { flex: 1 1 100%; height: 60vh; border-right: 0; border-bottom: 1px solid #111; }
         .split-view-right { padding: 20px 16px 48px; -webkit-overflow-scrolling: touch; }
         .node-card { width: min(300px, calc(100vw - 32px)); }
         .ed-topbar__title { font-size: 15px; }
@@ -606,6 +780,11 @@
           text-overflow: ellipsis;
           white-space: nowrap;
         }
+
+        /* On phones, graph/hierarchy are separate tabs (never shown side by
+           side), so the 900px breakpoint's 60vh cap — meant for the two
+           panels stacking together — just wastes space below the graph. */
+        .split-view-left { height: 100%; flex: 1 1 auto; }
 
         /* Priority Queue rows: rank/score/arrow were eating most of the width,
            squeezing task titles into a cramped 3-line wrap. Give the title
@@ -930,6 +1109,9 @@
                 <div class="ed-shell">
                     <!-- Left icon nav rail -->
                     <nav class="ed-rail">
+                        <button type="button" :class="{ 'is-active': navView === 'graph' }" @click="navView = 'graph'" title="Focus chart">
+                            <span class="rail-ico" v-html="iconSvg('box')"></span>
+                        </button>
                         <button type="button" :class="{ 'is-active': navView === 'hierarchy' }" @click="navView = 'hierarchy'" title="Hierarchy">
                             <span class="rail-ico" v-html="iconSvg('list')"></span>
                         </button>
@@ -939,8 +1121,30 @@
                     </nav>
 
                     <div class="ed-body">
-                <!-- Floating node card: appears when a task row is tapped -->
-                <div v-show="navView === 'hierarchy'" class="split-view-container" ref="splitContainer">
+                <!-- Split View Container (Graph + Hierarchy views) -->
+                <div v-show="navView === 'graph' || navView === 'hierarchy'" class="split-view-container" ref="splitContainer">
+                    <!-- GRAPH: 3D focus chart -->
+                    <div class="split-view-left" ref="leftPanel" v-show="navView === 'graph'">
+                        <v-card class="chart-card" elevation="3">
+                            <v-card-text class="chart-content">
+                                <div id="taskChart" :style="chartStyle"></div>
+                            </v-card-text>
+                        </v-card>
+
+                        <button type="button" class="hero-add" @click="openQuickAddModal(5, 5)" title="Add a new task">
+                            <span class="plus">&#43;</span> New Task
+                        </button>
+
+                        <button type="button" class="hero-reset-view" @click="resetGraphView" title="Snap back to the priority overview angle">
+                            <span class="rail-ico" v-html="iconSvg('crosshair')"></span> Fit View
+                        </button>
+
+                        <div class="ed-legend">
+                            <span class="ed-legend__note">floor:&nbsp;&rarr;&nbsp;cost of inaction&nbsp;&nbsp;·&nbsp;&nbsp;&uarr;&nbsp;importance&nbsp;&nbsp;·&nbsp;&nbsp;size = importance &times; cost of inaction&nbsp;&nbsp;·&nbsp;&nbsp;<i class="dot" style="background:#9aa0a0"></i>colour = goal it serves&nbsp;&nbsp;·&nbsp;&nbsp;only &starf; focus missions shown</span>
+                        </div>
+                    </div>
+
+                    <!-- Floating node card: appears when a task row is tapped, or a node in the graph is clicked -->
                         <div
                             v-if="nodeCard.open"
                             ref="nodeCardEl"
@@ -1030,6 +1234,14 @@
                                     </ul>
                                 </div>
                             </div>
+
+                            <button
+                                type="button"
+                                class="node-card__focus-toggle"
+                                :class="{ 'is-on': nodeCard.task && nodeCard.task.is_focus }"
+                                @click="toggleNodeFocus"
+                                title="Show this task on the focus chart"
+                            >{{ nodeCard.task && nodeCard.task.is_focus ? '★ On the focus chart' : '☆ Add to focus chart' }}</button>
 
                             <div class="node-card__seg node-card__seg--kind">
                                 <button :class="{ 'is-on': (nodeCard.task && (nodeCard.task.kind || 'action')) === 'action' }" @click="setNodeKind('action')" title="A task you do">Action</button>
@@ -1972,6 +2184,16 @@
             ></v-fab>
         </v-app>
     </div>
+
+    <!-- Three.js for the 3D focus chart (bare-specifier importmap; must precede module scripts) -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+    </script>
 
     <!-- Updated Scripts -->
     <script src="modules/chartVisualization.js" type="module"></script>

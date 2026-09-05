@@ -32,6 +32,7 @@ const setupSocket = (io) => {
         icon: task.icon || 'mdi-checkbox-blank-circle-outline',
         color: task.color || null,
         kind: task.kind || 'action',
+        is_focus: !!task.is_focus,
         cost_of_inaction: task.cost_of_inaction ?? null,
         // Timer fields
         total_time_spent: task.total_time_spent || 0,
@@ -382,6 +383,22 @@ const setupSocket = (io) => {
       } catch (error) {
         console.error("Failed to update task icon:", error);
         socket.emit("error", { message: "Failed to update icon" });
+      }
+    });
+
+    socket.on("toggleTaskFocus", async ({ taskId, isFocus }) => {
+      try {
+        await database.setTaskFocus(taskId, isFocus);
+
+        const data = await getTasksWithLeverage(socket.userId);
+        if (socket.userId) {
+          socket.emit("updateTasks", { data: processTaskData(data) });
+        } else {
+          io.emit("updateTasks", { data: processTaskData(data) });
+        }
+      } catch (error) {
+        console.error("Failed to toggle task focus:", error);
+        socket.emit("error", { message: "Failed to update focus chart" });
       }
     });
 
