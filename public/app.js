@@ -1674,6 +1674,40 @@ window.addEventListener('DOMContentLoaded', () => {
       // Make app globally available FIRST
       window.app = this;
 
+      // Step-by-step splash status instead of a static "Preparing..." — the
+      // actual slow part is usually a cold Render instance waking up, which
+      // we can't speed up, but we CAN show which real step we're on instead
+      // of a spinner that looks frozen. Hidden once real data (or the login
+      // gate) is ready, with a patience message + a hard timeout so a
+      // never-resolving edge case doesn't leave the splash up forever.
+      const splashStatusEl = document.getElementById('splash-status');
+      const splashBarEl = document.getElementById('splash-bar');
+      let splashDone = false;
+      const splashStep = (pct, text) => {
+        if (splashDone) return;
+        if (splashBarEl) splashBarEl.style.width = pct + '%';
+        if (splashStatusEl) splashStatusEl.textContent = text;
+      };
+      const hideSplash = () => {
+        if (splashDone) return;
+        splashDone = true;
+        clearTimeout(this._splashPatienceTimer);
+        clearTimeout(this._splashForceTimer);
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(() => splash.remove(), 400);
+        }
+      };
+      splashStep(15, '앱을 준비하는 중…');
+      // Cold Render instance can take 30-60s to wake — after a few seconds,
+      // say so explicitly instead of letting the bar just sit there.
+      this._splashPatienceTimer = setTimeout(() => {
+        splashStep(70, '서버가 깨어나는 중이에요. 평소보다 조금 걸릴 수 있어요…');
+      }, 6000);
+      // Absolute ceiling: never leave the user staring at the splash forever.
+      this._splashForceTimer = setTimeout(hideSplash, 25000);
+
       // Surface a failed Google sign-in instead of silently landing back on
       // the login gate with no explanation (common on Render's free-tier
       // cold starts, where the first attempt can time out).
@@ -1687,17 +1721,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
       // Check authentication
       this.checkAuth();
-      
-      this.$nextTick(async () => {
-        // Hide splash screen after initialization
-        const splash = document.getElementById('splash-screen');
-        if (splash) {
-          splash.style.opacity = '0';
-          setTimeout(() => {
-            splash.remove();
-          }, 400);
-        }
 
+      this.$nextTick(async () => {
         // Esc closes the top-most open thing
         this._onKeyEsc = (e) => {
           if (e.key !== 'Escape') return;
@@ -1711,17 +1736,18 @@ window.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('keydown', this._onKeyEsc);
       });
       
-      // Initialize socket connection AFTER chart setup
+      splashStep(35, '서버에 연결하는 중…');
       this.socket = io(window.location.origin, {
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000
       });
-      
+
       // Listen for socket connection and request data
       this.socket.on('connect', () => {
         console.log('Socket connected, checking auth');
+        splashStep(65, '로그인 확인하는 중…');
         // If we have a user, authenticate. authenticate will trigger initialData fetch.
         // If no user, request initialData (public tasks).
         if (this.user && this.user.id) {
@@ -1736,13 +1762,13 @@ window.addEventListener('DOMContentLoaded', () => {
       // required (it won't hand out task data over the socket either way).
       this.socket.on('authRequired', () => {
         this.showLoginGate = true;
+        hideSplash();
       });
 
-      // All enabler->enabled relationships, for the 3D impact graph
+      // All enabler->enabled relationships
       this.socket.on('taskRelationships', (data) => {
         if (data && data.taskId == null && Array.isArray(data.relationships)) {
           this.allRelationships = data.relationships;
-          this.renderGraph();
         }
       });
       this.socket.on('relationshipAdded', () => this.fetchRelationships());
@@ -1767,6 +1793,8 @@ window.addEventListener('DOMContentLoaded', () => {
           this.updateTasks(data.data);
         }
         this.fetchRelationships();
+        splashStep(100, '준비 완료!');
+        hideSplash();
       });
 
       this.socket.on('error', ({ message }) => {
